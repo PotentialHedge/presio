@@ -36,6 +36,13 @@ alter table sessions drop column if exists timer_mode;
 alter table sessions drop column if exists timer_duration;
 alter table sessions drop column if exists timer_threshold;
 
+-- sessions holds each deck's controller_token and passphrase, and the public
+-- schema is exposed through PostgREST to anyone with the anon key (which ships
+-- in the client bundle). Only the server touches this table, with the service
+-- role key, which bypasses RLS; RLS with no policies keeps PostgREST clients
+-- out. Idempotent, so safe on every boot.
+alter table sessions enable row level security;
+
 -- Index for cleanup query
 create index if not exists idx_sessions_expires_at on sessions (expires_at);
 
