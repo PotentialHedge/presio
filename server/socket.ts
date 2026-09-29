@@ -2,6 +2,7 @@ import type { Server, Socket } from "socket.io";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { safeEqual } from "./auth.js";
 import {
+  asRecord,
   isValidSlideNumber,
   isValidTotalSlides,
   jsonSize,
@@ -221,7 +222,8 @@ export function registerSocketHandlers(
   };
 
   io.on("connection", (socket) => {
-    socket.on("join_session", async ({ sessionId, role, token }: { sessionId: string; role: string; token?: string }) => {
+    socket.on("join_session", async (raw: unknown) => {
+      const { sessionId, role, token } = asRecord(raw);
       // Over budget: drop silently. Answering would hand a scanner the timing
       // signal the throttle exists to deny, and a real client simply retries on
       // its next watchdog tick, by which point the bucket has refilled.
@@ -233,19 +235,26 @@ export function registerSocketHandlers(
         return;
       }
 
-      const { data } = await supabase
-        .from("sessions")
-        .select("current_slide, total_slides, controller_token")
-        .eq("id", sessionId)
-        .neq("status", "expired")
-        .single();
+      let data;
+      try {
+        ({ data } = await supabase
+          .from("sessions")
+          .select("current_slide, total_slides, controller_token")
+          .eq("id", sessionId)
+          .neq("status", "expired")
+          .single());
+      } catch (err) {
+        console.warn("join_session failed:", err);
+        socket.emit("error", { message: "Couldn't join the session" });
+        return;
+      }
 
       if (!data) {
         socket.emit("error", { message: "Session not found" });
         return;
       }
 
-      let grantedRole = role;
+      let grantedRole: "controller" | "viewer" = role === "controller" ? "controller" : "viewer";
       if (role === "controller") {
         if (typeof token !== "string" || !safeEqual(token, data.controller_token)) {
           grantedRole = "viewer";
@@ -278,7 +287,8 @@ export function registerSocketHandlers(
       if (grantedRole === "controller") socket.emit("plugin_viewers", { viewers: presenceIn(sessionId) });
     });
 
-    socket.on("slide_change", controllerOnly(socket, async (sessionId, { slideNumber }: { slideNumber: number }) => {
+    socket.on("slide_change", controllerOnly(socket, async (sessionId, raw: unknown) => {
+      const { slideNumber } = asRecord(raw);
       // Reject non-finite/out-of-range values rather than persisting garbage.
       if (!isValidSlideNumber(slideNumber, socket.data.totalSlides)) return;
 
@@ -315,11 +325,13 @@ export function registerSocketHandlers(
     // the file with a different page count leaves the stored row stale —
     // correct it here so slide validation and later joins match the document
     // on screen.
-    socket.on("total_slides_change", controllerOnly(socket, async (sessionId, { totalSlides }: { totalSlides: number }) => {
+    socket.on("total_slides_change", controllerOnly(socket, async (sessionId, raw: unknown) => {
+      const { totalSlides } = asRecord(raw);
       if (!isValidTotalSlides(totalSlides)) return;
-      socket.data.totalSlides = totalSlides;
+      await setRoomTotalSlides(io, sessionId, totalSlides);
       io.to(sessionId).emit("total_slides_update", { totalSlides });
-      await supabase.from("sessions").update({ total_slides: totalSlides }).eq("id", sessionId);
+      const { error } = await supabase.from("sessions").update({ total_slides: totalSlides }).eq("id", sessionId);
+      if (error) console.warn(`Couldn't store session ${sessionId}'s page count:`, error.message);
     }));
 
     socket.on("blank_toggle", controllerOnly(socket, (sessionId) => {

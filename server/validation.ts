@@ -121,6 +121,12 @@ export function jsonSize(value: unknown): number {
   }
 }
 
+/** An untrusted payload's fields ({} when it isn't an object): socket
+ *  handlers read what they need and check each value. */
+export function asRecord(raw: unknown): Record<string, unknown> {
+  return typeof raw === "object" && raw !== null && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+}
+
 /** A plugin message's fields, when it's an object naming a valid plugin id. */
 function pluginMessage(raw: unknown): (Record<string, unknown> & { plugin: string }) | null {
   if (typeof raw !== "object" || raw === null) return null;
