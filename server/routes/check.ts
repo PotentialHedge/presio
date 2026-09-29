@@ -235,14 +235,17 @@ function validateNotes(
   }
 
   let text: string;
-  try { text = new TextDecoder().decode(content); }
+  try { text = new TextDecoder("utf-8", { fatal: true }).decode(content); }
   catch { return { filename, kind: "notes", slide: slide || undefined, validity: "invalid", issues: [...issues, { level: "error", message: "Content is not valid UTF-8" }] }; }
 
   let data: unknown;
   try { data = JSON.parse(text); }
   catch { return { filename, kind: "notes", slide: slide || undefined, validity: "invalid", issues: [...issues, { level: "error", message: "Not valid JSON" }] }; }
 
-  const d = data as Record<string, unknown>;
+  if (!isRecord(data)) {
+    return { filename, kind: "notes", slide: slide || undefined, validity: "invalid", issues: [...issues, { level: "error", message: "Must be a JSON object" }], data };
+  }
+  const d = data;
   let rendered: string | undefined;
 
   if (!("notes" in d)) {
@@ -287,11 +290,18 @@ function validateMediaJson(
     issues.push({ level: "error", message: `Slide ${slide} is out of range (1–${pageCount})` });
   }
 
+  let text: string;
+  try { text = new TextDecoder("utf-8", { fatal: true }).decode(content); }
+  catch { return { filename, kind: "media-json", slide: slide || undefined, validity: "invalid", issues: [...issues, { level: "error", message: "Content is not valid UTF-8" }] }; }
+
   let data: unknown;
-  try { data = JSON.parse(new TextDecoder().decode(content)); }
+  try { data = JSON.parse(text); }
   catch { return { filename, kind: "media-json", slide: slide || undefined, validity: "invalid", issues: [...issues, { level: "error", message: "Not valid JSON" }] }; }
 
-  const m = data as Record<string, unknown>;
+  if (!isRecord(data)) {
+    return { filename, kind: "media-json", slide: slide || undefined, validity: "invalid", issues: [...issues, { level: "error", message: "Must be a JSON object" }], data };
+  }
+  const m = data;
   for (const f of ["id", "mime", "slide"] as const) {
     if (m[f] === undefined) issues.push({ level: "error", message: `Missing field "${f}"` });
   }
@@ -323,6 +333,10 @@ function validateMediaJson(
   }
 
   return { filename, kind: "media-json", slide: isNaN(slide) ? undefined : slide, validity: issueValidity(issues), issues, data };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function issueValidity(issues: Issue[]): Validity {

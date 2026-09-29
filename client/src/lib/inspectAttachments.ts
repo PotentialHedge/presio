@@ -41,6 +41,10 @@ export interface DeckReport {
   summary: { valid: number; warning: number; invalid: number; total: number };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 function validity(issues: AttachmentIssue[]): Validity {
   if (issues.some((i) => i.level === "error")) return "invalid";
   if (issues.some((i) => i.level === "warning")) return "warning";
@@ -67,7 +71,7 @@ function inspectNotesJson(
 
   let text: string;
   try {
-    text = new TextDecoder().decode(content);
+    text = new TextDecoder("utf-8", { fatal: true }).decode(content);
   } catch {
     issues.push({ level: "error", message: "Content is not valid UTF-8" });
     return { filename, kind: "notes", slide: slideFromName || undefined, validity: "invalid", issues, content };
@@ -80,7 +84,11 @@ function inspectNotesJson(
     return { filename, kind: "notes", slide: slideFromName || undefined, validity: "invalid", issues, content };
   }
 
-  const data = parsed as Record<string, unknown>;
+  if (!isRecord(parsed)) {
+    issues.push({ level: "error", message: "Must be a JSON object" });
+    return { filename, kind: "notes", slide: slideFromName || undefined, validity: "invalid", issues, content, parsed };
+  }
+  const data = parsed;
 
   if (!("notes" in data)) {
     issues.push({ level: "error", message: 'Missing required "notes" field' });
@@ -138,7 +146,7 @@ function inspectMediaJson(
 
   let text: string;
   try {
-    text = new TextDecoder().decode(content);
+    text = new TextDecoder("utf-8", { fatal: true }).decode(content);
   } catch {
     issues.push({ level: "error", message: "Content is not valid UTF-8" });
     return { filename, kind: "media-json", slide: slideFromName || undefined, validity: "invalid", issues, content };
@@ -152,7 +160,11 @@ function inspectMediaJson(
     return { filename, kind: "media-json", slide: slideFromName || undefined, validity: "invalid", issues, content };
   }
 
-  const m = parsed as Record<string, unknown>;
+  if (!isRecord(parsed)) {
+    issues.push({ level: "error", message: "Must be a JSON object" });
+    return { filename, kind: "media-json", slide: slideFromName || undefined, validity: "invalid", issues, content, parsed };
+  }
+  const m = parsed;
 
   // Required fields
   for (const field of ["id", "mime", "slide"] as const) {
