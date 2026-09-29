@@ -62,7 +62,9 @@ async function cleanupExpired() {
 // Run once at startup (the interval otherwise waits a full hour first), then
 // hourly. Guard so a transient failure doesn't crash boot.
 cleanupExpired().catch((err) => console.error("Initial cleanup failed:", err));
-setInterval(cleanupExpired, 60 * 60 * 1000);
+setInterval(() => {
+  cleanupExpired().catch((err) => console.error("Cleanup failed:", err));
+}, 60 * 60 * 1000);
 
 // --- Start ---
 
