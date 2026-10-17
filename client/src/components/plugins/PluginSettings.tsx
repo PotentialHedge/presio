@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Check, Copy, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { appOrigin } from "@/lib/origins";
+import { agentPrompt } from "@/lib/plugins/agentPrompt";
 import type { PluginHost } from "@/lib/plugins/host";
 import {
   findCommand,
@@ -225,13 +225,6 @@ export function AddPluginPage({ onAdded }: { onAdded?: (key: string, plugin: Loa
       <BuildWithAgent />
     </div>
   );
-}
-
-/** The prompt that has a coding agent build a plugin: it reads /plugins.md,
- *  makes the repo, and hands back a ?plugins= link to open. */
-function agentPrompt(what: string): string {
-  const task = what.trim().replace(/\.$/, "") || "…";
-  return `Read ${appOrigin}/plugins.md and build me a Presio plugin that ${task}.`;
 }
 
 function BuildWithAgent() {

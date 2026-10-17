@@ -15,7 +15,7 @@ and talks to Presio only through `window.presio`.
 ## Build one (for agents)
 
 You were asked to build a plugin. Do it without asking the user anything
-except what the plugin should do, which they have told you. Pick a short slug
+except what the plugin should do (ask that if they haven't said). Pick a short slug
 `<name>` for it (`poll`, `closed-captions`).
 
 1. **Make the repo.** With the GitHub CLI:

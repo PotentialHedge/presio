@@ -9,6 +9,7 @@ import { PresioLogo } from "@/components/PresioLogo";
 import { GitHubIcon } from "@/components/GitHubIcon";
 import { MobileNotice } from "@/components/MobileNotice";
 import { CodeBlock } from "@/components/CodeBlock";
+import { CustomizeWithAgent } from "@/components/CustomizeWithAgent";
 import { ConfirmReplaceDialog } from "@/components/controller/ConfirmReplaceDialog";
 import { ConfirmReuploadDialog } from "@/components/controller/ConfirmReuploadDialog";
 import { ConfirmEndDialog } from "@/components/controller/ConfirmEndDialog";
@@ -1378,6 +1379,13 @@ export default function Home() {
 
       {!minimal && (
       <>
+      {/* ------------------------------------------------------------ plugins */}
+      <section id="customize" className="px-6 py-24 md:py-28">
+        <ScrollReveal className="mx-auto max-w-6xl">
+          <CustomizeWithAgent />
+        </ScrollReveal>
+      </section>
+
       {/* ---------------------------------------------------------- integrations */}
       <section id="integrations" className="px-6 py-24 md:py-28">
         <ScrollReveal className="mx-auto max-w-6xl">
