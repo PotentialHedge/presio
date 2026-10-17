@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { RotateCw, EllipsisVertical } from "lucide-react";
+import { RotateCw, EllipsisVertical, ArrowLeft, ArrowRight, ChevronFirst, ChevronLast, Hash, Maximize, Minimize, MonitorCog, House, Puzzle } from "lucide-react";
 import { getSessionAuth, setSessionAuth } from "@/lib/utils";
 import { appOrigin, onViewerOrigin, TAKEOVER_PARAM } from "@/lib/origins";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,12 @@ import { ViewerHint } from "@/components/ViewerHint";
 import { ViewerPluginLayer } from "@/components/plugins/ViewerPluginLayer";
 import { SlideLayers } from "@/components/plugins/SlideLayers";
 import type { PluginHostState } from "@/lib/plugins/usePluginHost";
+import { ViewerPluginList, ViewerSheets, ViewerToolbar } from "@/components/plugins/ViewerPlugins";
+import { usePluginPaletteItems } from "@/components/plugins/pluginCommands";
+import { CommandPalette } from "@/components/CommandPalette";
+import { goToSlideItems } from "@/components/controller/controllerCommands";
+import { appPaletteItems, slideArg, useAppCommands, type AppCommand } from "@/lib/commands";
+import { runsOnViewer, useViewerPluginSwitches } from "@/lib/plugins/viewerSwitches";
 
 export function ViewerView({
   id,
@@ -42,6 +48,7 @@ export function ViewerView({
   const navigate = useNavigate();
   const [cursorVisible, setCursorVisible] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   // Opened straight away when a viewer on the viewer origin handed over here
   // to take control (see the menu below).
   const [authOpen, setAuthOpen] = useState(() => new URLSearchParams(window.location.search).has(TAKEOVER_PARAM));
@@ -56,9 +63,9 @@ export function ViewerView({
   const armHide = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
-      if (!menuOpen && !authOpen) setCursorVisible(false);
+      if (!menuOpen && !authOpen && !paletteOpen) setCursorVisible(false);
     }, 3000);
-  }, [menuOpen, authOpen]);
+  }, [menuOpen, authOpen, paletteOpen]);
 
   const resetTimer = useCallback(() => {
     setCursorVisible(true);
@@ -80,11 +87,61 @@ export function ViewerView({
     return () => document.removeEventListener("fullscreenchange", onFsChange);
   }, []);
 
+  // Plugins this viewer turned off don't run here: their surfaces aren't
+  // mounted, and their buttons aren't drawn.
+  const switches = useViewerPluginSwitches();
+  const running = useMemo(
+    () => ({ ...plugins, plugins: plugins.plugins.filter((p) => !switches.isOff(p.id)) }),
+    [plugins, switches]
+  );
+
+  const toggleFullscreen = useCallback(() => {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void document.documentElement.requestFullscreen();
+  }, []);
+
+  // The viewer's own commands, for the palette; navigating ones only where
+  // this viewer may move on its own (a local viewer mirrors the presenter),
+  // and those plugins can run too (presio.commands.execute).
+  const clamp = (n: number) => Math.min(Math.max(n, 1), totalSlides);
+  const appCommands: AppCommand[] = [
+    ...(!local
+      ? [
+          { id: "nextSlide", title: "Next slide", category: "Navigation", icon: ArrowRight, shortcut: "→", exposed: true, run: () => onViewerGoTo(clamp(currentSlide + 1)) },
+          { id: "prevSlide", title: "Previous slide", category: "Navigation", icon: ArrowLeft, shortcut: "←", exposed: true, run: () => onViewerGoTo(clamp(currentSlide - 1)) },
+          { id: "firstSlide", title: "First slide", category: "Navigation", icon: ChevronFirst, exposed: true, run: () => onViewerGoTo(1) },
+          { id: "lastSlide", title: "Last slide", category: "Navigation", icon: ChevronLast, exposed: true, run: () => onViewerGoTo(totalSlides) },
+          { id: "goToSlide", title: "Go to slide…", category: "Navigation", icon: Hash, prefill: "slide ", exposed: true, run: (args: Record<string, unknown>) => onViewerGoTo(clamp(slideArg(args))) },
+          ...(outOfSync ? [{ id: "resync", title: "Follow the presenter again", category: "Navigation", icon: RotateCw, keywords: "sync", run: onResync }] : []),
+        ]
+      : []),
+    { id: "fullscreen", title: isFullscreen ? "Exit fullscreen" : "Enter fullscreen", category: "Viewer", icon: isFullscreen ? Minimize : Maximize, shortcut: "F", run: toggleFullscreen },
+    { id: "switchToController", title: "Switch to the controller", category: "Viewer", icon: MonitorCog, keywords: "present take control", run: () => switchToController() },
+    { id: "home", title: "Back to home", category: "Viewer", icon: House, run: () => navigate("/") },
+    ...plugins.plugins.filter((p) => runsOnViewer(p.manifest)).map((p): AppCommand => {
+      const off = switches.isOff(p.id);
+      return {
+        id: `pluginSwitch:${p.id}`,
+        title: `Turn ${p.manifest.displayName} ${off ? "on" : "off"} on this device`,
+        category: "Plugins",
+        icon: Puzzle,
+        keywords: "plugin disable enable",
+        run: () => switches.setOff(p.id, !off),
+      };
+    }),
+  ];
+  useAppCommands(plugins.host, appCommands);
+  const pluginPaletteItems = usePluginPaletteItems(plugins.host, running.plugins, null);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((open) => !open);
+        return;
+      }
       if (e.key === "f" || e.key === "F") {
-        if (document.fullscreenElement) document.exitFullscreen();
-        else document.documentElement.requestFullscreen();
+        toggleFullscreen();
       } else if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") {
         e.preventDefault();
         onViewerGoTo(currentSlide + 1);
@@ -95,7 +152,24 @@ export function ViewerView({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [currentSlide, onViewerGoTo]);
+  }, [currentSlide, onViewerGoTo, toggleFullscreen]);
+
+  // Take control: on the viewer origin the controller token must never be
+  // stored (lib/origins.ts), so ask for the passphrase on the app origin.
+  const switchToController = () => {
+    if (onViewerOrigin) {
+      window.location.assign(`${appOrigin}/s/${id}?role=viewer&${TAKEOVER_PARAM}=1`);
+      return;
+    }
+    // Local sessions are same-device; no passphrase gate needed.
+    const { controllerToken } = getSessionAuth(id);
+    if (local || controllerToken) {
+      navigate(`/s/${id}?role=controller`, { replace: true });
+    } else {
+      setMenuOpen(false);
+      setAuthOpen(true);
+    }
+  };
 
   const submitPassphrase = async () => {
     setAuthError("");
@@ -134,7 +208,7 @@ export function ViewerView({
       <div ref={canvasRef} data-testid="viewer-slide" data-slide={currentSlide} className="w-full h-full relative" />
       {/* Plugins' live layers on the slide (media, drawings, …): on the page,
           over its links (which they let through), under the blank cover. */}
-      <SlideLayers plugins={plugins} slide={currentSlide} mode="live" containerRef={canvasRef} />
+      <SlideLayers plugins={running} slide={currentSlide} mode="live" containerRef={canvasRef} />
 
       {/* Internal links move this viewer only, and only when it is allowed to
           navigate independently — a local viewer mirrors the controller, so it
@@ -160,7 +234,8 @@ export function ViewerView({
         </div>
       )}
 
-      <ViewerPluginLayer host={plugins.host} plugins={plugins.plugins} />
+      <ViewerPluginLayer host={plugins.host} plugins={running.plugins} />
+      <ViewerSheets host={plugins.host} plugins={running.plugins} />
 
       <div className="absolute top-4 left-4 flex items-center gap-2">
         {outOfSync ? (
@@ -186,14 +261,24 @@ export function ViewerView({
         )}
       </div>
 
-      <button
-        onClick={() => setMenuOpen(true)}
-        className={`absolute top-4 right-4 p-2 rounded-full bg-black/20 hover:bg-black/30 text-white backdrop-blur drop-shadow-md cursor-pointer transition-opacity duration-300 ${
-          cursorVisible ? "opacity-70 hover:opacity-100" : "opacity-0 pointer-events-none"
+      {/* Plugins' buttons for the audience, then the menu; both fade with
+          the cursor. */}
+      <div
+        className={`absolute top-4 right-4 flex items-center gap-2 transition-opacity duration-300 ${
+          cursorVisible ? "" : "opacity-0 pointer-events-none"
         }`}
       >
-        <EllipsisVertical size={20} />
-      </button>
+        <div className="flex items-center gap-2 opacity-90 hover:opacity-100 transition-opacity">
+          <ViewerToolbar host={plugins.host} plugins={running.plugins} />
+        </div>
+        <button
+          onClick={() => setMenuOpen(true)}
+          aria-label="Menu"
+          className="p-2 rounded-full bg-black/20 hover:bg-black/30 text-white backdrop-blur drop-shadow-md cursor-pointer opacity-70 hover:opacity-100 transition-opacity"
+        >
+          <EllipsisVertical size={20} />
+        </button>
+      </div>
 
       {menuOpen && (
         <DialogOverlay onClose={() => setMenuOpen(false)} maxWidth="max-w-xs">
@@ -202,23 +287,7 @@ export function ViewerView({
             <Button
               className="w-full"
               variant="outline"
-              onClick={() => {
-                // The controller token must never be stored on the viewer
-                // origin (lib/origins.ts): ask for the passphrase on the app
-                // origin instead.
-                if (onViewerOrigin) {
-                  window.location.assign(`${appOrigin}/s/${id}?role=viewer&${TAKEOVER_PARAM}=1`);
-                  return;
-                }
-                // Local sessions are same-device; no passphrase gate needed.
-                const { controllerToken } = getSessionAuth(id);
-                if (local || controllerToken) {
-                  navigate(`/s/${id}?role=controller`, { replace: true });
-                } else {
-                  setMenuOpen(false);
-                  setAuthOpen(true);
-                }
-              }}
+              onClick={switchToController}
             >
               Switch to Controller
             </Button>
@@ -227,11 +296,7 @@ export function ViewerView({
               className="w-full"
               variant="outline"
               onClick={() => {
-                if (document.fullscreenElement) {
-                  document.exitFullscreen();
-                } else {
-                  document.documentElement.requestFullscreen();
-                }
+                toggleFullscreen();
                 setMenuOpen(false);
               }}
             >
@@ -240,11 +305,20 @@ export function ViewerView({
             <Button className="w-full" variant="outline" onClick={() => navigate("/")}>
               Back to Home
             </Button>
-            <Button className="w-full" variant="ghost" onClick={() => setMenuOpen(false)}>
-              Close
-            </Button>
           </div>
+          <ViewerPluginList plugins={plugins.plugins} switches={switches} />
+          <Button className="w-full" variant="ghost" onClick={() => setMenuOpen(false)}>
+            Close
+          </Button>
         </DialogOverlay>
+      )}
+
+      {paletteOpen && (
+        <CommandPalette
+          items={[...appPaletteItems(appCommands), ...pluginPaletteItems]}
+          extraItems={local ? undefined : (query) => goToSlideItems(query, totalSlides, onViewerGoTo)}
+          onClose={() => setPaletteOpen(false)}
+        />
       )}
 
       {authOpen && (

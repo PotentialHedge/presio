@@ -70,6 +70,14 @@ index.html
     `contributes.panels` (`{ "id", "title" }`); `presio.panel` says which.
     Switching the plugin on adds them; the presenter can move, resize and
     hide them like any other card.
+  - `viewerSheet`: a card on each audience device for the audience to
+    interact with (a poll's answers): a bottom sheet on phones, a card beside
+    the slide on wide screens, under the plugin's name with a close button.
+    Hidden until the plugin calls `presio.ui.setVisible(true)`; the viewer can
+    close it (✕, Esc, or a drag down on a phone), which the plugin hears with
+    `presio.ui.onVisibleChange`. The sheet fits the height of your page's
+    `<body>` (so don't make it `height: 100%`), up to most of the screen, and
+    scrolls past that. Use `presio.theme` to match the app's light or dark card.
   - `viewer`: a full-screen layer on every viewer screen (projector and
     audience phones), hidden until the plugin calls `presio.ui.setVisible(true)`.
   - `slide`: a layer over the slide itself, sized to the page, on the
@@ -106,14 +114,24 @@ index.html
 - `contributes.commands` — what the plugin can do: `{ "id", "title", "icon"?,
   "category"? }`. Handle each with `presio.commands.register(id, handler)` in
   a frame (usually `background`); the handler gets the call's args and what it
-  returns is the result. Buttons and keybindings run commands, and other
-  plugins can too: `presio.commands.execute("alice/poll.open", args)`.
+  returns is the result. Buttons and keybindings run commands, the command
+  palette (⌘K / Ctrl+K) lists every command a frame on the device has
+  registered (under `category`, or the plugin's `displayName`, with its key),
+  and other plugins can run them too:
+  `presio.commands.execute("alice/poll.open", args)`. Presio's own navigation
+  is there as well: `presio.nextSlide`, `presio.prevSlide`,
+  `presio.firstSlide`, `presio.lastSlide` and `presio.goToSlide` with
+  `{ slide }` (on a viewer they move that viewer, where it may move on its own).
 - `contributes.buttons` — up to 8 buttons Presio draws natively, each running
   a `command`. `location`: `controller.toolbar` (the controller's bottom
   bar), `controller.currentSlide` (the current slide card's header, as an icon
-  with the label as its tooltip) or `settings` (under **Actions** on the
-  plugin's page in Settings); `thumbnail.context` and `viewer.toolbar` are
-  reserved. `label` and `icon` default to the command's. `icon` is one of
+  with the label as its tooltip), `thumbnail.context` (the slide thumbnails'
+  context menu — right-click or long-press; the command runs with
+  `{ slide }`), `viewer.toolbar` (a pill beside the viewer's menu button on
+  every audience device; the command runs in that device's `viewerSheet`,
+  `viewer` or `slide` frame, so register it there — on a phone an icon-only
+  pill when it has an icon) or `settings` (under **Actions** on the plugin's
+  page in Settings). `label` and `icon` default to the command's. `icon` is one of
   `qr-code bar-chart message users timer bell star sparkles hand check eye
   megaphone pen download upload`. With `accept` (an `<input accept>` value,
   e.g. `".json,application/json"`) Presio asks the presenter for a file first
@@ -134,7 +152,12 @@ index.html
   `presio.commands.shortcut(command)` gives the key the presenter has for one
   ("E", "⌘Z", or null), to show in a tooltip.
 - `contributes.panels` — dashboard cards for the `panel` surface.
-- `contributes.status` — reserved: small text in the controller's header.
+- `contributes.status` — small text in the controller's header ("12 votes"):
+  `{ "id", "location": "controller.header", "tooltip"? }`, up to 4. Hidden
+  until the plugin sets it with `presio.ui.setStatus(id, { text, tooltip?,
+  icon?, command?, args? })` from the presenter's device; a click runs
+  `command` (one of the plugin's) with `args`. `null` or an empty `text`
+  hides it again.
 - `contributes.settings` — settings Presio shows under the plugin in
   **Settings → Plugins** and stores in the presenter's settings file as
   `<plugin id>.<name>` (e.g. `alice/hello.greeting`). Types: `boolean`, `number`
@@ -212,9 +235,11 @@ presio.storage.onChange(storage => {})     // another surface of this plugin cha
 
 presio.commands.register(id, args => result)  // handle a command; buttons pass { file } or { menuItem }
 presio.commands.execute("<plugin id>.<command>", args)  // → Promise of the handler's result (on this device)
+presio.commands.execute("presio.goToSlide", { slide: 3 })  // Presio's: nextSlide, prevSlide, firstSlide, lastSlide, goToSlide
 presio.commands.shortcut(id)               // the presenter's key for a command: "E", "⌘Z" or null
 presio.ui.setButton(command, { active, label, disabled, menu })  // update its buttons (replaces the last call)
                                            // menu: [{ id, label, checked?, disabled? } | { heading } | { separator: true }]
+presio.ui.setStatus(id, { text, tooltip, icon, command, args })  // a status item in the controller's header; null hides it
 
 presio.deck.attachments()   // → Promise<[{ filename, bytes: Uint8Array }]> ("deck" permission)
 presio.deck.bytes()         // → Promise<Uint8Array>, the PDF itself ("deck")
@@ -222,7 +247,9 @@ presio.deck.pages()         // → Promise<[{ width, height }]>, each page's siz
 presio.deck.save(bytes)     // presenter: → Promise; same pages, saved where the deck lives ("editDeck")
 presio.deck.onChange(kind => {})  // the deck was swapped: "edit" (same pages, e.g. notes saved) or "replace"
 presio.deck.onExport(async (bytes, { mode }) => bytes)  // transform the PDF this device downloads
-presio.ui.setVisible(bool)  // viewer surface: show/hide the layer
+presio.ui.setVisible(bool)  // viewer surface: show/hide the layer; viewerSheet: open/close the sheet
+presio.ui.visible           // whether this frame's layer or sheet is showing
+presio.ui.onVisibleChange(visible => {})  // shown or hidden — also when the viewer closes the sheet
 presio.ui.setInteractive(true | false | "pen" | [{ x, y, w, h }])  // slide surface: take input (fractions of the surface)
                                            // in areas, touches arrive forwarded: pointer events sent to the element
                                            // touched (setPointerCapture throws for them; wrap it), a tap as a click

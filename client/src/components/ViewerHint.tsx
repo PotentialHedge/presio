@@ -12,6 +12,8 @@ function HintKey({ children }: { children: React.ReactNode }) {
 
 // A transient hint shown at the top of a freshly-spawned viewer window. It fades
 // out after 10s, or as soon as the user presses one of the keys it describes.
+// Keys mean nothing on a touch screen, so it isn't shown there; and it never
+// takes a click meant for the buttons it may overlap on a narrow window.
 export function ViewerHint({ canNavigate }: { canNavigate: boolean }) {
   const [visible, setVisible] = useState(true);
 
@@ -31,8 +33,8 @@ export function ViewerHint({ canNavigate }: { canNavigate: boolean }) {
 
   return (
     <div
-      className={`absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 rounded-lg bg-black/70 px-4 py-2 text-sm text-white/90 shadow-md transition-opacity duration-500 ${
-        visible ? "opacity-100" : "opacity-0 pointer-events-none"
+      className={`pointer-events-none absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center [@media(hover:none)]:hidden gap-3 rounded-lg bg-black/70 px-4 py-2 text-sm text-white/90 shadow-md transition-opacity duration-500 ${
+        visible ? "opacity-100" : "opacity-0"
       }`}
     >
       <span className="flex items-center gap-1.5">

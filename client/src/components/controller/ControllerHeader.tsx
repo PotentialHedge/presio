@@ -24,6 +24,7 @@ export function ControllerHeader({
   onDeckWatchResume,
   remoteDeckUpdate = false,
   onRemoteDeckApply,
+  status,
   actions,
 }: {
   id: string;
@@ -48,6 +49,8 @@ export function ControllerHeader({
   onRemoteDeckApply?: () => void;
   /** Tighter spacing + bare code (no "Code:" label) for the mobile header. */
   compact?: boolean;
+  /** Plugins' status items, just before the actions. */
+  status?: ReactNode;
   actions?: ReactNode;
 }) {
   const deck = onReplaceDeck && onDeckWatchModeChange && onDeckWatchApply && onDeckWatchResume && (
@@ -117,7 +120,10 @@ export function ControllerHeader({
           <div className="min-w-0 lg:pointer-events-auto">{deck}</div>
         </div>
       )}
-      <div className="flex min-w-0 flex-1 items-center justify-end gap-1">{actions}</div>
+      <div className="flex min-w-0 flex-1 items-center justify-end gap-1">
+        {status}
+        {actions}
+      </div>
     </div>
   );
 }

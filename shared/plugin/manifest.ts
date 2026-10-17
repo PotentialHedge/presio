@@ -30,7 +30,8 @@ export type PluginSurface =
   | "panel"
   /** On each viewer's device, a bottom sheet on phones and a side card on
    *  wide screens, for the audience to interact with (a poll's answers).
-   *  Reserved: not drawn yet. */
+   *  Hidden until the plugin asks to be shown (presio.ui.setVisible), and
+   *  the viewer can dismiss it. */
   | "viewerSheet"
   /** A full-screen layer on every viewer screen, hidden until the plugin
    *  asks to be shown (presio.ui.setVisible). */
@@ -68,9 +69,10 @@ export type ButtonLocation =
   | "controller.toolbar"
   /** The current slide card's header, as an icon (the label is its tooltip). */
   | "controller.currentSlide"
-  /** A thumbnail's context menu; the command gets { slide }. Reserved: not drawn yet. */
+  /** A thumbnail's context menu (right-click, or a long press); the command gets { slide }. */
   | "thumbnail.context"
-  /** The viewer's toolbar, on every audience device. Reserved: not drawn yet. */
+  /** The viewer's toolbar, on every audience device; the command runs in
+   *  that device's frames (viewerSheet, viewer, slide). */
   | "viewer.toolbar"
   /** The plugin's own page in Settings: for what's used now and then. */
   | "settings";
@@ -141,7 +143,8 @@ export interface KeybindingContribution {
 }
 
 /** A small piece of text Presio shows for the plugin ("12 votes"); the
- *  plugin sets its text at runtime. Reserved: not drawn yet. */
+ *  plugin sets its text at runtime (presio.ui.setStatus), and it's hidden
+ *  until it does. */
 export interface StatusContribution {
   id: string;
   location: StatusLocation;

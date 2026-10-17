@@ -96,10 +96,14 @@ export const CAPABILITIES = [
   "clock",
   "ui",
   "panels",
+  /** Per-viewer input slots held by the server (presio.audience). */
   "audience",
-  // Reserved: designed, not yet implemented by any host.
+  /** Status items in the controller's header (presio.ui.setStatus). */
   "status",
+  /** The viewer sheet surface, and viewer.toolbar buttons. */
   "viewerSheet",
+  /** The command palette, which lists contributed commands, and Presio's
+   *  own commands ("presio.nextSlide") for presio.commands.execute. */
   "palette",
 ] as const;
 
@@ -142,6 +146,7 @@ export type HostMethod =
   | "ui.setVisible"
   | "ui.setInteractive"
   | "ui.setButton"
+  | "ui.setStatus"
   | "audience.set"
   | "audience.open"
   | "audience.close"
@@ -170,6 +175,9 @@ export type FrameEvent =
   | "ui.view"
   | "ui.page"
   | "ui.hover"
+  /** { visible }: Presio showed or hid the frame's container (the viewer
+   *  dismissed a sheet). */
+  | "ui.visible"
   | "messages.receive"
   | "history.update"
   /** { key, open }: a key opened or closed (every role). */
@@ -182,7 +190,10 @@ export type FrameEvent =
 /** Events a frame sends the host. */
 export type HostEvent =
   /** The plugin's document is in place. */
-  "frame.ready";
+  | "frame.ready"
+  /** { height }: how tall the plugin's document is, in CSS pixels, for a
+   *  container that fits its content (the viewer sheet). */
+  | "ui.contentSize";
 
 /** An envelope's shape, checked loosely: what arrives on a port is untrusted. */
 export function isEnvelope(value: unknown): value is Envelope {

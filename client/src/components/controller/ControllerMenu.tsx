@@ -1,6 +1,6 @@
 import type { Deck } from "@/lib/deck";
 import type { PluginHost } from "@/lib/plugins/host";
-import { Menu, X, RefreshCw, Settings, ExternalLink, Share2, KeyRound, MonitorPlay, Power } from "lucide-react";
+import { Menu, X, RefreshCw, Settings, ExternalLink, Share2, KeyRound, MonitorPlay, Power, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { DownloadButton } from "@/components/DownloadButton";
@@ -26,6 +26,7 @@ export function ControllerMenu({
   onEndClick,
   onSettings,
   onOpenViewer,
+  onCommands,
 }: {
   open: boolean;
   onOpen: () => void;
@@ -46,6 +47,8 @@ export function ControllerMenu({
   onSettings?: () => void;
   /** Opens the viewer in its own window (desktop only). */
   onOpenViewer?: () => void;
+  /** Opens the command palette. */
+  onCommands?: () => void;
 }) {
   // Run an action after dismissing the drawer.
   const act = (fn: () => void) => () => {
@@ -72,6 +75,12 @@ export function ControllerMenu({
               </Button>
             </div>
             <div className="flex-1 flex flex-col gap-1 overflow-y-auto p-2">
+              {onCommands && (
+                <Button variant="ghost" className="justify-start" data-testid="menu-commands" onClick={act(onCommands)}>
+                  <Search size={16} className="mr-2" />
+                  Commands
+                </Button>
+              )}
               <Button variant="ghost" className="justify-start" onClick={act(onShare)}>
                 <Share2 size={16} className="mr-2" />
                 Share

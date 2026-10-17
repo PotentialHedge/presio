@@ -1,24 +1,5 @@
 import { useSyncExternalStore } from "react";
-import {
-  BarChart3,
-  Bell,
-  Check,
-  ChevronDown,
-  ChevronUp,
-  Download,
-  Eye,
-  Hand,
-  Megaphone,
-  MessageSquare,
-  PenLine,
-  QrCode,
-  Sparkles,
-  Star,
-  Timer,
-  Upload,
-  Users,
-  type LucideIcon,
-} from "lucide-react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import {
@@ -31,30 +12,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import type { ButtonMenuEntry, PluginHost } from "@/lib/plugins/host";
+import { ContextMenuItem, ContextMenuLabel, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { findCommand, type ButtonContribution, type ButtonLocation, type LoadedPlugin } from "@/lib/plugins/manifest";
 import { PluginFrame } from "./PluginFrame";
+import { pluginIcon } from "./icons";
+import { runPluginCommand } from "./pluginCommands";
 
 // The presenter's side of plugins, drawn by Presio from what each plugin
-// declares: its panels, its hidden background frame, and the buttons that run
-// its commands.
-
-const ICONS: Record<string, LucideIcon> = {
-  "qr-code": QrCode,
-  "bar-chart": BarChart3,
-  message: MessageSquare,
-  users: Users,
-  timer: Timer,
-  bell: Bell,
-  star: Star,
-  sparkles: Sparkles,
-  hand: Hand,
-  check: Check,
-  eye: Eye,
-  megaphone: Megaphone,
-  pen: PenLine,
-  download: Download,
-  upload: Upload,
-};
+// declares: its panels, its hidden background frame, the buttons that run
+// its commands, its status items and its thumbnail menu entries.
 
 /** One of a plugin's panels, in its dashboard card. */
 export function PluginPanel({ host, plugin, panel }: { host: PluginHost; plugin: LoadedPlugin; panel: string }) {
@@ -95,23 +61,10 @@ export function PluginButtons({
   );
 }
 
-/**
- * Press a plugin's button: run its command. One that asks for a file is
- * picked here, by Presio: the click is Presio's, and a plugin's frame
- * couldn't open a file picker on it.
- */
+/** Press a plugin's button: run its command (asking for a file first, for
+ *  a button with "accept"). */
 function press(host: PluginHost, pluginId: string, button: ButtonContribution) {
-  if (!button.accept) return host.pressButton(pluginId, button.command);
-  const input = document.createElement("input");
-  input.type = "file";
-  input.accept = button.accept;
-  input.onchange = async () => {
-    const file = input.files?.[0];
-    if (!file) return;
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    host.pressButton(pluginId, button.command, { name: file.name, type: file.type, bytes });
-  };
-  input.click();
+  runPluginCommand(host, pluginId, button.command, { accept: button.accept });
 }
 
 function PluginButtonGroup({ host, plugin, location }: { host: PluginHost; plugin: LoadedPlugin; location: ButtonLocation }) {
@@ -127,7 +80,7 @@ function PluginButtonGroup({ host, plugin, location }: { host: PluginHost; plugi
           const command = findCommand(manifest, b.command);
           const button = { ...b, label: b.label ?? command?.title ?? b.command, icon: b.icon ?? command?.icon };
           const state = states[button.command] ?? {};
-          const Icon = button.icon ? ICONS[button.icon] : undefined;
+          const Icon = pluginIcon(button.icon);
           const title = `${button.tooltip ?? state.label ?? button.label} (${name})`;
           const menu = state.menu && (
             <ButtonMenu
@@ -251,26 +204,145 @@ function ButtonMenu({
         )}
       </DropdownMenuTrigger>
       <DropdownMenuContent side={up ? "top" : "bottom"} align="end" className="max-w-80">
-        {entries.map((entry, i) =>
-          "separator" in entry ? (
-            <DropdownMenuSeparator key={i} />
-          ) : "heading" in entry ? (
-            <DropdownMenuLabel key={i} className="text-xs text-muted-foreground font-normal">
-              {entry.heading}
-            </DropdownMenuLabel>
-          ) : (
-            <DropdownMenuCheckboxItem
-              key={i}
-              checked={entry.checked ?? false}
-              disabled={entry.disabled}
-              data-testid={`plugin-menu-item-${pluginId}-${button.command}-${i}`}
-              onSelect={() => host.pickMenuItem(pluginId, button.command, entry.id)}
-            >
-              <span className="truncate">{entry.label}</span>
-            </DropdownMenuCheckboxItem>
-          )
-        )}
+        <PluginMenuEntries host={host} pluginId={pluginId} command={button.command} entries={entries} />
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+/** The rows of a button's menu (setButton's `menu`), inside a DropdownMenuContent;
+ *  a pick runs the button's command with { menuItem }. */
+export function PluginMenuEntries({
+  host,
+  pluginId,
+  command,
+  entries,
+}: {
+  host: PluginHost;
+  pluginId: string;
+  command: string;
+  entries: ButtonMenuEntry[];
+}) {
+  return (
+    <>
+      {entries.map((entry, i) =>
+        "separator" in entry ? (
+          <DropdownMenuSeparator key={i} />
+        ) : "heading" in entry ? (
+          <DropdownMenuLabel key={i} className="text-xs text-muted-foreground font-normal">
+            {entry.heading}
+          </DropdownMenuLabel>
+        ) : (
+          <DropdownMenuCheckboxItem
+            key={i}
+            checked={entry.checked ?? false}
+            disabled={entry.disabled}
+            data-testid={`plugin-menu-item-${pluginId}-${command}-${i}`}
+            onSelect={() => host.pickMenuItem(pluginId, command, entry.id)}
+          >
+            <span className="truncate">{entry.label}</span>
+          </DropdownMenuCheckboxItem>
+        )
+      )}
+    </>
+  );
+}
+
+/**
+ * Running plugins' status items (contributes.status) for the controller's
+ * header: small text the plugin sets at runtime ("12 votes"), hidden until
+ * it does. One bound to a command runs it on a click.
+ */
+export function PluginStatusItems({ host, plugins, compact = false }: { host: PluginHost; plugins: LoadedPlugin[]; compact?: boolean }) {
+  useSyncExternalStore(host.subscribeStatus, host.statusRevision);
+  const items = plugins.flatMap((plugin) => {
+    const set = host.statusItems(plugin.id);
+    return plugin.manifest.contributes.status.flatMap((decl) => {
+      const state = set[decl.id];
+      return state ? [{ plugin, id: decl.id, state, tooltip: state.tooltip ?? decl.tooltip }] : [];
+    });
+  });
+  if (!items.length) return null;
+  return (
+    <div className="flex min-w-0 items-center gap-0.5" data-testid="plugin-status-items">
+      {items.map(({ plugin, id, state, tooltip }) => {
+        const Icon = pluginIcon(state.icon);
+        const title = `${tooltip ?? state.text} (${plugin.manifest.displayName})`;
+        const content = (
+          <>
+            {Icon && <Icon size={13} className="shrink-0" />}
+            <span className="truncate tabular-nums">{state.text}</span>
+          </>
+        );
+        const className = cn(
+          "inline-flex h-7 min-w-0 items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground",
+          compact ? "max-w-24" : "max-w-48"
+        );
+        const testId = `plugin-status-${plugin.id}-${id}`;
+        const command = state.command;
+        if (!command) {
+          return (
+            <span key={`${plugin.id}:${id}`} title={title} className={className} data-testid={testId}>
+              {content}
+            </span>
+          );
+        }
+        return (
+          <button
+            key={`${plugin.id}:${id}`}
+            type="button"
+            title={title}
+            data-testid={testId}
+            onClick={() => host.runCommand(plugin.id, command, isRecord(state.args) ? state.args : {})}
+            className={cn(className, "hover:bg-accent hover:text-foreground transition-colors")}
+          >
+            {content}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+
+/**
+ * Running plugins' entries in a thumbnail's context menu (thumbnail.context
+ * buttons), each group under its plugin's name; the command runs with
+ * { slide }. Renders nothing when no plugin adds one.
+ */
+export function PluginThumbnailMenuItems({ host, plugins, slide }: { host: PluginHost; plugins: LoadedPlugin[]; slide: number }) {
+  const groups = plugins
+    .map((plugin) => ({ plugin, buttons: plugin.manifest.contributes.buttons.filter((b) => b.location === "thumbnail.context") }))
+    .filter((g) => g.buttons.length);
+  return (
+    <>
+      {groups.map(({ plugin, buttons }) => {
+        const states = host.buttonStates(plugin.id);
+        return (
+          <div key={plugin.hash}>
+            <ContextMenuSeparator />
+            <ContextMenuLabel>{plugin.manifest.displayName}</ContextMenuLabel>
+            {buttons.map((b) => {
+              const command = findCommand(plugin.manifest, b.command);
+              const state = states[b.command] ?? {};
+              const Icon = pluginIcon(b.icon ?? command?.icon);
+              return (
+                <ContextMenuItem
+                  key={b.command}
+                  disabled={state.disabled}
+                  title={b.tooltip}
+                  data-testid={`plugin-context-${plugin.id}-${b.command}`}
+                  onSelect={() => runPluginCommand(host, plugin.id, b.command, { accept: b.accept, args: { slide } })}
+                >
+                  {Icon ? <Icon /> : <span className="size-4" />}
+                  {state.label ?? b.label ?? command?.title ?? b.command}
+                </ContextMenuItem>
+              );
+            })}
+          </div>
+        );
+      })}
+    </>
   );
 }

@@ -51,6 +51,9 @@
     var audienceStateListeners = [];
     var audienceMineListeners = [];
     var audienceChangeListeners = [];
+    var visibleListeners = [];
+    // Whether Presio shows this frame's container (viewer layer, viewer sheet).
+    var visible = false;
     // Command id -> its handler in this frame.
     var commands = {};
     var exporter = null;
@@ -101,6 +104,13 @@
         if (i >= 0) list.splice(i, 1);
       };
     }
+    // The container's visibility changed, from either side: tell the plugin
+    // once per change (an echo of its own setVisible isn't one).
+    function setShown(next) {
+      if (next === visible) return;
+      visible = next;
+      each(visibleListeners, visible);
+    }
     function failure(code, message) {
       var err = new Error(message);
       err.code = code;
@@ -144,6 +154,8 @@
         ctx.hovered = p.hovered;
         each(hoverListeners, ctx.hovered);
       },
+      // Presio hid (or showed) the container itself: the viewer dismissed a sheet.
+      "ui.visible": function (p) { setShown(!!p.visible); },
       "messages.receive": function (p) {
         if (messageListeners.length) each(messageListeners, p);
         else pending.push(p);
@@ -487,8 +499,10 @@
             fire("commands.unregister", { command: id });
           };
         },
-        /** Run a command on this device: "<plugin id>.<command>", or a bare
-         *  id for this plugin's own. Resolves to the handler's result. */
+        /** Run a command on this device: "<plugin id>.<command>", a bare id
+         *  for this plugin's own, or one of Presio's ("presio.nextSlide",
+         *  "presio.prevSlide", "presio.firstSlide", "presio.lastSlide",
+         *  "presio.goToSlide" with { slide }). Resolves to the handler's result. */
         execute: function (command, args) {
           return call("commands.execute", { command: command, args: args === undefined ? null : args });
         },
@@ -614,8 +628,24 @@
         /** "slide" surface: whether a mouse is over the slide. */
         get hovered() { return !!ctx.hovered; },
         onHover: function (cb) { return subscribe(hoverListeners, cb); },
-        /** Viewer surface: show or hide this plugin's full-screen layer. */
-        setVisible: function (visible) { fire("ui.setVisible", { visible: !!visible }); },
+        /** "viewer" surface: show or hide this plugin's full-screen layer.
+         *  "viewerSheet" surface: open or close its sheet (a bottom sheet on
+         *  phones, a card beside the slide on wide screens), which the viewer
+         *  can also close themselves. */
+        setVisible: function (on) {
+          setShown(!!on);
+          fire("ui.setVisible", { visible: !!on });
+        },
+        /** Whether this frame's layer or sheet is showing. */
+        get visible() { return visible; },
+        /** cb(visible): it was shown or hidden — by the plugin, or by the
+         *  viewer closing the sheet. */
+        onVisibleChange: function (cb) { return subscribe(visibleListeners, cb); },
+        /** A status item (contributes.status) in the controller's header:
+         *  { text, tooltip?, icon?, command?, args? } — a click runs `command`
+         *  with `args`. null (or empty text) hides it. Each call replaces the
+         *  last; on audience devices it does nothing. */
+        setStatus: function (id, status) { fire("ui.setStatus", { id: id, status: status || null }); },
         /** Update the buttons that run a command — { active, label,
          *  disabled, menu }. Each call replaces the last. `menu` adds a
          *  small menu beside it: a list of { id, label, checked?, disabled? },
@@ -631,6 +661,22 @@
     // resolve them against its folder, not against this page.
     document.write(withBase(d.html, ctx.plugin.baseUrl));
     document.close();
+    // A viewer sheet fits its content: report how tall the plugin's document
+    // is whenever that changes (the sheet caps it and scrolls past that).
+    if (ctx.surface === "viewerSheet" && typeof ResizeObserver === "function") {
+      var lastHeight = -1;
+      var measure = function () {
+        var body = document.body;
+        if (!body) return;
+        var style = getComputedStyle(body);
+        var height = Math.ceil(body.getBoundingClientRect().height + parseFloat(style.marginTop) + parseFloat(style.marginBottom));
+        if (height === lastHeight) return;
+        lastHeight = height;
+        send({ kind: "event", method: "ui.contentSize", params: { height: height } });
+      };
+      if (document.body) new ResizeObserver(measure).observe(document.body);
+      measure();
+    }
     // Keys pressed while this frame has focus (after a click on one of its
     // buttons) are the page's shortcuts all the same: replay the ones the
     // plugin didn't handle, and that weren't typed into a field, on the page

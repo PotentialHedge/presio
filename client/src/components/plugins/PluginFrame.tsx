@@ -23,6 +23,8 @@ export function PluginFrame({
   onVisibleChange,
   onInteractiveChange,
   onReady,
+  onContentSize,
+  visible,
   view,
   page,
   hovered,
@@ -39,6 +41,11 @@ export function PluginFrame({
   onInteractiveChange?: (value: Interactive) => void;
   /** The plugin's document is in place — e.g. to listen to it (same origin). */
   onReady?: (frame: HTMLIFrameElement) => void;
+  /** Viewer sheet: how tall the plugin's document is (CSS pixels). */
+  onContentSize?: (height: number) => void;
+  /** Whether Presio shows the frame's container: the plugin hears when
+   *  this changes (the viewer dismissed its sheet). */
+  visible?: boolean;
   /** Slide surface: the part of it on screen, and its zoom. */
   view?: SlideView;
   /** Slide surface: where the page is within it. */
@@ -51,7 +58,7 @@ export function PluginFrame({
 }) {
   const ownRef = useRef<HTMLIFrameElement>(null);
   const ref = frameRef ?? ownRef;
-  const hooksRef = useLatestRef({ onVisibleChange, onInteractiveChange, onReady });
+  const hooksRef = useLatestRef({ onVisibleChange, onInteractiveChange, onReady, onContentSize });
   const [link, setLink] = useState<FrameLink | null>(null);
 
   useEffect(() => {
@@ -63,6 +70,9 @@ export function PluginFrame({
   useEffect(() => {
     if (hovered !== undefined) link?.setHovered(hovered);
   }, [link, hovered]);
+  useEffect(() => {
+    if (visible !== undefined) link?.setVisible(visible);
+  }, [link, visible]);
 
   useEffect(() => {
     const frame = ref.current;
@@ -81,6 +91,7 @@ export function PluginFrame({
           onVisible: (v) => hooksRef.current.onVisibleChange?.(v),
           onInteractive: (v) => hooksRef.current.onInteractiveChange?.(v),
           onReady: () => hooksRef.current.onReady?.(frame),
+          onContentSize: (h) => hooksRef.current.onContentSize?.(h),
         },
         panel
       );

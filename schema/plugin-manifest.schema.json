@@ -34,7 +34,7 @@
       "minItems": 1,
       "uniqueItems": true,
       "items": { "enum": ["background", "panel", "viewerSheet", "viewer", "slide"] },
-      "description": "background: hidden on the presenter's device; handles commands and keeps state. panel: inside the presenter's dashboard cards, one per contributes.panels entry. viewerSheet: a bottom sheet (phones) or side card on audience devices (reserved, not drawn yet). viewer: a full-screen layer on every viewer screen, hidden until the plugin shows it. slide: a layer over the slide itself, on the presenter's current slide and every viewer; lets input through unless the plugin claims it."
+      "description": "background: hidden on the presenter's device; handles commands and keeps state. panel: inside the presenter's dashboard cards, one per contributes.panels entry. viewerSheet: a bottom sheet (phones) or side card on audience devices, shown while the plugin asks (presio.ui.setVisible) and until the viewer closes it. viewer: a full-screen layer on every viewer screen, hidden until the plugin shows it. slide: a layer over the slide itself, on the presenter's current slide and every viewer; lets input through unless the plugin claims it."
     },
     "slideSurface": {
       "enum": ["page", "area"],
@@ -96,7 +96,7 @@
                   "viewer.toolbar",
                   "settings"
                 ],
-                "description": "controller.toolbar: the bottom bar. controller.currentSlide: the current slide card's header, as an icon. thumbnail.context: a thumbnail's menu (reserved). viewer.toolbar: every audience device's toolbar (reserved). settings: the plugin's page in Settings."
+                "description": "controller.toolbar: the bottom bar. controller.currentSlide: the current slide card's header, as an icon. thumbnail.context: a thumbnail's context menu; the command gets { slide }. viewer.toolbar: every audience device's toolbar; the command runs in that device's viewerSheet, viewer or slide frame. settings: the plugin's page in Settings."
               },
               "label": {
                 "type": "string",
@@ -160,7 +160,7 @@
               "tooltip": { "type": "string", "maxLength": 120 }
             }
           },
-          "description": "Small text Presio shows for the plugin (\"12 votes\"), set at runtime. Reserved: not drawn yet."
+          "description": "Small text Presio shows for the plugin (\"12 votes\"), set at runtime with presio.ui.setStatus; hidden until then."
         },
         "panels": {
           "type": "array",
