@@ -141,6 +141,13 @@
     @apply bg-background text-foreground;
     margin: 0;
   }
+  /* The controller on a touch screen (useTouchPresenting): no double-tap
+     zoom on anything. In the base layer, so a surface's own touch-action
+     (touch-none on the current slide) still wins. */
+  .no-page-zoom,
+  .no-page-zoom * {
+    touch-action: manipulation;
+  }
 }
 
 /* Installed app (added to the home screen): every surface fits the viewport

@@ -690,6 +690,12 @@
     // resolve them against its folder, not against this page.
     document.write(withBase(d.html, ctx.plugin.baseUrl));
     document.close();
+    // No double-tap zoom of the page from a tap in here (Safari asks the
+    // element tapped, frame or not). Layered, so the plugin's own
+    // touch-action, if it sets one, wins.
+    var noZoomStyle = document.createElement("style");
+    noZoomStyle.textContent = "@layer presio-frame { html, html * { touch-action: manipulation; } }";
+    (document.head || document.documentElement).prepend(noZoomStyle);
     // A viewer sheet fits its content: report how tall the plugin's document
     // is whenever that changes (the sheet caps it and scrolls past that).
     if (ctx.surface === "viewerSheet" && typeof ResizeObserver === "function") {
