@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-route
 import { ThemeProvider } from "@/lib/theme";
 import { AuthProvider } from "@/lib/auth";
 import { PasswordRecoveryDialog } from "@/components/PasswordRecoveryDialog";
+import { PluginPrompts } from "@/components/plugins/TrustPrompt";
 import Home from "@/pages/Home";
 import Presentation from "@/pages/Presentation";
 import Present from "@/pages/Present";
@@ -47,6 +48,9 @@ export default function App() {
             </Routes>
           </OriginGuard>
           <PasswordRecoveryDialog />
+          {/* ?plugins= links, Settings' "Add plugin" and plugin updates all
+              ask here, on whichever page the presenter is on. */}
+          <PluginPrompts />
         </BrowserRouter>
       </AuthProvider>
     </ThemeProvider>
