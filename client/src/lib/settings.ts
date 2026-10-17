@@ -58,11 +58,12 @@ const isPluginCommandKey = (key: string) => {
 function sanitizeKeymap(raw: unknown): Keymap | undefined {
   if (!isRecord(raw)) return undefined;
   const isBinding = (b: unknown): b is KeyBinding =>
-    isRecord(b) && typeof b.key === "string" && b.key.length > 0 && (b.meta === undefined || typeof b.meta === "boolean");
+    isRecord(b) && typeof b.key === "string" && b.key.length > 0 && (b.meta === undefined || typeof b.meta === "boolean") && (b.shift === undefined || typeof b.shift === "boolean");
   // Merged over the defaults, so a map saved before an action existed still
   // binds it.
   const km: Keymap = { ...DEFAULT_KEYMAP };
-  const clean = (list: KeyBinding[]) => list.map((b) => (b.meta ? { key: b.key, meta: true } : { key: b.key }));
+  const clean = (list: KeyBinding[]) =>
+    list.map((b): KeyBinding => ({ key: b.key, ...(b.meta && { meta: true }), ...(b.shift && { shift: true }) }));
   for (const action of KEYMAP_ACTIONS) {
     const list = raw[action];
     if (Array.isArray(list) && list.every(isBinding)) km[action] = clean(list);
@@ -99,7 +100,7 @@ export const CORE_SETTINGS: { [K in CoreSettingKey]: CoreSpec<CoreSettings[K]> }
     type: "object",
     default: DEFAULT_KEYMAP,
     sanitize: sanitizeKeymap,
-    description: "Controller keyboard shortcuts, per action (or \"<plugin id>.<command>\" for a plugin's): a list of { key, meta? }.",
+    description: "Controller keyboard shortcuts, per action (or \"<plugin id>.<command>\" for a plugin's): a list of { key, meta?, shift? }.",
   },
   "share.lanAddress": {
     type: "string",

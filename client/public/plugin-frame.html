@@ -51,6 +51,8 @@
     var audienceStateListeners = [];
     var audienceMineListeners = [];
     var audienceChangeListeners = [];
+    var viewerJoinListeners = [];
+    var viewerLeaveListeners = [];
     var visibleListeners = [];
     // Whether Presio shows this frame's container (viewer layer, viewer sheet).
     var visible = false;
@@ -169,6 +171,15 @@
         if (p.value === null || p.value === undefined) delete audienceMine()[p.key];
         else audienceMine()[p.key] = p.value;
         each(audienceMineListeners, { key: p.key, value: p.value === undefined ? null : p.value });
+      },
+      "viewers.join": function (p) {
+        var ids = ctx.viewers || (ctx.viewers = []);
+        if (ids.indexOf(p.viewer) < 0) ids.push(p.viewer);
+        each(viewerJoinListeners, p.viewer);
+      },
+      "viewers.leave": function (p) {
+        ctx.viewers = (ctx.viewers || []).filter(function (id) { return id !== p.viewer; });
+        each(viewerLeaveListeners, p.viewer);
       },
       "audience.change": function (p) {
         each(audienceChangeListeners, { key: p.key, summary: p.summary, changes: p.changes || {}, reset: p.reset === true });
@@ -437,15 +448,19 @@
          * payload forgets the type. `retain: "deck"` is the same, but only
          * for the deck on screen. `volatile: true` may be dropped rather than
          * queued when the connection is busy — for a stream where only the
-         * latest value matters.
+         * latest value matters. `to: id` (presenter only) sends it to that
+         * one viewer instead (an id from presio.viewers, or a message's
+         * sender); it can't be retained.
          */
         send: function (type, payload, opts) {
-          fire("messages.send", {
+          var params = {
             type: type,
             payload: payload === undefined ? null : payload,
             retain: opts && opts.retain === "deck" ? "deck" : !!(opts && opts.retain),
             volatile: !!(opts && opts.volatile),
-          });
+          };
+          if (opts && opts.to !== undefined) params.to = opts.to;
+          fire("messages.send", params);
         },
         /** cb({ type, payload, from: "presenter" | "audience", sender? }) */
         onMessage: function (cb) {
@@ -455,6 +470,20 @@
           queued.forEach(function (m) { each([cb], m); });
           return off;
         },
+      },
+      /**
+       * Presenter: the viewers running this plugin, by id — the `sender` of
+       * their messages and the `to` of one for them. A viewer joins when the
+       * plugin's first frame on its device starts (a message sent on join
+       * reaches it) and leaves when the last one goes or the device does;
+       * a reconnect is a leave and a join under a new id. Viewers already
+       * there when this frame starts are in `ids` and don't join. Empty on
+       * viewers.
+       */
+      viewers: {
+        get ids() { return (ctx.viewers || []).slice(); },
+        onJoin: function (cb) { return subscribe(viewerJoinListeners, cb); },
+        onLeave: function (cb) { return subscribe(viewerLeaveListeners, cb); },
       },
       /** The plugin's settings (contributes.settings), as the presenter set
        *  them — viewers see the presenter's values. */

@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { openPdf, destroyPdf } from "@/lib/pdf";
-import { ExternalLink, RefreshCw, X, Zap } from "lucide-react";
+import { ExternalLink, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { AccountControl } from "@/components/AccountControl";
@@ -9,7 +9,7 @@ import { PresioLogo } from "@/components/PresioLogo";
 import { GitHubIcon } from "@/components/GitHubIcon";
 import { MobileNotice } from "@/components/MobileNotice";
 import { CodeBlock } from "@/components/CodeBlock";
-import { CustomizeWithAgent } from "@/components/CustomizeWithAgent";
+import { CopyAgentPromptLink, CustomizeWithAgent } from "@/components/CustomizeWithAgent";
 import { ConfirmReplaceDialog } from "@/components/controller/ConfirmReplaceDialog";
 import { ConfirmReuploadDialog } from "@/components/controller/ConfirmReuploadDialog";
 import { ConfirmEndDialog } from "@/components/controller/ConfirmEndDialog";
@@ -1145,13 +1145,10 @@ export default function Home() {
                   it's the difference between one drop and thirty. Minimal mode
                   is for people who already know, so it goes with the rest. */}
               {!watchSupported && !minimal && (
-                <div className="mb-3 flex items-start gap-2 rounded-lg border border-muted-foreground/20 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-                  <Zap size={14} className="mt-px shrink-0 text-(--home2-accent)" />
-                  <p>
-                    <span className="font-medium text-foreground">Writing your talk?</span> Use
-                    Chrome to enable live hot reload when the slides change on disk.
-                  </p>
-                </div>
+                <p className="mb-3 text-sm text-muted-foreground">
+                  Writing your talk? Use Chrome to enable live hot reload when the slides
+                  change on disk.
+                </p>
               )}
               <div
                 className={`cursor-pointer rounded-xl border-2 border-dashed px-9 py-14 text-center transition-colors ${dragging
@@ -1369,13 +1366,18 @@ export default function Home() {
                   it stays visible in minimal mode so the explainer can be
                   brought back without clearing storage. The label names what
                   the click does, so it flips with the mode. */}
-              <button
-                type="button"
-                onClick={() => toggleMinimal(!minimal)}
-                className="mt-8 block w-full cursor-pointer rounded-sm text-center text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--home2-accent)]"
-              >
-                {minimal ? "How does Presio work?" : "Hide distractions"}
-              </button>
+              {/* Minimal mode hides the "make it yours" section, so the
+                  plugin prompt gets a quiet entry point of its own here. */}
+              <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
+                {minimal && <CopyAgentPromptLink />}
+                <button
+                  type="button"
+                  onClick={() => toggleMinimal(!minimal)}
+                  className="cursor-pointer rounded-sm text-center text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--home2-accent)]"
+                >
+                  {minimal ? "How does Presio work?" : "Hide distractions"}
+                </button>
+              </div>
             </div>
           </div>
 

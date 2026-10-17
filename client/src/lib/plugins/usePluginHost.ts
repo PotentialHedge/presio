@@ -370,7 +370,14 @@ export function usePluginHost({
   useEffect(() => {
     if (local !== true) return;
     const channel = new BroadcastChannel(`presio-plugins-${id}`);
-    host.setOutbound((event) => channel.postMessage({ kind: "event", event }));
+    // A viewer window's address, for presio.viewers and messages `to` it.
+    const self = crypto.randomUUID();
+    host.setOutbound((event) => channel.postMessage({ kind: "event", event: isPresenter ? event : { ...event, sender: self } }));
+    // Which window runs which plugin: each viewer window says, and says
+    // nothing runs as it goes.
+    if (!isPresenter) host.viewers.setReport((plugins) => channel.postMessage({ kind: "presence", viewer: self, plugins }));
+    const leave = () => channel.postMessage({ kind: "presence", viewer: self, plugins: [] });
+    if (!isPresenter) window.addEventListener("pagehide", leave);
     // Histories: the presenter's window orders edits and passes each on; the
     // viewer window asks it for what it's missing (blobs it reads itself,
     // from this browser's IndexedDB).
@@ -452,7 +459,10 @@ export function usePluginHost({
     channel.onmessage = (e) => {
       const { kind, event, events, plugin, entry, head, reqId, reply } = e.data ?? {};
       if (typeof kind === "string" && kind.startsWith("audience_")) onAudience(e.data);
-      else if (kind === "event") host.receive(event);
+      else if (kind === "event") {
+        if (!event?.to || event.to === self) host.receive(event);
+      } else if (kind === "presence" && isPresenter) host.viewers.setFor(String(e.data.viewer), Array.isArray(e.data.plugins) ? e.data.plugins : []);
+      else if (kind === "viewers_resync" && !isPresenter) host.viewers.resend();
       else if (kind === "retained") host.seedRetained(events);
       else if (kind === "hello" && isPresenter) channel.postMessage({ kind: "retained", events: host.retainedEvents() });
       else if (kind === "history_entry" && !isPresenter) host.history.receive(plugin, entry as HistoryEntry);
@@ -467,8 +477,14 @@ export function usePluginHost({
     } else {
       // A viewer window opened before this one: it asks again.
       channel.postMessage({ kind: "audience_resync" });
+      channel.postMessage({ kind: "viewers_resync" });
     }
     return () => {
+      if (!isPresenter) {
+        window.removeEventListener("pagehide", leave);
+        leave();
+      }
+      host.viewers.setReport(null);
       channel.close();
       host.setOutbound(() => {});
       host.history.setLink({}, false);
@@ -508,6 +524,11 @@ export function usePluginHost({
     // A volatile message (a laser position) is dropped rather than queued
     // while the socket can't take it: a late one is worse than none.
     host.setOutbound((event) => (event.volatile ? socket.volatile : socket).emit("plugin_event", event));
+    // Which viewer runs which plugin (presio.viewers): each viewer tells the
+    // server, which tells the presenter.
+    if (!isPresenter) host.viewers.setReport((plugins) => socket.emit("plugin_presence", { plugins }));
+    const onViewers = ({ viewers }: { viewers: { plugin: string; viewer: string }[] }) => host.viewers.reset(viewers);
+    const onViewer = ({ plugin, viewer, here }: { plugin: string; viewer: string; here: boolean }) => host.viewers.change(plugin, viewer, here);
 
     // Histories: the server orders edits (server/history.ts); blobs go over
     // HTTP. The link is ready once the socket has joined (plugins_state).
@@ -608,6 +629,8 @@ export function usePluginHost({
         return;
       }
       joinAudience();
+      // A (re)join: the server may not know what runs here (it restarted).
+      host.viewers.resend();
       for (const [plugin, values] of Object.entries(state.settings ?? {})) host.setPluginSettings(plugin, values);
       host.seedRetained(state.retained);
       // Fetch only what changed; the watchdog re-joins every 30s.
@@ -662,6 +685,8 @@ export function usePluginHost({
     socket.on("audience_state", onAudienceState);
     socket.on("audience_cleared", onAudienceCleared);
     socket.on("audience_resync", onAudienceResync);
+    socket.on("plugin_viewers", onViewers);
+    socket.on("plugin_viewer", onViewer);
     publishRef.current = publish;
     return () => {
       socket.off("plugin_event", onEvent);
@@ -675,6 +700,9 @@ export function usePluginHost({
       socket.off("audience_state", onAudienceState);
       socket.off("audience_cleared", onAudienceCleared);
       socket.off("audience_resync", onAudienceResync);
+      socket.off("plugin_viewers", onViewers);
+      socket.off("plugin_viewer", onViewer);
+      host.viewers.setReport(null);
       host.setOutbound(() => {});
       host.history.setLink({}, false);
       host.audience.setLink(null);

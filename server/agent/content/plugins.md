@@ -205,7 +205,10 @@ index.html
   attachments); `"editDeck"` to save an edited PDF over it from the presenter's
   device; `"history"` to keep an edit history for the deck (`presio.history`)
   and blobs (`presio.blobs`); `"audience"` to collect each viewer's input
-  (`presio.audience`). An unknown permission is an error.
+  (`presio.audience`); `"screen"`, `"camera"` and `"microphone"` to call
+  `navigator.mediaDevices.getDisplayMedia()` / `getUserMedia()` in the
+  plugin's frames (the browser still asks the person; on audience surfaces
+  that's each viewer). An unknown permission is an error.
 - `contributes.commands` — what the plugin can do: `{ "id", "title", "icon"?,
   "category"? }`. Handle each with `presio.commands.register(id, handler)` in
   a frame (usually `background`); the handler gets the call's args and what it
@@ -243,7 +246,7 @@ index.html
   with `{ menuItem }`.
 - `contributes.keybindings` — default keys for commands on the presenter's
   controller: `{ "command", "keys" }`, up to 3 keys each `{ "key":
-  KeyboardEvent.key, "meta"?: true }` (an empty list makes the command
+  KeyboardEvent.key, "meta"?: true, "shift"?: true }` (an empty list makes the command
   bindable with no default). They're listed under the plugin's name in
   **Settings → Keyboard shortcuts**, where the presenter can rebind them
   (stored in the `keybindings` setting as `<plugin id>.<command>`). They never
@@ -328,7 +331,11 @@ presio.slide.onChange(({ current, total }) => {})  // → unsubscribe()
 presio.onContextChange(presio => {})       // session/role/theme or shortcuts changed
 
 presio.messages.send(type, payload, { retain, volatile })  // message the plugin's other instances
+presio.messages.send(type, payload, { to: viewer })        // presenter: to one viewer only
 presio.messages.onMessage(({ type, payload, from, sender }) => {})
+presio.viewers.ids                         // presenter: ids of the viewers running this plugin
+presio.viewers.onJoin(viewer => {})        // presenter: its first frame on a device started
+presio.viewers.onLeave(viewer => {})       // presenter: its last frame there went, or the device did
 
 presio.settings.get(name)                  // this plugin's setting (presenter's value)
 presio.settings.all
@@ -435,6 +442,16 @@ Messaging:
 - From the **audience**, a message reaches the presenter's instances only
   (rate-limited), with `from: "audience"` and a per-connection `sender` id.
   The presenter aggregates and broadcasts results back.
+- `{ to: viewer }` (presenter only) sends a message to that one viewer's
+  instances instead of every device: a private reply, or WebRTC signalling.
+  It can't be retained. The id is a message's `sender`, or one from
+  `presio.viewers`: the viewers running the plugin, which the presenter's
+  frames hear join (`onJoin`, once the plugin's first frame on that device
+  has started, so a message sent then arrives) and leave (`onLeave`, when its
+  last frame there goes or the device disconnects). Start from `ids`:
+  viewers already there when the frame starts (after the presenter reloads,
+  say) are in it and don't join again. A reconnecting viewer leaves and joins
+  again under a new id.
 - A message reaches the plugin's *other* frames, on this device too (a
   `background` and its `panel`), never the frame that sent it. Likewise
   `presio.storage.onChange` fires in the plugin's other frames, not the one

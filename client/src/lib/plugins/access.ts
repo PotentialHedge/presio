@@ -9,6 +9,9 @@ export const PERMISSIONS: Record<PluginPermission, { title: string; detail: stri
   editDeck: { title: "Change your deck", detail: "Save an edited PDF over the one you're presenting." },
   history: { title: "Keep an edit history", detail: "Shared with every screen in the session, with any files it adds." },
   audience: { title: "Collect input from your audience", detail: "What each viewer sends, under an anonymous id." },
+  screen: { title: "Share a screen", detail: "Capture a screen, window or tab, once you pick one in your browser's prompt." },
+  camera: { title: "Use the camera", detail: "Your browser still asks before it turns the camera on." },
+  microphone: { title: "Use the microphone", detail: "Your browser still asks before it turns the microphone on." },
 };
 
 /** Surfaces that run on audience devices. */

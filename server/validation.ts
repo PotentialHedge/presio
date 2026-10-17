@@ -1,5 +1,5 @@
 import { PLUGIN_ID_RE } from "../shared/plugin/sources.js";
-import { MAX_MESSAGE_BYTES, MESSAGE_TYPE_RE } from "../shared/plugin/protocol.js";
+import { MAX_MESSAGE_BYTES, MESSAGE_TYPE_RE, VIEWER_ADDRESS_RE } from "../shared/plugin/protocol.js";
 
 // Pure validation/sanitization helpers, factored out of the request/socket
 // handlers so they can be unit-tested without a server or Supabase.
@@ -87,6 +87,8 @@ export interface PluginEvent {
   retain: Retain;
   /** May be dropped for a backed-up viewer rather than queued. */
   volatile: boolean;
+  /** Presenter: for this one viewer only (its socket id); never retained. */
+  to?: string;
 }
 
 interface PluginManifest {
@@ -132,8 +134,10 @@ export function sanitizePluginEvent(raw: unknown): PluginEvent | null {
   if (typeof e.type !== "string" || !PLUGIN_TYPE_RE.test(e.type)) return null;
   const payload = e.payload === undefined ? null : e.payload;
   if (jsonSize(payload) > MAX_PLUGIN_PAYLOAD_BYTES) return null;
-  const retain = e.retain === true || e.retain === "deck" ? e.retain : false;
-  return { plugin: e.plugin, type: e.type, payload, retain, volatile: e.volatile === true };
+  if (e.to !== undefined && (typeof e.to !== "string" || !VIEWER_ADDRESS_RE.test(e.to))) return null;
+  const to = e.to as string | undefined;
+  const retain = !to && (e.retain === true || e.retain === "deck") ? e.retain : false;
+  return { plugin: e.plugin, type: e.type, payload, retain, volatile: e.volatile === true, ...(to ? { to } : {}) };
 }
 
 // A plugin's resolved settings, as the presenter publishes them for viewers.
@@ -148,6 +152,15 @@ export function sanitizePluginSettings(raw: unknown): { plugin: string; settings
 
 // A viewer couldn't load a plugin the presenter published: which (by id and
 // the hash it was published with) and why, in a line for the presenter.
+// The plugins a viewer has frames running for (plugin_presence): at most one
+// per published plugin.
+export function sanitizePluginPresence(raw: unknown): string[] | null {
+  const plugins = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>).plugins : null;
+  if (!Array.isArray(plugins) || plugins.length > MAX_PLUGINS_PER_SESSION) return null;
+  if (!plugins.every((p) => typeof p === "string" && PLUGIN_ID_RE.test(p))) return null;
+  return [...new Set(plugins as string[])];
+}
+
 export function sanitizePluginLoadFailure(raw: unknown): { plugin: string; hash: string; reason: string } | null {
   const e = pluginMessage(raw);
   if (!e) return null;

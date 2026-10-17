@@ -1,8 +1,21 @@
 import { useEffect, useRef, useState } from "react";
 import { useLatestRef } from "@/hooks/useLatestRef";
 import type { FrameLink, Interactive, PluginHost, SlidePage, SlideView } from "@/lib/plugins/host";
-import type { LoadedPlugin, PluginSurface } from "@/lib/plugins/manifest";
+import type { LoadedPlugin, PluginPermission, PluginSurface } from "@/lib/plugins/manifest";
 import { cn } from "@/lib/utils";
+
+// Media permissions, as the iframe features they unlock.
+const MEDIA_FEATURES: Partial<Record<PluginPermission, string>> = {
+  screen: "display-capture",
+  camera: "camera",
+  microphone: "microphone",
+};
+
+/** The frame's `allow`: players inside (YouTube, Vimeo, <video>) may autoplay
+ *  and go fullscreen, plus whatever media the plugin asked for. Read when the
+ *  frame loads, which is once per plugin version (see below). */
+const frameAllow = (plugin: LoadedPlugin) =>
+  ["autoplay", "fullscreen", "picture-in-picture", ...plugin.manifest.permissions.flatMap((p) => MEDIA_FEATURES[p] ?? [])].join("; ");
 
 /**
  * One plugin surface: an iframe running plugin-frame.html, booted with the
@@ -120,8 +133,7 @@ export function PluginFrame({
     <iframe
       ref={ref}
       src="/plugin-frame.html"
-      // Players inside (YouTube, Vimeo, <video>) may autoplay and go fullscreen.
-      allow="autoplay; fullscreen; picture-in-picture"
+      allow={frameAllow(plugin)}
       title={plugin.manifest.displayName}
       data-testid={`plugin-frame-${plugin.id}-${surface}${panel ? `-${panel}` : ""}`}
       className={cn("border-0 bg-transparent", className)}

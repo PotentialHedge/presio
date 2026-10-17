@@ -59,7 +59,7 @@
       { "command": "eraser", "keys": [{ "key": "e" }] },
       { "command": "lasso", "keys": [] },
       { "command": "undo", "keys": [{ "key": "z", "meta": true }] },
-      { "command": "redo", "keys": [{ "key": "y", "meta": true }] },
+      { "command": "redo", "keys": [{ "key": "z", "meta": true, "shift": true }, { "key": "y", "meta": true }] },
       { "command": "toggleDrawings", "keys": [] },
       { "command": "clear", "keys": [] }
     ],
@@ -67,8 +67,8 @@
       "toolbar": { "type": "boolean", "default": true, "description": "Show the drawing tools on the current slide." },
       "advanced": {
         "type": "boolean",
-        "default": false,
-        "description": "Advanced tools: the eraser, the lasso, and snapping a stroke held still at its end to a line or a box. Turned on the first time you draw with a pen."
+        "default": true,
+        "description": "Advanced tools: the eraser, the lasso, and snapping a stroke held still at its end to a line or a box."
       },
       "hidden": {
         "type": "boolean",

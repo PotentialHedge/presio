@@ -55,6 +55,7 @@ interface PresioMessage {
   type: string;
   payload: unknown;
   from: "presenter" | "audience";
+  /** From the audience: the viewer's id, as in presio.viewers. */
   sender?: string;
 }
 
@@ -117,7 +118,7 @@ interface PresioAudienceChange {
 /** What a host can do (presio.supports()); see shared/plugin/protocol.ts. */
 type PresioCapability =
   | "slide" | "context" | "settings" | "storage" | "messages" | "commands" | "deck" | "layers"
-  | "history" | "blobs" | "clock" | "ui" | "panels" | "audience" | "status" | "viewerSheet" | "palette";
+  | "history" | "blobs" | "clock" | "ui" | "panels" | "audience" | "status" | "viewerSheet" | "palette" | "viewers";
 
 /** Why a call failed: an Error with one of these as `code`. */
 type PresioErrorCode = "MethodNotFound" | "PermissionDenied" | "InvalidParams" | "Unavailable" | "Internal";
@@ -157,9 +158,19 @@ interface Presio {
   };
   readonly messages: {
     /** retain: true for the session, "deck" until the deck is replaced; a
-     *  retained null forgets the type. volatile: may be dropped, not queued. */
-    send(type: string, payload?: unknown, opts?: { retain?: boolean | "deck"; volatile?: boolean }): void;
+     *  retained null forgets the type. volatile: may be dropped, not queued.
+     *  to: presenter only, for that one viewer (presio.viewers); not retained. */
+    send(type: string, payload?: unknown, opts?: { retain?: boolean | "deck"; volatile?: boolean; to?: string }): void;
     onMessage(cb: (message: PresioMessage) => void): Unsubscribe;
+  };
+  /** Presenter: the viewers running this plugin, by id (a message's `sender`,
+   *  and its `to`). One joins when the plugin's first frame on its device
+   *  starts and leaves when the last goes; a reconnect gets a new id. Start
+   *  from `ids`: viewers already there when the frame starts don't join. */
+  readonly viewers: {
+    readonly ids: string[];
+    onJoin(cb: (viewer: string) => void): Unsubscribe;
+    onLeave(cb: (viewer: string) => void): Unsubscribe;
   };
   readonly settings: {
     get(name: string): unknown;

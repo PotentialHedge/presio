@@ -24,7 +24,7 @@ const IDEAS: [idea: string, size: string, faded: boolean][] = [
   ["a progress bar", "text-sm", true],
 ];
 
-export function CustomizeWithAgent() {
+function useCopyAgentPrompt() {
   const [copied, setCopied] = useState(false);
 
   const copy = () => {
@@ -36,6 +36,31 @@ export function CustomizeWithAgent() {
       () => {}
     );
   };
+
+  return [copied, copy] as const;
+}
+
+// The same prompt as a quiet text button, for the minimal home page where the
+// full section is hidden.
+export function CopyAgentPromptLink({ className = "" }: { className?: string }) {
+  const [copied, copy] = useCopyAgentPrompt();
+
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      title="Copies a prompt for Claude Code, Codex or Cursor that builds a Presio plugin"
+      className={`inline-flex cursor-pointer items-center gap-1.5 rounded-sm text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--home2-accent)] ${className}`}
+      data-testid="home-agent-prompt-copy-minimal"
+    >
+      {copied ? <Check size={12} /> : <Copy size={12} />}
+      {copied ? "Copied — paste it into your agent" : "Create a plugin"}
+    </button>
+  );
+}
+
+export function CustomizeWithAgent() {
+  const [copied, copy] = useCopyAgentPrompt();
 
   return (
     <div className="text-center">

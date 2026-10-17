@@ -9,6 +9,7 @@ import {
   sanitizePublishedPlugin,
   sanitizePluginSettings,
   sanitizePluginLoadFailure,
+  sanitizePluginPresence,
   MAX_PLUGINS_PER_SESSION,
   MAX_RETAINED_PER_PLUGIN,
   MAX_RETAINED_BYTES_PER_PLUGIN,
@@ -157,6 +158,26 @@ export function registerSocketHandlers(
     retained: [...(pluginRetained.get(sessionId)?.values() ?? [])].map(({ plugin, type, payload, retain }) => ({ plugin, type, payload, retain })),
   });
 
+  // Which viewers run which plugins (presio.viewers): each viewer socket keeps
+  // the plugins it has frames for in socket.data.plugins, and the controller
+  // hears each change. A viewer's id is its socket id, as in `sender`.
+  const presenceIn = (sessionId: string) => {
+    const viewers: { plugin: string; viewer: string }[] = [];
+    for (const id of io.sockets.adapter.rooms.get(sessionId) ?? []) {
+      if (controllers.get(sessionId) === id) continue;
+      for (const plugin of (io.sockets.sockets.get(id)?.data.plugins as Set<string> | undefined) ?? []) viewers.push({ plugin, viewer: id });
+    }
+    return viewers;
+  };
+  const setPresence = (socket: Socket, sessionId: string, next: Set<string>) => {
+    const prev: Set<string> = socket.data.plugins ?? new Set();
+    socket.data.plugins = next;
+    const controller = controllers.get(sessionId);
+    if (!controller || controller === socket.id) return;
+    for (const plugin of prev) if (!next.has(plugin)) io.to(controller).emit("plugin_viewer", { plugin, viewer: socket.id, here: false });
+    for (const plugin of next) if (!prev.has(plugin)) io.to(controller).emit("plugin_viewer", { plugin, viewer: socket.id, here: true });
+  };
+
   // Tail of each session's in-flight current_slide write, so overlapping
   // updates land in emit order (see slide_change).
   const pendingSlideWrites = new Map<string, Promise<void>>();
@@ -240,6 +261,8 @@ export function registerSocketHandlers(
         }
       }
 
+      // Moving to another session: it stops running the old one's plugins.
+      if (socket.data.sessionId && socket.data.sessionId !== sessionId) setPresence(socket, socket.data.sessionId, new Set());
       socket.join(sessionId);
       socket.data.sessionId = sessionId;
       socket.data.role = grantedRole;
@@ -251,6 +274,8 @@ export function registerSocketHandlers(
         role: grantedRole,
       });
       socket.emit("plugins_state", pluginsState(sessionId));
+      // The controller starts from who's running which plugin (presio.viewers).
+      if (grantedRole === "controller") socket.emit("plugin_viewers", { viewers: presenceIn(sessionId) });
     });
 
     socket.on("slide_change", controllerOnly(socket, async (sessionId, { slideNumber }: { slideNumber: number }) => {
@@ -345,6 +370,13 @@ export function registerSocketHandlers(
       const { plugin, type, payload } = event;
 
       if (controllers.get(sessionId) === socket.id) {
+        // For one viewer: only one in this session.
+        if (event.to) {
+          if (event.to === socket.id || !io.sockets.adapter.rooms.get(sessionId)?.has(event.to)) return;
+          const target = event.volatile ? io.to(event.to).volatile : io.to(event.to);
+          target.emit("plugin_event", { plugin, type, payload, from: "presenter" });
+          return;
+        }
         if (event.retain) retain(sessionId, { plugin, type, payload, retain: event.retain, size: jsonSize(payload) });
         // Volatile ones (a laser position) may be dropped for a viewer whose
         // connection is backed up, rather than queued behind newer ones.
@@ -359,6 +391,18 @@ export function registerSocketHandlers(
       const controller = controllers.get(sessionId);
       if (!controller) return;
       io.to(controller).emit("plugin_event", { plugin, type, payload, from: "audience", sender: socket.id });
+    });
+
+    // A viewer's plugins with frames running now (the whole set, re-sent on
+    // every join): the controller hears who started or stopped which.
+    socket.on("plugin_presence", (raw: unknown) => {
+      const { sessionId } = socket.data;
+      if (!sessionId || controllers.get(sessionId) === socket.id) return;
+      const plugins = sanitizePluginPresence(raw);
+      if (!plugins || !allowAudiencePluginEvent(socket)) return;
+      // Not checked against what's published: after a restart, viewers say
+      // what they run before the presenter has republished.
+      setPresence(socket, sessionId, new Set(plugins));
     });
 
     // A viewer couldn't load one of the published plugins (a presenter's
@@ -473,6 +517,8 @@ export function registerSocketHandlers(
       const { sessionId } = socket.data;
       if (sessionId && controllers.get(sessionId) === socket.id) {
         controllers.delete(sessionId);
+      } else if (sessionId) {
+        setPresence(socket, sessionId, new Set());
       }
     });
   });

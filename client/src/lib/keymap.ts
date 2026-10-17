@@ -6,7 +6,12 @@
 export interface KeyBinding {
   key: string;
   meta?: boolean;
+  shift?: boolean;
 }
+
+/** Whether Shift is part of a binding for this key, rather than already in the
+ * character it types ("?" is Shift+/; "Z" is still "z"). */
+export const shiftMatters = (key: string) => key.length !== 1 || /[a-z]/i.test(key);
 
 export interface Keymap {
   nextSlide: KeyBinding[];
@@ -46,7 +51,8 @@ export function matchesBinding(e: KeyboardEvent, bindings: KeyBinding[]): boolea
   return bindings.some((b) => {
     const keyMatch = e.key.toLowerCase() === b.key.toLowerCase();
     const metaMatch = b.meta ? e.metaKey : !e.metaKey;
-    return keyMatch && metaMatch;
+    const shiftMatch = !shiftMatters(b.key) || (b.shift ? e.shiftKey : !e.shiftKey);
+    return keyMatch && metaMatch && shiftMatch;
   });
 }
 
@@ -59,7 +65,7 @@ export function pluginBindings(keymap: Keymap, pluginId: string, command: { comm
 }
 
 const sameBinding = (a: KeyBinding, b: KeyBinding) =>
-  a.key.toLowerCase() === b.key.toLowerCase() && !!a.meta === !!b.meta;
+  a.key.toLowerCase() === b.key.toLowerCase() && !!a.meta === !!b.meta && !!a.shift === !!b.shift;
 
 /**
  * The Presio action already bound to this key, if any. Presio's own shortcuts
@@ -95,6 +101,7 @@ export function shortcutTakenBy(keymap: Keymap, binding: KeyBinding, earlier: re
 
 export function formatBinding(b: KeyBinding): string {
   const parts: string[] = [];
+  if (b.shift) parts.push("⇧");
   if (b.meta) parts.push("⌘");
   const display: Record<string, string> = {
     ArrowLeft: "←", ArrowRight: "→", ArrowUp: "↑", ArrowDown: "↓",

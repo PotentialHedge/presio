@@ -6,6 +6,7 @@ import {
   pluginBindings,
   pluginCommandKey,
   shortcutTakenBy,
+  shiftMatters,
   type Keymap,
   type KeyBinding,
   type PluginShortcutSet,
@@ -67,6 +68,7 @@ export function ShortcutsEditor({
       if (["Shift", "Control", "Alt", "Meta"].includes(e.key)) return;
       const binding: KeyBinding = { key: e.key };
       if (e.metaKey) binding.meta = true;
+      if (e.shiftKey && shiftMatters(e.key)) binding.shift = true;
       const bindings = [...recording.bindings];
       bindings[recording.index] = binding;
       onChange({ ...keymap, [recording.id]: bindings });

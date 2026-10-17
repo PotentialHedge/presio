@@ -105,6 +105,9 @@ export const CAPABILITIES = [
   /** The command palette, which lists contributed commands, and Presio's
    *  own commands ("presio.nextSlide") for presio.commands.execute. */
   "palette",
+  /** Which viewers run the plugin (presio.viewers), and messages for one
+   *  of them (presio.messages.send with `to`). */
+  "viewers",
 ] as const;
 
 export type Capability = (typeof CAPABILITIES)[number];
@@ -219,5 +222,10 @@ export function eventOf(method: string, params?: unknown): EventEnvelope {
 
 /** One plugin message's payload, as JSON (the server enforces it too). */
 export const MAX_MESSAGE_BYTES = 16 * 1024;
+
+/** A viewer's address (presio.viewers, a message's `sender` and `to`): its
+ *  socket id, or a local deck's viewer window's id. Not the anonymous id
+ *  presio.audience keeps slots under. */
+export const VIEWER_ADDRESS_RE = /^[\w-]{1,64}$/;
 /** A message type: what presio.messages.send's first argument may be. */
 export const MESSAGE_TYPE_RE = /^[A-Za-z0-9_.:-]{1,64}$/;

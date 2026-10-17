@@ -551,7 +551,7 @@ export function runSlide() {
   const drawingTool = () => tool === "pen" || tool === "highlighter";
   // Pencil mode: only a pen draws, and fingers pan, pinch and turn the page.
   // This device's, for the session: unset until a pen is first seen here,
-  // which turns it on (and reveals the advanced tools).
+  // which turns it on.
   const pencil = (): boolean | null => {
     const v = presio.storage.get("pencil");
     return typeof v === "boolean" ? v : null;
@@ -574,7 +574,6 @@ export function runSlide() {
     window.addEventListener("pointerdown", (e) => {
       if (e.pointerType === "pen" && pencil() === null) {
         presio.storage.set("pencil", true);
-        if (!advanced()) void presio.settings.set("advanced", true);
         updateInteractive();
         palette?.render();
       }

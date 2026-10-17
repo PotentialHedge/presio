@@ -24,6 +24,7 @@ export function ControllerHeader({
   onDeckWatchResume,
   remoteDeckUpdate = false,
   onRemoteDeckApply,
+  onCodeClick,
   status,
   actions,
 }: {
@@ -49,6 +50,8 @@ export function ControllerHeader({
   onRemoteDeckApply?: () => void;
   /** Tighter spacing + bare code (no "Code:" label) for the mobile header. */
   compact?: boolean;
+  /** Clicking the session code (opens the share dialog). */
+  onCodeClick?: () => void;
   /** Plugins' status items, just before the actions. */
   status?: ReactNode;
   actions?: ReactNode;
@@ -90,15 +93,18 @@ export function ControllerHeader({
           <span className="hidden sm:inline">Presio</span>
         </Link>
         <span className="hidden text-muted-foreground/40 sm:inline">|</span>
-        {!local &&
-          (compact ? (
-            <span className="font-mono font-bold tracking-widest text-sm select-all">{id}</span>
-          ) : (
-            <>
-              <span className="hidden text-xs text-muted-foreground lg:inline">Code:</span>
-              <span className="font-mono font-bold tracking-widest select-all">{id}</span>
-            </>
-          ))}
+        {!local && (
+          <button
+            type="button"
+            onClick={onCodeClick}
+            disabled={!onCodeClick}
+            title="Share"
+            className="flex shrink-0 items-baseline gap-1.5 rounded-md hover:text-muted-foreground transition-colors disabled:pointer-events-none"
+          >
+            {!compact && <span className="hidden text-xs text-muted-foreground lg:inline">Code:</span>}
+            <span className={cn("font-mono font-bold tracking-widest", compact && "text-sm")}>{id}</span>
+          </button>
+        )}
         <ConnectionIndicator local={local} />
         {local && (
           <span className="text-xs font-medium text-amber-600 dark:text-amber-500">Local</span>

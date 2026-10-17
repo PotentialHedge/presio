@@ -59,9 +59,15 @@ export type PluginPermission =
   /** Keep an edit history for the deck, shared with every device, and blobs. */
   | "history"
   /** Collect each viewer's input (presio.audience). */
-  | "audience";
+  | "audience"
+  /** Capture a screen, window or tab (getDisplayMedia). */
+  | "screen"
+  /** Use the device's camera (getUserMedia). */
+  | "camera"
+  /** Use the device's microphone (getUserMedia). */
+  | "microphone";
 
-export const PERMISSIONS: readonly PluginPermission[] = ["deck", "editDeck", "history", "audience"];
+export const PERMISSIONS: readonly PluginPermission[] = ["deck", "editDeck", "history", "audience", "screen", "camera", "microphone"];
 
 /** Where a contributed button can go. */
 export type ButtonLocation =
@@ -129,6 +135,8 @@ export interface KeyBinding {
   /** A KeyboardEvent.key value. */
   key: string;
   meta?: boolean;
+  /** Needs Shift held (for keys Shift doesn't already change, like letters). */
+  shift?: boolean;
 }
 
 /**
@@ -464,11 +472,12 @@ function parseContributes(p: Problems, raw: unknown, surfaces: PluginSurface[]):
     const keys = p.list(k, "keys", `${at}.keys`, 3).flatMap((rawKey, j): KeyBinding[] => {
       const kat = `${at}.keys[${j}]`;
       if (!isObj(rawKey) || typeof rawKey.key !== "string" || !rawKey.key || rawKey.key.length > 32) {
-        p.error(kat, 'must be { "key": <a KeyboardEvent.key value, like "c" or "ArrowUp">, "meta"?: true }');
+        p.error(kat, 'must be { "key": <a KeyboardEvent.key value, like "c" or "ArrowUp">, "meta"?: true, "shift"?: true }');
         return [];
       }
       if (rawKey.meta !== undefined && typeof rawKey.meta !== "boolean") p.error(`${kat}.meta`, "must be true or false");
-      return [rawKey.meta === true ? { key: rawKey.key, meta: true } : { key: rawKey.key }];
+      if (rawKey.shift !== undefined && typeof rawKey.shift !== "boolean") p.error(`${kat}.shift`, "must be true or false");
+      return [{ key: rawKey.key, ...(rawKey.meta === true && { meta: true }), ...(rawKey.shift === true && { shift: true }) }];
     });
     if (!has(PRESENTER_HANDLERS)) p.error(at, `keybindings need a surface to run their command in: add one of ${listOf(PRESENTER_HANDLERS)} to "surfaces"`);
     if (command && out.keybindings.some((x) => x.command === command)) return p.error(`${at}.command`, `${quote(command)} has keybindings already; list all its keys in one entry`);

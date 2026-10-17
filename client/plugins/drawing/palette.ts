@@ -9,9 +9,8 @@
 // it); and with the mouse off the slide altogether it fades out. It keeps its
 // size and place on screen when the presenter pinches in.
 //
-// The eraser and the lasso only show once they're wanted (a pen was used, or
-// the "Advanced tools" setting): the palette starts with the few tools most
-// talks need.
+// The eraser and the lasso show with the "Advanced tools" setting (on by
+// default); turned off, the palette keeps to the few tools most talks need.
 
 import { icon } from "./icons";
 import type { Tool } from "./model";

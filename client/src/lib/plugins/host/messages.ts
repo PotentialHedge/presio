@@ -5,7 +5,7 @@
 // and across a reload of the presenter's page.
 
 import { lsGet, lsRemove, lsSet, pluginRetainedKey } from "@/lib/storage";
-import { MESSAGE_TYPE_RE } from "@shared/plugin/protocol";
+import { MESSAGE_TYPE_RE, VIEWER_ADDRESS_RE } from "@shared/plugin/protocol";
 import { HostError, type Conn, type HostCore, type MethodTable, type PluginRole } from "./types";
 
 export type Retain = boolean | "deck";
@@ -22,6 +22,8 @@ export interface WireEvent {
   volatile?: boolean;
   from?: PluginRole;
   sender?: string;
+  /** From the presenter, for this one viewer only (presio.viewers' id). */
+  to?: string;
 }
 
 /**
@@ -80,6 +82,14 @@ export class Messages {
           throw new HostError("InvalidParams", "A message type is 1–64 letters, digits or _ . : -");
         }
         const role = this.core.ctx.role;
+        if (p.to !== undefined) {
+          if (typeof p.to !== "string" || !VIEWER_ADDRESS_RE.test(p.to)) throw new HostError("InvalidParams", "`to` is a viewer's id, from presio.viewers");
+          if (role !== "presenter") throw new HostError("Unavailable", "Only the presenter can message one viewer: the audience's messages go to the presenter");
+          if (p.retain) throw new HostError("InvalidParams", "A message for one viewer can't be retained");
+          // Straight to that viewer: none of this device's frames are it.
+          this.outbound({ plugin: conn.plugin.id, type: p.type, payload: p.payload ?? null, volatile: p.volatile === true, from: role, to: p.to });
+          return null;
+        }
         const event: WireEvent = {
           plugin: conn.plugin.id,
           type: p.type,

@@ -45,6 +45,7 @@ import {
   type SlideView,
 } from "./types";
 import { Ui, type ButtonState, type StatusState } from "./ui";
+import { Viewers } from "./viewers";
 
 export * from "./types";
 export { retainKey, forgetDeckRetained, type Retain, type WireEvent } from "./messages";
@@ -57,7 +58,7 @@ export { audienceViewerId, type AudienceLink } from "./audience";
 /** What this host implements (presio.supports()). */
 export const HOST_CAPABILITIES: Capability[] = [
   "slide", "context", "settings", "storage", "messages", "commands", "deck", "layers", "history", "blobs", "clock", "ui", "panels",
-  "audience", "status", "viewerSheet", "palette",
+  "audience", "status", "viewerSheet", "palette", "viewers",
 ];
 
 /** A file the presenter picked for a button that asks for one. */
@@ -105,6 +106,8 @@ export class PluginHost implements HostCore {
   private ui: Ui;
   /** presio.audience: viewers' input, and the way to wherever it's held. */
   readonly audience: Audience;
+  /** presio.viewers: who runs which plugin (presenter), or what runs here (viewer). */
+  readonly viewers: Viewers;
   private table: MethodTable;
 
   constructor(ctx: PluginContext) {
@@ -118,6 +121,7 @@ export class PluginHost implements HostCore {
     this.historyModule = new History(this);
     this.ui = new Ui(this);
     this.audience = new Audience(this);
+    this.viewers = new Viewers(this);
     this.table = {
       ...this.messages.methods,
       ...this.storage.methods,
@@ -198,6 +202,7 @@ export class PluginHost implements HostCore {
       settings: this.settings.of(plugin.id),
       storage: this.storage.read(plugin.id),
       audience: this.audience.frameState(plugin.id),
+      viewers: this.viewers.of(plugin.id),
       clockOffset: this.clock,
       shortcuts: this.commands.shortcuts(plugin),
       view: FULL_VIEW,
@@ -370,6 +375,7 @@ export class PluginHost implements HostCore {
     this.conns.add(conn);
     port.onmessage = (e) => this.onFrameMessage(conn, e.data);
     this.messages.replay(conn);
+    this.viewers.framesChanged();
     let view = FULL_VIEW;
     let page = FULL_PAGE;
     let hovered = false;
@@ -377,6 +383,7 @@ export class PluginHost implements HostCore {
       disconnect: () => {
         this.conns.delete(conn);
         port.close();
+        this.viewers.framesChanged();
         if (conn.commands.size) this.commands.changed();
         // Calls to it won't be answered now.
         for (const [id, call] of this.pending) {

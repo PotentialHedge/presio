@@ -51,8 +51,8 @@
     "permissions": {
       "type": "array",
       "uniqueItems": true,
-      "items": { "enum": ["deck", "editDeck", "history", "audience"] },
-      "description": "deck: read the PDF (its bytes, attachments, page sizes). editDeck: save an edited PDF over the deck (presenter's device only). history: an edit history for the deck shared with every device, and blobs. audience: collect each viewer's input (presio.audience)."
+      "items": { "enum": ["deck", "editDeck", "history", "audience", "screen", "camera", "microphone"] },
+      "description": "deck: read the PDF (its bytes, attachments, page sizes). editDeck: save an edited PDF over the deck (presenter's device only). history: an edit history for the deck shared with every device, and blobs. audience: collect each viewer's input (presio.audience). screen, camera, microphone: navigator.mediaDevices.getDisplayMedia / getUserMedia in the plugin's frames (the browser still asks the person)."
     },
     "dependencies": {
       "type": "object",
@@ -139,7 +139,8 @@
                       "maxLength": 32,
                       "description": "A KeyboardEvent.key value, e.g. \"k\" or \"ArrowUp\"."
                     },
-                    "meta": { "type": "boolean", "description": "Needs ⌘ (Meta) held." }
+                    "meta": { "type": "boolean", "description": "Needs ⌘ (Meta) held." },
+                    "shift": { "type": "boolean", "description": "Needs Shift held (for keys Shift doesn't already change, like letters)." }
                   }
                 }
               }

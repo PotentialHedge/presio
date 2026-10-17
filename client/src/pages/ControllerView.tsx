@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { cn, getSessionAuth, setSessionAuth } from "@/lib/utils";
-import { Settings, TriangleAlert, Check, Option, Plus, Share2, ExternalLink, User, LayoutGrid, Puzzle, KeyRound, Keyboard, FileJson, Search, Compass } from "lucide-react";
+import { Settings, TriangleAlert, Check, Option, Plus, Share2, ExternalLink, User, Puzzle, KeyRound, Keyboard, FileJson, Search, Compass, SunMoon, Sun, Moon, Monitor } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ButtonGroup } from "@/components/ui/button-group";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { DialogOverlay } from "@/components/ui/dialog-overlay";
 import { CopyField } from "@/components/CopyField";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { LoginDialog } from "@/components/LoginDialog";
 import { AccountControl } from "@/components/AccountControl";
 import { ControllerOnboarding } from "@/components/ControllerOnboarding";
@@ -653,7 +653,6 @@ export function ControllerView({
       >
         <Settings size={15} />
       </button>
-      <ThemeToggle />
       <span className="text-muted-foreground/40">|</span>
       <Button size="sm" variant="ghost" className="text-muted-foreground hover:text-foreground" onClick={() => setShareDialogOpen(true)}>
         Share
@@ -720,6 +719,7 @@ export function ControllerView({
         onDeckWatchResume={onDeckWatchResume}
         remoteDeckUpdate={remoteDeckUpdate}
         onRemoteDeckApply={onRemoteDeckApply}
+        onCodeClick={() => setShareDialogOpen(true)}
         status={<PluginStatusItems host={plugins.host} plugins={plugins.plugins} compact={isMobile} />}
         actions={isMobile || narrow ? menuActions : desktopActions}
       />
@@ -828,11 +828,33 @@ export function ControllerView({
               : []),
             {
               id: "layout",
-              label: "Layout",
-              icon: LayoutGrid,
-              description: "Which cards the dashboard shows, and how they're arranged.",
+              label: "Appearance",
+              icon: SunMoon,
+              description: "The theme, and which cards the dashboard shows and how they're arranged.",
               content: (
                 <div className="space-y-2">
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-medium text-muted-foreground">Theme</p>
+                    <ButtonGroup>
+                      {([
+                        ["system", "System", Monitor],
+                        ["light", "Light", Sun],
+                        ["dark", "Dark", Moon],
+                      ] as const).map(([value, label, Icon]) => (
+                        <Button
+                          key={value}
+                          size="sm"
+                          variant={theme === value ? "secondary" : "outline"}
+                          aria-pressed={theme === value}
+                          onClick={() => setTheme(value)}
+                        >
+                          <Icon size={14} className="mr-1.5" />
+                          {label}
+                        </Button>
+                      ))}
+                    </ButtonGroup>
+                  </div>
+                  <p className="pt-2 text-xs font-medium text-muted-foreground">Dashboard cards</p>
                   <div className="space-y-0.5">
                     {layoutKeys.map((key) => (
                       <button

@@ -101,13 +101,17 @@ test("blanking the screen takes over the viewer and releases it again", async ({
 test("the join code can be thrown up on the viewer", async ({ browser, request }) => {
   const sessionId = await newSession(request);
   const ctx = await browser.newContext();
+  // Join Code ships switched off; turn it on as the presenter would.
+  await ctx.addInitScript(() => {
+    localStorage.setItem("presio_settings", JSON.stringify({ plugins: { "presio/join-code": { enabled: true } } }));
+  });
   const controller = await openController(ctx, sessionId);
   const viewer = await openViewer(ctx, sessionId);
   await waitForSlide(controller);
   await waitForSlide(viewer);
 
-  // The built-in Join Code plugin's layer, mounted on every viewer but hidden
-  // until the presenter puts it up.
+  // The Join Code plugin's layer, mounted on the viewer but hidden until the
+  // presenter puts it up.
   const layer = viewer.getByTestId("plugin-frame-presio/join-code-viewer");
   await expect(layer).toBeAttached();
   await expect(layer).toBeHidden();

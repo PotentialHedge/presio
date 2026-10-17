@@ -35,7 +35,7 @@ export const BUILTINS: Record<string, { enabled: boolean }> = {
   notes: { enabled: true },
   media: { enabled: true },
   drawing: { enabled: true },
-  "join-code": { enabled: true },
+  "join-code": { enabled: false },
 };
 
 /** Where a built-in plugin is served. */

@@ -2,7 +2,6 @@ import type { Deck } from "@/lib/deck";
 import type { PluginHost } from "@/lib/plugins/host";
 import { Menu, X, RefreshCw, Settings, ExternalLink, Share2, KeyRound, MonitorPlay, Power, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { DownloadButton } from "@/components/DownloadButton";
 
 // Slide-over menu for the narrow controller — phones, and any window too small
@@ -114,7 +113,6 @@ export function ControllerMenu({
                   Settings
                 </Button>
               )}
-              <ThemeToggle block />
               <div className="mt-auto">
                 <Button variant="destructive" className="w-full" onClick={act(onEndClick)}>
                   <Power size={16} className="mr-2" />
