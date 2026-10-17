@@ -273,7 +273,7 @@ export function ControllerView({
   // fingers off a zoomed slide never flips pages. (A plugin layer taking the
   // slide's input — a drawing tool — gets the taps instead.)
   const [slideZoomActive, setSlideZoomActive] = useState(false);
-  // On a touch screen: fullscreen, and only the slide zooms, never the page.
+  // On a touch screen only the slide zooms, never the page.
   useTouchPresenting();
   useSlideTapNav(currentCanvasEl, {
     enabled: !slideZoomActive,
