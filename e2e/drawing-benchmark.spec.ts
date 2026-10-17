@@ -39,9 +39,9 @@ async function loadDrawing(page: Page, strokes: Stroke[]) {
   await drawingSurface(page);
   const file = { format: "presio-drawing", version: 1, annotations: { 1: strokes } };
   await page.locator('button[title="Settings"]').first().click();
-  await page.locator('[data-testid="settings-tab-plugin:/plugins/drawing/"]').click();
+  await page.locator('[data-testid="settings-tab-plugin:presio/drawing"]').click();
   const chooser = page.waitForEvent("filechooser");
-  await page.locator('[data-testid="plugin-button-drawing-loadFile"]').click();
+  await page.locator('[data-testid="plugin-button-presio/drawing-loadFile"]').click();
   await (await chooser).setFiles({
     name: "busy.json",
     mimeType: "application/json",
@@ -53,7 +53,7 @@ async function loadDrawing(page: Page, strokes: Stroke[]) {
 
 /** Whether a socket frame the viewer received is about drawing, and whether
  *  it's a live-stroke update. */
-const isDrawing = (payload: string) => payload.includes('"plugin":"drawing"');
+const isDrawing = (payload: string) => payload.includes('"plugin":"presio/drawing"');
 const isStrokeUpdate = (payload: string) => isDrawing(payload) && /"type":"(p|b)"/.test(payload);
 
 /**

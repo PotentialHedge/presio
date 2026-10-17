@@ -1,6 +1,8 @@
 {
-  "id": "join-code",
-  "name": "Join Code",
+  "$schema": "https://presio.ch/schema/plugin-manifest.schema.json",
+  "presio": 1,
+  "name": "join-code",
+  "displayName": "Join Code",
   "version": "1.1.0",
   "author": "Presio",
   "description": "Put the session's join code up on every viewer screen from a button in the controller's bottom bar, or the C key.",
@@ -9,18 +11,16 @@
   "activation": ["always"],
   "permissions": [],
   "contributes": {
+    "commands": [{ "id": "toggle", "title": "Show join code", "icon": "qr-code" }],
     "buttons": [
       {
-        "id": "toggle",
+        "command": "toggle",
+        "location": "controller.toolbar",
         "label": "Join code",
-        "icon": "qr-code",
-        "tooltip": "Show the join code on every viewer screen",
-        "location": "controller.toolbar"
+        "tooltip": "Show the join code on every viewer screen"
       }
     ],
-    "keybindings": [
-      { "command": "toggle", "label": "Show join code", "keys": [{ "key": "c" }] }
-    ],
+    "keybindings": [{ "command": "toggle", "keys": [{ "key": "c" }] }],
     "settings": {
       "heading": {
         "type": "string",
@@ -28,11 +28,7 @@
         "maxLength": 80,
         "description": "Text above the code."
       },
-      "showUrl": {
-        "type": "boolean",
-        "default": true,
-        "description": "Show the join link under the code."
-      }
+      "showUrl": { "type": "boolean", "default": true, "description": "Show the join link under the code." }
     }
   }
 }

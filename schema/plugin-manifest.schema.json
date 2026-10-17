@@ -1,170 +1,137 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://presio.xyz/schema/plugin-manifest.json",
-  "title": "Presio plugin manifest",
-  "description": "presio-plugin.json, served next to the plugin's HTML. See /plugins.md.",
+  "$id": "https://presio.ch/schema/plugin-manifest.schema.json",
+  "title": "Presio plugin manifest (v2)",
+  "description": "presio-plugin.json, served next to the plugin's HTML. The plugin's id is not declared here: it comes from where the plugin is loaded from (github:alice/presio-poll is alice/poll). Validated by shared/plugin/manifest.ts; see /plugins.md.",
   "type": "object",
-  "required": [
-    "id",
-    "name",
-    "version"
-  ],
+  "required": ["presio", "name", "version", "surfaces"],
   "properties": {
-    "id": {
-      "type": "string",
-      "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
-      "description": "Stable identifier; also the message namespace."
+    "$schema": { "type": "string" },
+    "presio": {
+      "const": 1,
+      "description": "The plugin API's major version the plugin is written for. Additive API changes keep it; a breaking change is a new major."
     },
     "name": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 80
+      "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+      "description": "A slug. The id's name part where the source doesn't give one (a plugin served from a URL: url:<host>/<name>)."
     },
+    "displayName": { "type": "string", "minLength": 1, "maxLength": 80, "description": "What people see; name by default." },
     "version": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 32
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(-[0-9A-Za-z.-]+)?$",
+      "description": "Semver. Released under the git tag \"v\" + version."
     },
-    "author": {
-      "type": "string",
-      "maxLength": 80
-    },
-    "description": {
-      "type": "string",
-      "maxLength": 300
-    },
+    "author": { "type": "string", "maxLength": 80 },
+    "description": { "type": "string", "maxLength": 300 },
     "main": {
       "type": "string",
       "default": "index.html",
-      "description": "The plugin's single-file HTML, relative to the manifest."
+      "description": "The plugin's HTML, relative to the manifest."
     },
     "surfaces": {
       "type": "array",
-      "items": {
-        "enum": [
-          "background",
-          "tile",
-          "viewer",
-          "slide"
-        ]
-      },
-      "description": "background: hidden on the presenter's device; handles buttons, keybindings and state. tile: a card of its own on the presenter's dashboard. viewer: a full-screen layer on every viewer screen, hidden until the plugin shows it. slide: a layer over the slide itself, sized to the page, on the presenter's current slide and every viewer; lets input through unless the plugin claims it."
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "enum": ["background", "panel", "viewerSheet", "viewer", "slide"] },
+      "description": "background: hidden on the presenter's device; handles commands and keeps state. panel: inside the presenter's dashboard cards, one per contributes.panels entry. viewerSheet: a bottom sheet (phones) or side card on audience devices (reserved, not drawn yet). viewer: a full-screen layer on every viewer screen, hidden until the plugin shows it. slide: a layer over the slide itself, on the presenter's current slide and every viewer; lets input through unless the plugin claims it."
     },
     "slideSurface": {
       "enum": ["page", "area"],
       "default": "page",
-      "description": "What the slide surface covers. page: the page itself, so fractions of the layer are page positions. area: the whole slide area around it (the viewer's screen, the current slide card), letterbox bars included; presio.ui.page says where the page is within it."
+      "description": "What the slide surface covers. page: the page itself, so fractions of the layer are page positions. area: the whole slide area around it, letterbox bars included; presio.ui.page says where the page is within it."
     },
     "activation": {
       "type": "array",
-      "items": {
-        "type": "string",
-        "pattern": "^(always|attachment:.+)$"
-      },
+      "maxItems": 16,
+      "default": ["always"],
+      "items": { "type": "string", "pattern": "^(always|attachment:.{1,200})$" },
       "description": "When the plugin runs: \"always\", or \"attachment:<glob>\" for decks embedding a matching attachment."
     },
     "permissions": {
       "type": "array",
-      "items": {
-        "enum": [
-          "deck",
-          "editDeck",
-          "history"
-        ]
-      },
-      "description": "deck: read the PDF (its bytes and embedded attachments). editDeck: save an edited PDF over the deck (presenter's device only). history: keep an edit history for the deck, shared with every device, and blobs (presio.history, presio.blobs)."
+      "uniqueItems": true,
+      "items": { "enum": ["deck", "editDeck", "history", "audience"] },
+      "description": "deck: read the PDF (its bytes, attachments, page sizes). editDeck: save an edited PDF over the deck (presenter's device only). history: an edit history for the deck shared with every device, and blobs. audience: collect each viewer's input (reserved, not served yet)."
+    },
+    "dependencies": {
+      "type": "object",
+      "maxProperties": 16,
+      "additionalProperties": { "type": "string", "minLength": 1 },
+      "description": "Other plugins this one needs: source (\"github:alice/presio-quiz-core\", or the alice/quiz-core shorthand) → semver range (\"^1.0.0\", \"~1.2.0\", \"1.x\", \">=1.2.0\", \"1.2.3\")."
     },
     "contributes": {
       "type": "object",
       "properties": {
-        "buttons": {
+        "commands": {
           "type": "array",
-          "maxItems": 4,
+          "maxItems": 64,
           "items": {
             "type": "object",
-            "required": [
-              "id",
-              "label",
-              "location"
-            ],
+            "required": ["id", "title"],
+            "additionalProperties": false,
             "properties": {
-              "id": {
-                "type": "string",
-                "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
-              },
-              "label": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 24
-              },
-              "icon": {
-                "enum": [
-                  "qr-code",
-                  "bar-chart",
-                  "message",
-                  "users",
-                  "timer",
-                  "bell",
-                  "star",
-                  "sparkles",
-                  "hand",
-                  "check",
-                  "eye",
-                  "megaphone",
-                  "pen",
-                  "download",
-                  "upload"
-                ]
-              },
-              "tooltip": {
-                "type": "string",
-                "maxLength": 120
-              },
+              "id": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$" },
+              "title": { "type": "string", "minLength": 1, "maxLength": 64 },
+              "icon": { "$ref": "#/$defs/icon" },
+              "category": { "type": "string", "maxLength": 40 }
+            }
+          },
+          "description": "What the plugin can do. Handled with presio.commands.register(id, handler); run by its buttons and keybindings, and by other plugins as presio.commands.execute(\"<plugin id>.<id>\", args)."
+        },
+        "buttons": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "required": ["command", "location"],
+            "additionalProperties": false,
+            "properties": {
+              "command": { "type": "string", "description": "A command in contributes.commands." },
               "location": {
                 "enum": [
                   "controller.toolbar",
                   "controller.currentSlide",
+                  "thumbnail.context",
+                  "viewer.toolbar",
                   "settings"
-                ]
-              },
-              "accept": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 200,
-                "description": "Ask the presenter for a file of these types (an <input accept> value) first; the press arrives with it."
-              }
-            }
-          },
-          "description": "Buttons Presio draws natively; presses reach the background surface (or the tile)."
-        },
-        "keybindings": {
-          "type": "array",
-          "maxItems": 16,
-          "items": {
-            "type": "object",
-            "required": [
-              "command",
-              "label",
-              "keys"
-            ],
-            "properties": {
-              "command": {
-                "type": "string",
-                "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+                ],
+                "description": "controller.toolbar: the bottom bar. controller.currentSlide: the current slide card's header, as an icon. thumbnail.context: a thumbnail's menu (reserved). viewer.toolbar: every audience device's toolbar (reserved). settings: the plugin's page in Settings."
               },
               "label": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 48
+                "maxLength": 24,
+                "description": "The command's title by default."
               },
+              "icon": { "$ref": "#/$defs/icon" },
+              "tooltip": { "type": "string", "maxLength": 120 },
+              "accept": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "description": "Ask the presenter for a file of these types (an <input accept> value) first; the command runs with { file }."
+              }
+            }
+          },
+          "description": "Buttons Presio draws that run a command. Their state (active, label, disabled, a menu) is set with presio.ui.setButton(command, state); a menu pick runs the command with { menuItem }."
+        },
+        "keybindings": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "object",
+            "required": ["command", "keys"],
+            "additionalProperties": false,
+            "properties": {
+              "command": { "type": "string", "description": "A command in contributes.commands." },
               "keys": {
                 "type": "array",
                 "maxItems": 3,
                 "items": {
                   "type": "object",
-                  "required": [
-                    "key"
-                  ],
+                  "required": ["key"],
+                  "additionalProperties": false,
                   "properties": {
                     "key": {
                       "type": "string",
@@ -172,72 +139,85 @@
                       "maxLength": 32,
                       "description": "A KeyboardEvent.key value, e.g. \"k\" or \"ArrowUp\"."
                     },
-                    "meta": {
-                      "type": "boolean",
-                      "description": "Needs ⌘ (Meta) held."
-                    }
+                    "meta": { "type": "boolean", "description": "Needs ⌘ (Meta) held." }
                   }
                 }
               }
             }
           },
-          "description": "Keyboard shortcuts for the presenter's controller, rebindable in Settings (stored as \"<id>.<command>\" in the keybindings setting). Presses reach presio.onCommand on the background surface (or the tile). Presio's own shortcuts win where keys overlap."
+          "description": "Default keys for commands on the presenter's controller, rebindable in Settings (stored as \"<plugin id>.<command>\" in the keybindings setting). Presio's own shortcuts win where keys overlap. An empty keys list makes the command bindable without a default."
+        },
+        "status": {
+          "type": "array",
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "required": ["id", "location"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$" },
+              "location": { "enum": ["controller.header"] },
+              "tooltip": { "type": "string", "maxLength": 120 }
+            }
+          },
+          "description": "Small text Presio shows for the plugin (\"12 votes\"), set at runtime. Reserved: not drawn yet."
+        },
+        "panels": {
+          "type": "array",
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "required": ["id", "title"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$" },
+              "title": { "type": "string", "minLength": 1, "maxLength": 40 }
+            }
+          },
+          "description": "Cards on the presenter's dashboard, each showing the plugin's panel surface (presio.panel is the id). Needs \"panel\" in surfaces."
         },
         "settings": {
           "type": "object",
           "maxProperties": 32,
-          "propertyNames": {
-            "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
-          },
+          "propertyNames": { "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$" },
           "additionalProperties": {
             "type": "object",
-            "required": [
-              "type",
-              "default"
-            ],
+            "required": ["type", "default"],
             "properties": {
-              "type": {
-                "enum": [
-                  "boolean",
-                  "number",
-                  "string",
-                  "enum"
-                ]
-              },
+              "type": { "enum": ["boolean", "number", "string", "enum"] },
               "default": {},
-              "description": {
-                "type": "string",
-                "maxLength": 300
-              },
-              "minimum": {
-                "type": "number"
-              },
-              "maximum": {
-                "type": "number"
-              },
-              "maxLength": {
-                "type": "integer",
-                "minimum": 1,
-                "maximum": 1000
-              },
-              "values": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "minItems": 1
-              },
-              "labels": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              }
+              "description": { "type": "string", "maxLength": 300 },
+              "minimum": { "type": "number" },
+              "maximum": { "type": "number" },
+              "maxLength": { "type": "integer", "minimum": 1, "maximum": 1000 },
+              "values": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+              "labels": { "type": "array", "items": { "type": "string" } }
             }
           },
-          "description": "Settings stored as \"<id>.<name>\" in the presenter's settings file."
+          "description": "Settings stored as \"<plugin id>.<name>\" in the presenter's settings file."
         }
       }
+    }
+  },
+  "$defs": {
+    "icon": {
+      "enum": [
+        "qr-code",
+        "bar-chart",
+        "message",
+        "users",
+        "timer",
+        "bell",
+        "star",
+        "sparkles",
+        "hand",
+        "check",
+        "eye",
+        "megaphone",
+        "pen",
+        "download",
+        "upload"
+      ]
     }
   }
 }

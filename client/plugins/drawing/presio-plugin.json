@@ -1,6 +1,8 @@
 {
-  "id": "drawing",
-  "name": "Drawing",
+  "$schema": "https://presio.ch/schema/plugin-manifest.schema.json",
+  "presio": 1,
+  "name": "drawing",
+  "displayName": "Drawing",
   "version": "1.0.0",
   "author": "Presio",
   "description": "A pen, a highlighter and a laser pointer on your current slide, drawn live on every screen, shown in your previews and kept in the PDF you download. With a pen (Apple Pencil) it also erases, selects and moves, and snaps lines and boxes.",
@@ -10,48 +12,59 @@
   "activation": ["always"],
   "permissions": ["deck", "history"],
   "contributes": {
+    "commands": [
+      { "id": "palette", "title": "Show or hide the drawing tools", "icon": "pen" },
+      { "id": "pen", "title": "Pen" },
+      { "id": "highlighter", "title": "Highlighter" },
+      { "id": "laser", "title": "Laser pointer" },
+      { "id": "pointer", "title": "No tool (pointer)" },
+      { "id": "eraser", "title": "Eraser" },
+      { "id": "lasso", "title": "Lasso (select and move)" },
+      { "id": "undo", "title": "Undo the last stroke" },
+      { "id": "redo", "title": "Redo" },
+      { "id": "toggleDrawings", "title": "Hide or show the drawings" },
+      { "id": "clear", "title": "Clear the slide's drawings" },
+      { "id": "saveFile", "title": "Save drawings to a file", "icon": "download" },
+      { "id": "loadFile", "title": "Load drawings from a file", "icon": "upload" }
+    ],
     "buttons": [
       {
-        "id": "palette",
+        "command": "palette",
+        "location": "controller.currentSlide",
         "label": "Drawing tools",
         "icon": "pen",
-        "tooltip": "Show or hide the drawing tools",
-        "location": "controller.currentSlide"
+        "tooltip": "Show or hide the drawing tools"
       },
       {
-        "id": "saveFile",
+        "command": "saveFile",
+        "location": "settings",
         "label": "Save to file",
         "icon": "download",
-        "tooltip": "Download every slide's drawings as a JSON file",
-        "location": "settings"
+        "tooltip": "Download every slide's drawings as a JSON file"
       },
       {
-        "id": "loadFile",
+        "command": "loadFile",
+        "location": "settings",
         "label": "Load from file",
         "icon": "upload",
         "tooltip": "Replace the drawings with a saved file's",
-        "location": "settings",
         "accept": ".json,application/json"
       }
     ],
     "keybindings": [
-      { "command": "pen", "label": "Pen", "keys": [{ "key": "p" }] },
-      { "command": "highlighter", "label": "Highlighter", "keys": [{ "key": "h" }] },
-      { "command": "laser", "label": "Laser pointer", "keys": [{ "key": "l" }] },
-      { "command": "pointer", "label": "No tool (pointer)", "keys": [{ "key": "Escape" }] },
-      { "command": "eraser", "label": "Eraser", "keys": [{ "key": "e" }] },
-      { "command": "lasso", "label": "Lasso (select and move)", "keys": [] },
-      { "command": "undo", "label": "Undo the last stroke", "keys": [{ "key": "z", "meta": true }] },
-      { "command": "redo", "label": "Redo", "keys": [{ "key": "y", "meta": true }] },
-      { "command": "toggleDrawings", "label": "Hide or show the drawings", "keys": [] },
-      { "command": "clear", "label": "Clear the slide's drawings", "keys": [] }
+      { "command": "pen", "keys": [{ "key": "p" }] },
+      { "command": "highlighter", "keys": [{ "key": "h" }] },
+      { "command": "laser", "keys": [{ "key": "l" }] },
+      { "command": "pointer", "keys": [{ "key": "Escape" }] },
+      { "command": "eraser", "keys": [{ "key": "e" }] },
+      { "command": "lasso", "keys": [] },
+      { "command": "undo", "keys": [{ "key": "z", "meta": true }] },
+      { "command": "redo", "keys": [{ "key": "y", "meta": true }] },
+      { "command": "toggleDrawings", "keys": [] },
+      { "command": "clear", "keys": [] }
     ],
     "settings": {
-      "toolbar": {
-        "type": "boolean",
-        "default": true,
-        "description": "Show the drawing tools on the current slide."
-      },
+      "toolbar": { "type": "boolean", "default": true, "description": "Show the drawing tools on the current slide." },
       "advanced": {
         "type": "boolean",
         "default": false,

@@ -59,7 +59,7 @@ export function runSlide() {
       const item: Item = { p, el, player: null!, poster: null, controls: null, applied: 0 };
       item.player = createPlayer(p, presenter, {
         sample: presenter
-          ? (t, playing) => presio.send("time", { slide: p.slide, id: p.id, t, playing, sampledAt: presio.clock.now() })
+          ? (t, playing) => presio.messages.send("time", { slide: p.slide, id: p.id, t, playing, sampledAt: presio.clock.now() })
           : undefined,
         changed: () => update(item),
       });
@@ -115,7 +115,7 @@ export function runSlide() {
 
   const setAudio = (next: AudioState) => {
     audio = next;
-    presio.send("audio", audio, { retain: true });
+    presio.messages.send("audio", audio, { retain: true });
     menuFor = null;
     applyAudio();
   };
@@ -240,7 +240,7 @@ export function runSlide() {
 
   // --- Inputs ---
 
-  presio.onMessage(({ type, payload }) => {
+  presio.messages.onMessage(({ type, payload }) => {
     if (type === "state") {
       state = parseState(payload) ?? state;
       applyState();

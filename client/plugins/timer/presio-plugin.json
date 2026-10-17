@@ -1,23 +1,26 @@
 {
-  "id": "timer",
-  "name": "Timer",
+  "$schema": "https://presio.ch/schema/plugin-manifest.schema.json",
+  "presio": 1,
+  "name": "timer",
+  "displayName": "Timer",
   "version": "1.0.0",
   "author": "Presio",
   "description": "A talk timer on your dashboard, counting up or down, with a warning as time runs out. Only you see it.",
   "main": "index.html",
-  "surfaces": ["background", "tile"],
+  "surfaces": ["background", "panel"],
   "activation": ["always"],
   "permissions": [],
   "contributes": {
+    "commands": [{ "id": "toggle", "title": "Start or stop the talk timer", "icon": "timer" }],
     "buttons": [
       {
-        "id": "toggle",
+        "command": "toggle",
+        "location": "controller.toolbar",
         "label": "00:00",
-        "icon": "timer",
-        "tooltip": "Start or stop the talk timer",
-        "location": "controller.toolbar"
+        "tooltip": "Start or stop the talk timer"
       }
     ],
+    "panels": [{ "id": "timer", "title": "Timer" }],
     "settings": {
       "mode": {
         "type": "enum",
@@ -40,11 +43,7 @@
         "maximum": 999,
         "description": "Turn the timer red at this many minutes: remaining when counting down, elapsed when counting up. Leave empty for no warning."
       },
-      "showClock": {
-        "type": "boolean",
-        "default": false,
-        "description": "Also show the current time on the card."
-      }
+      "showClock": { "type": "boolean", "default": false, "description": "Also show the current time on the card." }
     }
   }
 }

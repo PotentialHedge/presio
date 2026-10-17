@@ -299,7 +299,7 @@ export function runSlide() {
   const startStroke = (stroke: Stroke) => {
     beginDraft(stroke, slide);
     draft!.sent = stroke.points.length;
-    presio.send("b", {
+    presio.messages.send("b", {
       i: stroke.id,
       s: slide,
       t: stroke.tool === "highlighter" ? "h" : "p",
@@ -311,7 +311,7 @@ export function runSlide() {
 
   const sendPoints = () => {
     if (!draft || draft.sent >= draft.stroke.points.length) return;
-    presio.send("p", { i: draft.stroke.id, d: encodePoints(draft.stroke.points, draft.sent) });
+    presio.messages.send("p", { i: draft.stroke.id, d: encodePoints(draft.stroke.points, draft.sent) });
     draft.sent = draft.stroke.points.length;
   };
 
@@ -325,7 +325,7 @@ export function runSlide() {
 
   const abandonStroke = () => {
     if (!draft) return;
-    presio.send("x", { i: draft.stroke.id });
+    presio.messages.send("x", { i: draft.stroke.id });
     endDraft();
   };
 
@@ -355,11 +355,11 @@ export function runSlide() {
     if (!laser || (laserSent && laserSent.x === laser.x && laserSent.y === laser.y)) return;
     laserSent = laser;
     const { size } = laserStyle();
-    presio.send("l", { x: Math.round(laser.x * 1e4) / 1e4, y: Math.round(laser.y * 1e4) / 1e4, s: size, ...(laserLine && { t: 1 }) }, { volatile: true });
+    presio.messages.send("l", { x: Math.round(laser.x * 1e4) / 1e4, y: Math.round(laser.y * 1e4) / 1e4, s: size, ...(laserLine && { t: 1 }) }, { volatile: true });
   };
   const hideLaser = () => {
     laserDot.hidden = true;
-    if (presenter && (laser || laserSent)) presio.send("l", null);
+    if (presenter && (laser || laserSent)) presio.messages.send("l", null);
     if (laser) trail.push(null);
     laser = null;
     laserSent = null;
@@ -872,7 +872,7 @@ export function runSlide() {
     else renderPalette();
   });
 
-  presio.onMessage(({ type, payload }) => {
+  presio.messages.onMessage(({ type, payload }) => {
     if (presenter) return;
     if (type === "b") {
       const b = parseBegin(payload);

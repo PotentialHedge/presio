@@ -21,8 +21,9 @@
 <script>
   // One file, two surfaces:
   //  - background (presenter's device): owns the "showing" state and the
-  //    bottom-bar button, and broadcasts the state to viewers (retained, so a
-  //    phone that joins while the code is up shows it too);
+  //    "toggle" command (the bottom-bar button, the C key), and broadcasts
+  //    the state to viewers (retained, so a phone that joins while the code
+  //    is up shows it too);
   //  - viewer (every viewer screen): draws the code while it's showing.
   const $ = (id) => document.getElementById(id);
   let showing = false;
@@ -54,14 +55,13 @@
       // A local deck has no join code to show.
       if (presio.session.local) return;
       showing = !showing;
-      presio.send("visible", { on: showing }, { retain: true });
+      presio.messages.send("visible", { on: showing }, { retain: true });
       render();
     };
-    presio.onButton("toggle", toggle);
-    presio.onCommand("toggle", toggle);
+    presio.commands.register("toggle", toggle);
   }
 
-  presio.onMessage(({ type, payload, from }) => {
+  presio.messages.onMessage(({ type, payload, from }) => {
     if (type === "visible" && from === "presenter") {
       showing = !!payload?.on;
       render();

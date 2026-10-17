@@ -1,5 +1,5 @@
 // The talk timer. Two surfaces, both on the presenter's device only:
-//  - tile: the dashboard card, with Start/Stop and Reset;
+//  - panel: the dashboard card, with Start/Stop and Reset;
 //  - background: keeps the bottom-bar button's label on the current time and
 //    starts/stops the timer from it — the timer's handle on a phone, whose
 //    dashboard has no room for the card.
@@ -73,7 +73,7 @@ function formatTime(total: number): string {
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 }
 
-function Tile() {
+function Panel() {
   usePresio();
   const now = useNow();
   const { clock: c, toggle, reset } = useClock();
@@ -106,10 +106,10 @@ function ToolbarButton() {
   const now = useNow();
   const { clock: c, toggle } = useClock();
   const label = formatTime(readout(elapsedOf(c, now)).seconds);
-  useEffect(() => presio.onButton("toggle", toggle), [toggle]);
+  useEffect(() => presio.commands.register("toggle", toggle), [toggle]);
   // Only tell Presio when the button actually changes, not every tick.
   useEffect(() => presio.ui.setButton("toggle", { label, active: c.running }), [label, c.running]);
   return null;
 }
 
-mount(presio.surface === "tile" ? <Tile /> : <ToolbarButton />);
+mount(presio.surface === "panel" ? <Panel /> : <ToolbarButton />);

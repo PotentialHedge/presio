@@ -13,7 +13,7 @@ import { jumpToSlide, newSession, openController, openViewer, waitForSlide } fro
 
 /** Media the plugin extracted from the PDF, as opposed to anything remote. */
 const embedded = (page: Page) =>
-  page.frameLocator('[data-testid="plugin-frame-media-slide"]').locator('img[src^="blob:"]');
+  page.frameLocator('[data-testid="plugin-frame-presio/media-slide"]').locator('img[src^="blob:"]');
 
 test("media embedded in the PDF plays on the slide it belongs to, in both windows", async ({
   browser,

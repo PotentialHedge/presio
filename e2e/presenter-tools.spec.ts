@@ -16,7 +16,7 @@ test("speaker notes follow the deck and come from the PDF's own attachments", as
   await waitForSlide(controller);
 
   // Notes are a built-in plugin: its card is a sandboxed frame.
-  const tile = controller.frameLocator('[data-testid="plugin-frame-notes-tile"]');
+  const tile = controller.frameLocator('[data-testid="plugin-frame-presio/notes-panel-notes"]');
   const notes = tile.getByTestId("speaker-notes");
 
   // The fixture deck carries notes on slides 2 and 3 only, so slide 1 offers
@@ -37,7 +37,7 @@ test("speaker notes follow the deck and come from the PDF's own attachments", as
   // Notes are the presenter's alone — they must never reach the projector.
   const viewer = await openViewer(ctx, sessionId);
   await waitForSlide(viewer);
-  await expect(viewer.locator('[data-testid^="plugin-frame-notes"]')).toHaveCount(0);
+  await expect(viewer.locator('[data-testid^="plugin-frame-presio/notes"]')).toHaveCount(0);
   await expect(viewer.getByText("This GIF is embedded directly")).toHaveCount(0);
 
   await ctx.close();
@@ -50,7 +50,7 @@ test("the talk timer starts, counts, and resets", async ({ browser, request }) =
   await waitForSlide(controller);
 
   // The timer is a built-in plugin: its card is a sandboxed frame.
-  const tile = controller.frameLocator('[data-testid="plugin-frame-timer-tile"]');
+  const tile = controller.frameLocator('[data-testid="plugin-frame-presio/timer-panel-timer"]');
   const elapsed = tile.getByTestId("timer-elapsed");
   await expect(elapsed).toHaveText("00:00");
 
@@ -108,7 +108,7 @@ test("the join code can be thrown up on the viewer", async ({ browser, request }
 
   // The built-in Join Code plugin's layer, mounted on every viewer but hidden
   // until the presenter puts it up.
-  const layer = viewer.getByTestId("plugin-frame-join-code-viewer");
+  const layer = viewer.getByTestId("plugin-frame-presio/join-code-viewer");
   await expect(layer).toBeAttached();
   await expect(layer).toBeHidden();
 
@@ -117,7 +117,7 @@ test("the join code can be thrown up on the viewer", async ({ browser, request }
 
   // The projector shows the code itself, so the room can type it in.
   await expect(layer).toBeVisible();
-  await expect(viewer.frameLocator('[data-testid="plugin-frame-join-code-viewer"]').getByText(sessionId, { exact: true })).toBeVisible();
+  await expect(viewer.frameLocator('[data-testid="plugin-frame-presio/join-code-viewer"]').getByText(sessionId, { exact: true })).toBeVisible();
 
   await controller.keyboard.press("c");
   await expect(layer).toBeHidden();

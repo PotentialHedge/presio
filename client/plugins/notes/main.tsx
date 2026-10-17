@@ -55,7 +55,7 @@ function SizeButtons({ scale }: { scale: number }) {
   );
 }
 
-function Tile() {
+function Panel() {
   const { slide } = usePresio();
   const [notes, reflect] = useNotes();
   const scale = (presio.settings.get("fontScale") as number) ?? 1;
@@ -134,4 +134,4 @@ function Tile() {
   );
 }
 
-mount(<Tile />);
+mount(<Panel />);

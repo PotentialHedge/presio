@@ -1,4 +1,4 @@
-// What the presenter's surfaces tell every device (presio.send):
+// What the presenter's surfaces tell every device (presio.messages.send):
 //
 //  - "state" (retained): the last command — which item on which slide, and
 //    play / pause / reset. A new slide starts with its autoplay item playing,
@@ -37,7 +37,7 @@ export const DEFAULT_AUDIO: AudioState = { muted: true, target: "both" };
 
 export function sendState(slide: number, id: string | null, action: Action, prev: MediaState | null): MediaState {
   const state: MediaState = { slide, id, action, seq: Math.max(Date.now(), (prev?.seq ?? 0) + 1) };
-  presio.send("state", state, { retain: true });
+  presio.messages.send("state", state, { retain: true });
   return state;
 }
 

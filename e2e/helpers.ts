@@ -78,7 +78,7 @@ export async function waitForSlide(page: Page) {
 }
 
 /** The drawing plugin's layer over the slide (a "slide" surface frame). */
-export const DRAWING_FRAME = '[data-testid="plugin-frame-drawing-slide"]';
+export const DRAWING_FRAME = '[data-testid="plugin-frame-presio/drawing-slide"]';
 
 /** What's inside the drawing layer: its palette, its laser dot. */
 export function drawingLayer(page: Page) {

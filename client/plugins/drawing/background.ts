@@ -99,35 +99,36 @@ export function runBackground() {
     if (tool !== "none" && presio.settings.get("toolbar") === false) void presio.settings.set("toolbar", true);
     presio.storage.set("tool", tool);
   };
-  presio.onCommand("pen", () => setTool("pen"));
-  presio.onCommand("highlighter", () => setTool("highlighter"));
-  presio.onCommand("laser", () => setTool("laser"));
-  presio.onCommand("pointer", () => setTool("none"));
+  presio.commands.register("pen", () => setTool("pen"));
+  presio.commands.register("highlighter", () => setTool("highlighter"));
+  presio.commands.register("laser", () => setTool("laser"));
+  presio.commands.register("pointer", () => setTool("none"));
   // The eraser and the lasso are advanced tools: asking for one shows them.
   const setAdvancedTool = (tool: Tool) => {
     if (presio.settings.get("advanced") !== true) void presio.settings.set("advanced", true);
     setTool(tool);
   };
-  presio.onCommand("eraser", () => setAdvancedTool("eraser"));
-  presio.onCommand("lasso", () => setAdvancedTool("lasso"));
-  presio.onCommand("redo", () => commitAll(history, redoOps(history, presio.slide.current)));
-  presio.onCommand("toggleDrawings", () => void presio.settings.set("hidden", presio.settings.get("hidden") !== true));
-  presio.onCommand("undo", () => commitAll(history, undoOps(history, presio.slide.current)));
-  presio.onCommand("clear", () => commitAll(history, clearOps(history.state, presio.slide.current)));
+  presio.commands.register("eraser", () => setAdvancedTool("eraser"));
+  presio.commands.register("lasso", () => setAdvancedTool("lasso"));
+  presio.commands.register("redo", () => { commitAll(history, redoOps(history, presio.slide.current)); });
+  presio.commands.register("toggleDrawings", () => void presio.settings.set("hidden", presio.settings.get("hidden") !== true));
+  presio.commands.register("undo", () => { commitAll(history, undoOps(history, presio.slide.current)); });
+  presio.commands.register("clear", () => { commitAll(history, clearOps(history.state, presio.slide.current)); });
 
-  // --- The palette's button in the current slide's header ---
+  // --- The palette's button in the current slide's header (its command) ---
 
   const showButton = () => presio.ui.setButton("palette", { active: presio.settings.get("toolbar") !== false });
-  presio.onButton("palette", () => void presio.settings.set("toolbar", presio.settings.get("toolbar") === false));
+  presio.commands.register("palette", () => void presio.settings.set("toolbar", presio.settings.get("toolbar") === false));
   presio.settings.onChange(showButton);
   showButton();
 
   // --- Saving and loading, from its page in Settings ---
 
-  presio.onButton("saveFile", () => {
+  presio.commands.register("saveFile", () => {
     saveFile(new Blob([serializeFile(history.state)], { type: "application/json" }), "slides-drawing.json");
   });
-  presio.onButton("loadFile", (_id, file) => {
+  presio.commands.register("loadFile", (args) => {
+    const file = args?.file;
     if (!file) return;
     try {
       const loaded = parseFile(new TextDecoder().decode(file.bytes), presio.slide.total);

@@ -15,7 +15,7 @@ export function runBackground() {
   let state: MediaState | null = null;
   let lastTime: (TimeMessage & { at: number }) | null = null;
 
-  presio.onMessage(({ type, payload }) => {
+  presio.messages.onMessage(({ type, payload }) => {
     if (type === "state") state = parseState(payload) ?? state;
     else if (type === "time") {
       const time = parseTime(payload);
@@ -75,12 +75,12 @@ export function runBackground() {
     return state?.slide === slide && state.id === p.id && state.action === "play";
   };
 
-  presio.onCommand("togglePlay", () => {
+  presio.commands.register("togglePlay", () => {
     const p = target(onSlide().filter(isPlayable));
     if (p) state = sendState(presio.slide.current, p.id, isPlaying(p) ? "pause" : "play", state);
   });
 
-  presio.onCommand("restart", () => {
+  presio.commands.register("restart", () => {
     const p = target(onSlide());
     if (p) state = sendState(presio.slide.current, p.id, "reset", state);
   });

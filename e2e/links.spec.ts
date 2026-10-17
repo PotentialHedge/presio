@@ -139,7 +139,7 @@ test("links go inert while a drawing tool is active", async ({ browser, request 
     controller.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.getAttribute("data-testid") ?? "", at);
 
   await pickTool(controller, "pen");
-  await expect.poll(onTop).toBe("plugin-frame-drawing-slide");
+  await expect.poll(onTop).toBe("plugin-frame-presio/drawing-slide");
 
   // With no tool, clicks reach the links again.
   await pickTool(controller, "none");

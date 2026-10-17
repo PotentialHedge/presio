@@ -1,6 +1,8 @@
 {
-  "id": "media",
-  "name": "Media",
+  "$schema": "https://presio.ch/schema/plugin-manifest.schema.json",
+  "presio": 1,
+  "name": "media",
+  "displayName": "Media",
   "version": "1.0.0",
   "author": "Presio",
   "description": "Plays the GIFs, videos and YouTube/Vimeo embeds in your PDF on their slides, in sync on every screen, with play, restart and audio controls on your current slide.",
@@ -9,9 +11,10 @@
   "activation": ["attachment:media-slide-*.json"],
   "permissions": ["deck"],
   "contributes": {
+    "commands": [{ "id": "togglePlay", "title": "Play/pause media" }, { "id": "restart", "title": "Restart media" }],
     "keybindings": [
-      { "command": "togglePlay", "label": "Play/pause media", "keys": [{ "key": "k" }] },
-      { "command": "restart", "label": "Restart media", "keys": [{ "key": "r" }] }
+      { "command": "togglePlay", "keys": [{ "key": "k" }] },
+      { "command": "restart", "keys": [{ "key": "r" }] }
     ]
   }
 }

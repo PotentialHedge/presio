@@ -26,7 +26,7 @@ const COLLAPSE_DELAY_MS = 700;
 
 // A tooltip with the presenter's key for the command, if they have one.
 const withKey = (label: string, command: string) => {
-  const key = presio.shortcut(command);
+  const key = presio.commands.shortcut(command);
   return key ? `${label} (${key})` : label;
 };
 
