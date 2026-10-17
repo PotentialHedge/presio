@@ -37,6 +37,10 @@ export const STORAGE_KEYS = {
 export const pluginStateKey = (id: string) => `presio_plugin_state_${id}`;
 /** The presenter's retained plugin messages for one session (lib/plugins/host.ts). */
 export const pluginRetainedKey = (id: string) => `presio_plugin_retained_${id}`;
+/** The presenter's copy of viewers' input to plugins for one session (presio.audience). */
+export const pluginAudienceKey = (id: string) => `presio_plugin_audience_${id}`;
+/** This browser's anonymous viewer id for one session (presio.audience). */
+export const audienceViewerKey = (id: string) => `presio_audience_viewer_${id}`;
 export const sessionKey = (id: string) => `session_${id}`;
 /** Live-reload preference for a local deck: "off" | "prompt" | "auto". A device
  *  preference (the file being watched is on this machine), not session state. */
@@ -98,7 +102,7 @@ export function lsRemove(key: string): void {
  *  reappearing, mid-presentation). */
 export function rekeySessionStorage(oldId: string, newId: string): void {
   if (oldId === newId) return;
-  for (const key of [pluginRetainedKey, pluginStateKey, viewerOpenedKey]) {
+  for (const key of [pluginRetainedKey, pluginStateKey, pluginAudienceKey, viewerOpenedKey]) {
     const value = lsGetString(key(oldId), "");
     if (value) lsSetString(key(newId), value);
     lsRemove(key(oldId));

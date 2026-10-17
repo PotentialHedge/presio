@@ -48,6 +48,9 @@
     var viewListeners = [];
     var pageListeners = [];
     var hoverListeners = [];
+    var audienceStateListeners = [];
+    var audienceMineListeners = [];
+    var audienceChangeListeners = [];
     // Command id -> its handler in this frame.
     var commands = {};
     var exporter = null;
@@ -146,6 +149,18 @@
         else pending.push(p);
       },
       "history.update": function (p) { if (history) history.receive(p); },
+      "audience.state": function (p) {
+        audienceKeys()[p.key] = p.open === true;
+        each(audienceStateListeners, { key: p.key, open: p.open === true });
+      },
+      "audience.mine": function (p) {
+        if (p.value === null || p.value === undefined) delete audienceMine()[p.key];
+        else audienceMine()[p.key] = p.value;
+        each(audienceMineListeners, { key: p.key, value: p.value === undefined ? null : p.value });
+      },
+      "audience.change": function (p) {
+        each(audienceChangeListeners, { key: p.key, summary: p.summary, changes: p.changes || {}, reset: p.reset === true });
+      },
     };
 
     // Methods the host calls here. Each returns the result (or a promise of it).
@@ -354,10 +369,20 @@
       return h;
     }
 
-    // Stand-ins for what's designed but not served by this host: calls reject
-    // with Unavailable; presio.supports() says which is which.
-    function notYet(method) {
-      return function (a, b) { return call(method, { key: a, value: b }); };
+    // presio.audience: this frame's copy of each key's state and (viewer) its
+    // own values, kept current by the host's events.
+    function audienceKeys() {
+      ctx.audience = ctx.audience || { keys: {}, mine: {} };
+      return ctx.audience.keys;
+    }
+    function audienceMine() {
+      ctx.audience = ctx.audience || { keys: {}, mine: {} };
+      return ctx.audience.mine;
+    }
+    // Listeners for one key, or (called with just a callback) for every key.
+    function subscribeKey(list, key, cb) {
+      if (typeof key === "function") return subscribe(list, key);
+      return subscribe(list, function (e) { if (e.key === key) cb(e); });
     }
 
     var api = {
@@ -528,15 +553,47 @@
       clock: {
         now: function () { return Date.now() + (ctx.clockOffset || 0); },
       },
-      /** Each viewer's input ("audience" permission). Not served yet:
-       *  check presio.supports("audience"). */
+      /**
+       * Each viewer's input ("audience" permission): one slot per viewer
+       * under each key the presenter opens. Values are JSON, at most 16 KB.
+       */
       audience: {
-        set: notYet("audience.set"),
-        open: notYet("audience.open"),
-        close: notYet("audience.close"),
-        clear: notYet("audience.clear"),
-        summary: notYet("audience.summary"),
-        onChange: function () { return function () {}; },
+        /** Viewer: write this viewer's own value under an open key (null
+         *  removes it). Rejects when the key is closed. */
+        set: function (key, value) {
+          return call("audience.set", { key: key, value: value === undefined ? null : value }).then(function () {
+            if (value === undefined || value === null) delete audienceMine()[key];
+            else audienceMine()[key] = value;
+          });
+        },
+        /** Viewer: this viewer's own value under a key, or null. */
+        get: function (key) {
+          var mine = audienceMine();
+          return Object.prototype.hasOwnProperty.call(mine, key) ? mine[key] : null;
+        },
+        /** { open }: whether a key takes viewers' values. */
+        state: function (key) { return { open: audienceKeys()[key] === true }; },
+        /** cb({ key, open }) when a key opens or closes; onState(key, cb) for one. */
+        onState: function (key, cb) { return subscribeKey(audienceStateListeners, key, cb); },
+        /** Viewer: cb({ key, value }) when this viewer's own value changes
+         *  (the presenter cleared it, or another surface set it). */
+        onMine: function (key, cb) { return subscribeKey(audienceMineListeners, key, cb); },
+        /** Presenter: start, stop or reset taking viewers' values for a key. */
+        open: function (key) { return call("audience.open", { key: key }); },
+        close: function (key) { return call("audience.close", { key: key }); },
+        clear: function (key) { return call("audience.clear", { key: key }); },
+        /** Presenter: every viewer's value, { [viewerId]: value }. */
+        all: function (key) { return call("audience.all", { key: key }); },
+        /** Presenter: { total, values: [{ value, count }] }, most common first. */
+        summary: function (key) { return call("audience.summary", { key: key }); },
+        /**
+         * Presenter: cb({ key, summary, changes, reset }) as viewers' values
+         * change, a few times a second at most. `changes` is { [viewerId]:
+         * value | null } since the last call; `reset` means the values were
+         * replaced wholesale (cleared, or re-synced): call all() for them.
+         * onChange(key, cb) for one key.
+         */
+        onChange: function (key, cb) { return subscribeKey(audienceChangeListeners, key, cb); },
       },
       ui: {
         /**

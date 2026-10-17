@@ -52,7 +52,7 @@
       "type": "array",
       "uniqueItems": true,
       "items": { "enum": ["deck", "editDeck", "history", "audience"] },
-      "description": "deck: read the PDF (its bytes, attachments, page sizes). editDeck: save an edited PDF over the deck (presenter's device only). history: an edit history for the deck shared with every device, and blobs. audience: collect each viewer's input (reserved, not served yet)."
+      "description": "deck: read the PDF (its bytes, attachments, page sizes). editDeck: save an edited PDF over the deck (presenter's device only). history: an edit history for the deck shared with every device, and blobs. audience: collect each viewer's input (presio.audience)."
     },
     "dependencies": {
       "type": "object",

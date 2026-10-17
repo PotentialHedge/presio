@@ -12,13 +12,14 @@ import type { PDFDocumentProxy } from "pdfjs-dist";
 import { socket } from "@/lib/socket";
 import { readAttachments, type PdfAttachment } from "@/lib/pdf";
 import { useJoinUrl } from "@/lib/joinUrl";
-import { PluginHost, retainKey, type PageSize, type PluginContext, type WireEvent } from "./host";
+import { PluginHost, retainKey, audienceViewerId, type AudienceLink, type PageSize, type PluginContext, type WireEvent } from "./host";
 import { isActivatedBy, type LoadedPlugin, type PluginManifest } from "./manifest";
 import { loadPlugin, usePluginEntries } from "./registry";
 import { clockOffset, onClockSample } from "@/lib/clock";
 import { resolvePluginSettings, useSettingsDocument } from "@/lib/settings";
 import { getSessionAuth } from "@/lib/utils";
 import { blobSha, type HistoryEntry, type HistoryLink, type SyncReply } from "./history";
+import type { AudienceJoin, AudienceKeyState, AudienceSummary } from "@shared/plugin/audience";
 
 /** A plugin viewers run: its id, where to load it, and what it must hash to. */
 interface PublishedPlugin {
@@ -160,6 +161,63 @@ function useLocallyActivePlugins(enabled: boolean, readAll: () => Promise<PdfAtt
   }, [enabled, entriesKey, readAll]);
 
   return { plugins: enabled ? plugins : [], errors };
+}
+
+// --- presio.audience: the links to wherever viewers' slots are held ---
+
+/** How long to wait on an answer about a viewer's slot. */
+const AUDIENCE_ACK_MS = 8000;
+/** At most this much of the presenter's mirror per seed message (a socket
+ *  message to the server is at most 1 MB). */
+const AUDIENCE_SEED_PART_BYTES = 256 * 1024;
+
+/** A plugin that collects viewers' input: published to viewers, with the permission. */
+const collectsAudience = (manifest: Pick<PluginManifest, "surfaces" | "permissions">) =>
+  runsOnViewers(manifest) && manifest.permissions.includes("audience");
+
+/** Ask the server about the audience; rejects with its reason. */
+async function askAudience<T>(event: string, args: unknown): Promise<T> {
+  let reply: (T & { error?: string }) | undefined;
+  try {
+    reply = await socket.timeout(AUDIENCE_ACK_MS).emitWithAck(event, args);
+  } catch {
+    throw new Error("Couldn't reach the server");
+  }
+  if (reply?.error) throw new Error(reply.error);
+  return reply as T;
+}
+
+/** A shared deck's link: the server holds the slots. */
+function sharedAudienceLink(): AudienceLink {
+  const ask = (event: string) => async (plugin: string, key: string) => void (await askAudience(event, { plugin, key }));
+  return {
+    open: ask("audience_open"),
+    close: ask("audience_close"),
+    clear: ask("audience_clear"),
+    set: async (plugin, key, value) => void (await askAudience("audience_set", { plugin, key, value })),
+  };
+}
+
+/** The presenter's mirror of a plugin's slots, in parts small enough to send. */
+function seedParts(keys: Record<string, AudienceKeyState>): Record<string, AudienceKeyState>[] {
+  const parts: Record<string, AudienceKeyState>[] = [];
+  let part: Record<string, AudienceKeyState> = {};
+  let bytes = 0;
+  for (const [key, { open, slots }] of Object.entries(keys)) {
+    part[key] = { open, slots: {} };
+    for (const [viewer, value] of Object.entries(slots)) {
+      const size = JSON.stringify(value).length + viewer.length;
+      if (bytes + size > AUDIENCE_SEED_PART_BYTES && bytes > 0) {
+        parts.push(part);
+        part = { [key]: { open, slots: {} } };
+        bytes = 0;
+      }
+      part[key].slots[viewer] = value;
+      bytes += size;
+    }
+  }
+  parts.push(part);
+  return parts;
 }
 
 /** How long to wait on the server's answer about a history. */
@@ -354,9 +412,57 @@ export function usePluginHost({
           },
       true
     );
+    // Audience input: the viewer window is the audience, and this browser's
+    // presenter window holds the slots.
+    const viewer = audienceViewerId(id);
+    const audienceReplies = new Map<string, (error: string | null) => void>();
+    host.audience.setLink(
+      isPresenter
+        ? {
+            open: async (plugin, key) => channel.postMessage({ kind: "audience_state", plugin, key, open: true }),
+            close: async (plugin, key) => channel.postMessage({ kind: "audience_state", plugin, key, open: false }),
+            clear: async (plugin, key) => channel.postMessage({ kind: "audience_cleared", plugin, key }),
+          }
+        : {
+            set: (plugin, key, value) =>
+              new Promise<void>((resolve, reject) => {
+                const reqId = `${viewer}:${nextSync++}`;
+                const timer = setTimeout(() => {
+                  audienceReplies.delete(reqId);
+                  reject(new Error("The presenter's window didn't answer"));
+                }, 5000);
+                audienceReplies.set(reqId, (error) => {
+                  clearTimeout(timer);
+                  audienceReplies.delete(reqId);
+                  if (error) reject(new Error(error));
+                  else resolve();
+                });
+                channel.postMessage({ kind: "audience_set", reqId, plugin, key, value, viewer });
+              }),
+          }
+    );
+    const onAudience = (m: Record<string, unknown>) => {
+      const { kind, plugin, key } = m as { kind: string; plugin: string; key: string };
+      if (isPresenter) {
+        if (kind === "audience_join") {
+          channel.postMessage({ kind: "audience_join_reply", viewer: m.viewer, join: host.audience.joinFor(String(m.viewer)) });
+        } else if (kind === "audience_set") {
+          const error = host.audience.receiveWrite(plugin, key, String(m.viewer), m.value);
+          channel.postMessage({ kind: "audience_set_reply", reqId: m.reqId, error });
+        }
+        return;
+      }
+      if (kind === "audience_state") host.audience.receiveKeyState(plugin, key, m.open === true);
+      else if (kind === "audience_cleared") host.audience.receiveCleared(plugin, key);
+      else if (kind === "audience_join_reply" && m.viewer === viewer) host.audience.receiveJoin(m.join as AudienceJoin);
+      else if (kind === "audience_set_reply") audienceReplies.get(String(m.reqId))?.((m.error as string | null) ?? null);
+      else if (kind === "audience_resync") channel.postMessage({ kind: "audience_join", viewer });
+    };
+
     channel.onmessage = (e) => {
       const { kind, event, events, plugin, entry, head, reqId, reply } = e.data ?? {};
-      if (kind === "event") host.receive(event);
+      if (typeof kind === "string" && kind.startsWith("audience_")) onAudience(e.data);
+      else if (kind === "event") host.receive(event);
       else if (kind === "retained") host.seedRetained(events);
       else if (kind === "hello" && isPresenter) channel.postMessage({ kind: "retained", events: host.retainedEvents() });
       else if (kind === "history_entry" && !isPresenter) host.history.receive(plugin, entry as HistoryEntry);
@@ -365,11 +471,18 @@ export function usePluginHost({
         channel.postMessage({ kind: "history_sync_reply", reqId, reply: host.history.answerSync(plugin, head) });
       } else if (kind === "history_sync_reply" && !isPresenter) syncs.get(reqId)?.(reply);
     };
-    if (!isPresenter) channel.postMessage({ kind: "hello" });
+    if (!isPresenter) {
+      channel.postMessage({ kind: "hello" });
+      channel.postMessage({ kind: "audience_join", viewer });
+    } else {
+      // A viewer window opened before this one: it asks again.
+      channel.postMessage({ kind: "audience_resync" });
+    }
     return () => {
       channel.close();
       host.setOutbound(() => {});
       host.history.setLink({}, false);
+      host.audience.setLink(null);
     };
   }, [host, id, local, isPresenter]);
 
@@ -413,6 +526,40 @@ export function usePluginHost({
     const onHistoryReset = ({ plugin }: { plugin: string }) => host.history.receiveReset(plugin);
     const onDisconnect = () => host.history.setLink(historyLink, false);
 
+    // Audience input: the server holds the slots. The presenter mirrors them
+    // and, on (re)joining, merges its copy into the server's and adopts the
+    // result; a viewer gets back its key states and its own values.
+    host.audience.setLink(sharedAudienceLink());
+    const viewer = audienceViewerId(id);
+    const joinAudience = () => {
+      askAudience<{ plugins: AudienceJoin }>("audience_join", { viewer }).then(
+        (reply) => host.audience.receiveJoin(reply.plugins),
+        (e) => console.warn("Couldn't join the audience:", e)
+      );
+    };
+    const seedAudience = async () => {
+      for (const { id: plugin, manifest } of pluginsRef.current) {
+        if (!collectsAudience(manifest)) continue;
+        try {
+          for (const keys of seedParts(host.audience.mirrorOf(plugin))) {
+            if (Object.keys(keys).length) await askAudience("audience_seed", { plugin, keys });
+          }
+          const reply = await askAudience<{ keys: Record<string, AudienceKeyState> }>("audience_pull", { plugin });
+          host.audience.adopt(plugin, reply.keys);
+        } catch (e) {
+          console.warn(`Couldn't sync ${plugin}'s audience input:`, e);
+        }
+      }
+    };
+    const onAudienceUpdate = (u: { plugin: string; key: string; summary: AudienceSummary; changes: Record<string, unknown> }) =>
+      host.audience.receiveUpdate(u.plugin, u.key, u.summary, u.changes);
+    const onAudienceState = ({ plugin, key, open }: { plugin: string; key: string; open: boolean }) =>
+      host.audience.receiveKeyState(plugin, key, open);
+    const onAudienceCleared = ({ plugin, key }: { plugin: string; key: string }) => host.audience.receiveCleared(plugin, key);
+    const onAudienceResync = () => {
+      if (!isPresenter) joinAudience();
+    };
+
     // Only where to find each plugin: viewers load it themselves (cached like
     // any web page), never through the server.
     const publish = () => {
@@ -433,6 +580,7 @@ export function usePluginHost({
           hash,
         }));
       socket.emit("plugins_publish", { plugins });
+      if (isPresenter) void seedAudience();
     };
 
     const onEvent = (event: WireEvent) => host.receive(event);
@@ -450,6 +598,7 @@ export function usePluginHost({
         const ours = pluginsRef.current.filter((p) => runsOnViewers(p.manifest));
         const stale = ours.length !== server.size || ours.some((p) => server.get(p.id) !== p.hash);
         if (stale) publish();
+        else void seedAudience();
         // Retained state is merged both ways: ours goes up where the server
         // has none, and a reloaded controller adopts what the server kept.
         const onServer = new Set(state.retained.map(retainKey));
@@ -468,6 +617,7 @@ export function usePluginHost({
         }
         return;
       }
+      joinAudience();
       for (const [plugin, values] of Object.entries(state.settings ?? {})) host.setPluginSettings(plugin, values);
       host.seedRetained(state.retained);
       // Fetch only what changed; the watchdog re-joins every 30s.
@@ -518,6 +668,10 @@ export function usePluginHost({
     socket.on("history_entry", onHistoryEntry);
     socket.on("history_reset", onHistoryReset);
     socket.on("disconnect", onDisconnect);
+    socket.on("audience_update", onAudienceUpdate);
+    socket.on("audience_state", onAudienceState);
+    socket.on("audience_cleared", onAudienceCleared);
+    socket.on("audience_resync", onAudienceResync);
     publishRef.current = publish;
     return () => {
       socket.off("plugin_event", onEvent);
@@ -527,8 +681,13 @@ export function usePluginHost({
       socket.off("history_entry", onHistoryEntry);
       socket.off("history_reset", onHistoryReset);
       socket.off("disconnect", onDisconnect);
+      socket.off("audience_update", onAudienceUpdate);
+      socket.off("audience_state", onAudienceState);
+      socket.off("audience_cleared", onAudienceCleared);
+      socket.off("audience_resync", onAudienceResync);
       host.setOutbound(() => {});
       host.history.setLink({}, false);
+      host.audience.setLink(null);
       publishRef.current = null;
     };
   }, [host, id, local, isPresenter]);

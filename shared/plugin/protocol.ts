@@ -96,8 +96,8 @@ export const CAPABILITIES = [
   "clock",
   "ui",
   "panels",
-  // Reserved: designed, not yet implemented by any host.
   "audience",
+  // Reserved: designed, not yet implemented by any host.
   "status",
   "viewerSheet",
   "palette",
@@ -146,6 +146,7 @@ export type HostMethod =
   | "audience.open"
   | "audience.close"
   | "audience.clear"
+  | "audience.all"
   | "audience.summary";
 
 /** Calls the host makes to a frame. */
@@ -170,7 +171,13 @@ export type FrameEvent =
   | "ui.page"
   | "ui.hover"
   | "messages.receive"
-  | "history.update";
+  | "history.update"
+  /** { key, open }: a key opened or closed (every role). */
+  | "audience.state"
+  /** { key, value }: this viewer's own value changed (cleared, or set from another frame). */
+  | "audience.mine"
+  /** { key, summary, changes, reset? }: viewers' values changed (presenter). */
+  | "audience.change";
 
 /** Events a frame sends the host. */
 export type HostEvent =

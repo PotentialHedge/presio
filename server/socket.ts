@@ -16,6 +16,7 @@ import {
   type PublishedPlugin,
   type Retain,
 } from "./validation.js";
+import { clearAudience, createAudienceState, registerAudienceHandlers, type AudienceState } from "./audience.js";
 import { HistoryError, HistoryStore, parseBase, sanitizeHead, sanitizeHistoryCommit, SHA256_RE, type HistoryBucket } from "./history.js";
 
 // A presenter plugin message kept for viewers who join later (the plugin's
@@ -45,6 +46,8 @@ export interface SocketState {
   pluginSettings: Map<string, Map<string, Record<string, unknown>>>;
   // Plugins' edit histories (presio.history) and their blobs, per session.
   history: HistoryStore;
+  // Each viewer's input to plugins (presio.audience, see audience.ts).
+  audience: AudienceState;
 }
 
 export function createSocketState(): SocketState {
@@ -55,6 +58,7 @@ export function createSocketState(): SocketState {
     pluginRetained: new Map(),
     pluginSettings: new Map(),
     history: new HistoryStore(),
+    audience: createAudienceState(),
   };
 }
 
@@ -65,6 +69,7 @@ export function clearSessionState(state: SocketState, sessionId: string) {
   state.publishedPlugins.delete(sessionId);
   state.pluginRetained.delete(sessionId);
   state.pluginSettings.delete(sessionId);
+  clearAudience(state.audience, sessionId);
   void state.history.drop(sessionId).catch((err) => console.warn(`Couldn't drop the history of session ${sessionId}:`, err));
 }
 
@@ -124,9 +129,10 @@ function takeToken(socket: Socket, key: "joinBucket" | "pluginBucket", burst: nu
 const allowJoin = (socket: Socket) => takeToken(socket, "joinBucket", JOIN_BURST, JOIN_REFILL_PER_SEC);
 
 // Viewers may message the presenter's plugins (a vote, a question), which makes
-// plugin_event the one audience-writable event. It carries no DB cost, but an
-// unthrottled phone could still flood the presenter, so it gets a bucket like
-// join_session's — generous enough for any human tapping buttons.
+// plugin_event and audience_set (a viewer's own slot, see audience.ts) the
+// audience-writable events. They carry no DB cost, but an unthrottled phone
+// could still flood the presenter, so they share a bucket like join_session's
+// — generous enough for any human tapping buttons.
 const AUDIENCE_PLUGIN_BURST = 20;
 const AUDIENCE_PLUGIN_REFILL_PER_SEC = 5;
 
@@ -449,6 +455,15 @@ export function registerSocketHandlers(
         console.warn("history_reset failed:", err);
       }
     }));
+
+    // --- Audience input (presio.audience, see audience.ts) ---
+    registerAudienceHandlers(socket, {
+      io,
+      state: state.audience,
+      controllers,
+      publishedPlugins,
+      allow: allowAudiencePluginEvent,
+    });
 
     socket.on("time_ping", (clientT1: number, ack?: (data: { serverTime: number; clientT1: number }) => void) => {
       if (typeof ack === "function") ack({ serverTime: Date.now(), clientT1 });

@@ -57,7 +57,7 @@ export type PluginPermission =
   | "editDeck"
   /** Keep an edit history for the deck, shared with every device, and blobs. */
   | "history"
-  /** Collect each viewer's input (presio.audience). Reserved: not yet served. */
+  /** Collect each viewer's input (presio.audience). */
   | "audience";
 
 export const PERMISSIONS: readonly PluginPermission[] = ["deck", "editDeck", "history", "audience"];
