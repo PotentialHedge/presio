@@ -1,31 +1,34 @@
 import { useState } from "react";
-import { Check, Copy, ShieldAlert } from "lucide-react";
+import { Check, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { agentPrompt } from "@/lib/plugins/agentPrompt";
 
-// The home page's "make it yours" section: say what you want Presio to do,
-// copy one prompt, and a coding agent builds it as a plugin.
+// The home page's "make it yours" section: one button copies a prompt, and the
+// coding agent it's pasted into asks what to build, then builds it as a plugin.
+// The ideas behind the button are only there to inspire.
 
-const IDEAS = [
-  "lets viewers answer multiple-choice polls",
-  "shows live captions of what I say",
-  "puts a countdown on every screen",
-  "collects questions from the audience",
+const IDEAS: [idea: string, size: string, faded: boolean][] = [
+  ["multiple-choice polls", "text-lg", false],
+  ["live captions", "text-sm", true],
+  ["a countdown on every screen", "text-base", false],
+  ["audience Q&A", "text-xl", false],
+  ["emoji reactions", "text-sm", true],
+  ["a speaker timer", "text-base", true],
+  ["a QR code to join", "text-lg", false],
+  ["quiz with a leaderboard", "text-sm", false],
+  ["confetti on the last slide", "text-base", true],
+  ["a laser pointer from your phone", "text-sm", true],
+  ["word clouds from the audience", "text-lg", true],
+  ["slide notes on your watch", "text-sm", false],
+  ["live translation", "text-base", false],
+  ["a progress bar", "text-sm", true],
 ];
 
-const STEPS = [
-  ["Say what you want", "Or leave it blank, and your agent asks you."],
-  ["Paste it into your agent", "Claude Code, Codex, Cursor… It builds the plugin in a GitHub repo of yours."],
-  ["Open the link it gives you", "Presio shows what the plugin can do and asks before it runs."],
-] as const;
-
 export function CustomizeWithAgent() {
-  const [what, setWhat] = useState("");
   const [copied, setCopied] = useState(false);
-  const prompt = agentPrompt(what);
 
   const copy = () => {
-    navigator.clipboard.writeText(prompt).then(
+    navigator.clipboard.writeText(agentPrompt("")).then(
       () => {
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
@@ -35,73 +38,37 @@ export function CustomizeWithAgent() {
   };
 
   return (
-    <div className="grid grid-cols-1 gap-10 md:grid-cols-[0.9fr_1.1fr] md:gap-16">
-      <div>
-        <div className="mb-3.5 font-mono text-xs font-semibold uppercase tracking-wide text-(--home2-accent)">
-          Make it yours
-        </div>
-        <h2 className="mb-3 text-xl font-semibold leading-tight tracking-tight md:text-2xl">
-          Missing something? Have your agent build it.
-        </h2>
-        <p className="mb-8 max-w-[52ch] text-[15px] text-muted-foreground">
-          Presio takes plugins: buttons, shortcuts, panels for you, and things on every
-          viewer's screen or phone. One prompt is all a coding agent needs to write one.
-        </p>
-        <ol className="space-y-4">
-          {STEPS.map(([title, body], i) => (
-            <li key={title} className="flex gap-3">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border font-mono text-xs text-muted-foreground">
-                {i + 1}
-              </span>
-              <div>
-                <div className="text-sm font-medium">{title}</div>
-                <div className="text-sm text-muted-foreground">{body}</div>
-              </div>
-            </li>
-          ))}
-        </ol>
+    <div className="text-center">
+      <div className="mb-3.5 font-mono text-xs font-semibold uppercase tracking-wide text-(--home2-accent)">
+        Make it yours
       </div>
+      <h2 className="mb-3 text-xl font-semibold leading-tight tracking-tight md:text-2xl">
+        Missing something? Your agent builds it in minutes.
+      </h2>
+      <p className="mx-auto max-w-[52ch] text-[15px] text-muted-foreground">
+        Paste one prompt into Claude Code, Codex or Cursor, say what you want, and it hands you a working plugin.
+      </p>
 
-      <div className="flex flex-col justify-center gap-3 rounded-2xl border bg-muted/30 p-5 md:p-6" data-testid="home-agent-prompt">
-        <label className="text-sm font-medium" htmlFor="home-plugin-idea">
-          What should Presio do?
-        </label>
-        <input
-          id="home-plugin-idea"
-          value={what}
-          onChange={(e) => setWhat(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") copy(); }}
-          placeholder={IDEAS[0]}
-          className="h-10 w-full min-w-0 rounded-md border bg-background px-3 text-sm outline-none transition-[box-shadow] focus-visible:ring-[3px] focus-visible:ring-ring/50"
-        />
-        <div className="flex flex-wrap gap-1.5">
-          {IDEAS.map((idea) => (
-            <button
+      <div className="relative mx-auto mt-10 max-w-3xl">
+        <div
+          aria-hidden
+          className="flex flex-wrap items-center justify-center gap-x-6 gap-y-4 px-2 py-6 select-none [mask-image:radial-gradient(ellipse_at_center,transparent_18%,black_55%)]"
+        >
+          {IDEAS.map(([idea, size, faded]) => (
+            <span
               key={idea}
-              type="button"
-              onClick={() => setWhat(idea)}
-              className="cursor-pointer rounded-full border bg-background px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+              className={`${size} whitespace-nowrap ${faded ? "text-muted-foreground/50" : "text-muted-foreground"}`}
             >
               {idea}
-            </button>
+            </span>
           ))}
         </div>
-        <p className="mt-2 rounded-lg border bg-background px-3.5 py-3 font-mono text-[13px] leading-relaxed break-words select-all">
-          {prompt}
-        </p>
-        <Button size="lg" onClick={copy} className="w-full" data-testid="home-agent-prompt-copy">
-          {copied ? <Check /> : <Copy />}
-          {copied ? "Copied — paste it into your agent" : "Copy prompt"}
-        </Button>
-        <p className="flex gap-2 text-xs text-muted-foreground">
-          <ShieldAlert className="mt-px h-3.5 w-3.5 shrink-0" />
-          <span>
-            Load only plugins you trust: a plugin can act as you on your device.{" "}
-            <a href="/plugins.md" className="underline underline-offset-4 hover:text-foreground">
-              How plugins work
-            </a>
-          </span>
-        </p>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <Button size="lg" onClick={copy} className="shadow-lg" data-testid="home-agent-prompt-copy">
+            {copied ? <Check /> : <Copy />}
+            {copied ? "Copied — paste it into your agent" : "Copy prompt"}
+          </Button>
+        </div>
       </div>
     </div>
   );
