@@ -12,11 +12,9 @@ import {
   ShieldAlert,
   Star,
   Tag,
-  Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DialogOverlay } from "@/components/ui/dialog-overlay";
-import type { ButtonLocation, PluginPermission, PluginSurface } from "@/lib/plugins/manifest";
 import { findEntry, installResolved, loadResolvedOnce, setPluginEnabled } from "@/lib/plugins/registry";
 import {
   formatPluginVersion,
@@ -29,39 +27,15 @@ import {
 import { grantTrust, needsApproval, trustChange, type TrustChange } from "@/lib/plugins/trust";
 import { finishPrompt, requestPlugin, usePromptQueue, type PromptChoice, type PromptRequest } from "@/lib/plugins/prompts";
 import { checkForUpdates } from "@/lib/plugins/updates";
+import { AUDIENCE_SURFACES, PERMISSIONS } from "@/lib/plugins/access";
+import { NewBadge, PluginAccess } from "./PluginAccess";
 
 // The trust prompt: what a plugin is, who made it, what it may do and where
 // it shows up, before it runs. One plugin at a time (with its dependencies),
 // from a ?plugins= link, Settings' "Add plugin", or an update or dev commit
 // that wants more than was approved. Mounted once, in App.
 
-const TRUST_WARNING = "Only load plugins you trust. A plugin can act as you on this device.";
-
-const PERMISSIONS: Record<PluginPermission, { title: string; detail: string }> = {
-  deck: { title: "Read your deck", detail: "Its pages, its attachments and the PDF file itself." },
-  editDeck: { title: "Change your deck", detail: "Save an edited PDF over the one you're presenting." },
-  history: { title: "Keep an edit history", detail: "Shared with every screen in the session, with any files it adds." },
-  audience: { title: "Collect input from your audience", detail: "What each viewer sends, under an anonymous id." },
-};
-
-/** Surfaces that run on audience devices. */
-const AUDIENCE_SURFACES: PluginSurface[] = ["viewer", "viewerSheet", "slide"];
-
-const SURFACES: Record<PluginSurface, string> = {
-  background: "Runs in the background on this device while you present",
-  panel: "Adds a card to your dashboard",
-  viewerSheet: "Shows a panel on your audience's phones and screens",
-  viewer: "Shows a full-screen layer on every viewer's screen",
-  slide: "Draws over your slides, on your screen and every viewer's",
-};
-
-const BUTTONS: Record<ButtonLocation, string> = {
-  "controller.toolbar": "Adds a button to your bottom bar",
-  "controller.currentSlide": "Adds a button to the current slide's header",
-  "thumbnail.context": "Adds an item to the thumbnails' menu",
-  "viewer.toolbar": "Adds a button to your audience's toolbar",
-  settings: "Adds actions to its Settings page",
-};
+const TRUST_WARNING = "Only load plugins you trust: a plugin can act as you on this device.";
 
 /** Is this the presenter's side of the app, where a ?plugins= link means something? */
 function isPresenterRoute(pathname: string, params: URLSearchParams): boolean {
@@ -220,7 +194,14 @@ function TrustPrompt({ request, remaining }: { request: PromptRequest; remaining
         <p key={w} className="text-xs text-amber-700 dark:text-amber-400">{w}</p>
       ))}
 
-      {root?.plugin && <Capabilities resolved={root} change={rootChange} />}
+      {root?.plugin && (
+        <Section title="It can">
+          <PluginAccess
+            manifest={root.plugin.manifest}
+            newPermissions={rootChange && !rootChange.first ? rootChange.permissions : []}
+          />
+        </Section>
+      )}
 
       {resolution.dependencies.length > 0 && (
         <Section title={`Also loads ${resolution.dependencies.length === 1 ? "a plugin it needs" : `${resolution.dependencies.length} plugins it needs`}`}>
@@ -233,10 +214,7 @@ function TrustPrompt({ request, remaining }: { request: PromptRequest; remaining
       )}
 
       <Callout tone="warning" icon={<ShieldAlert className="size-4" />} testId="plugin-prompt-warning">
-        <p className="font-medium">{TRUST_WARNING}</p>
-        {ok && request.reason !== "update" && request.reason !== "dev" && (
-          <p className="text-xs opacity-80">"Load once" runs it in this tab until you close it; "Install" keeps it.</p>
-        )}
+        <p>{TRUST_WARNING}</p>
       </Callout>
 
       {actionError && <p className="text-sm text-destructive">{actionError}</p>}
@@ -342,10 +320,6 @@ function VersionBadge({ version }: { version: PluginVersion }) {
   }
 }
 
-const NewBadge = () => (
-  <span className="rounded bg-amber-500/15 px-1 py-px text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">New</span>
-);
-
 /** What changed since the presenter last allowed this plugin. */
 function ChangeSummary({ change }: { change: TrustChange }) {
   return (
@@ -357,49 +331,6 @@ function ChangeSummary({ change }: { change: TrustChange }) {
         {change.dependencies.map((d) => <li key={d}>It now also loads <span className="font-mono">{d}</span></li>)}
       </ul>
     </Callout>
-  );
-}
-
-/** What a plugin may do and where it shows up. */
-function Capabilities({ resolved, change }: { resolved: ResolvedPlugin; change: TrustChange | null }) {
-  const manifest = resolved.plugin!.manifest;
-  const audience = manifest.surfaces.some((s) => AUDIENCE_SURFACES.includes(s));
-  const isNew = (p: PluginPermission) => !!change && !change.first && change.permissions.includes(p);
-  const buttons = [...new Set(manifest.contributes.buttons.map((b) => b.location))];
-  return (
-    <>
-      <Section title="It can">
-        {manifest.permissions.length ? (
-          <ul className="space-y-2" data-testid="plugin-prompt-permissions">
-            {manifest.permissions.map((p) => (
-              <li key={p} className={`rounded-lg border px-3 py-2 ${isNew(p) ? "border-amber-500/50 bg-amber-500/10" : ""}`}>
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  {PERMISSIONS[p].title} {isNew(p) && <NewBadge />}
-                </div>
-                <div className="text-xs text-muted-foreground">{PERMISSIONS[p].detail}</div>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            Nothing beyond what every plugin can: its own settings, storage and messages, and what it shows.
-          </p>
-        )}
-      </Section>
-
-      <Section title="Where it shows up">
-        {audience && (
-          <div className="mb-2 flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm font-medium" data-testid="plugin-prompt-audience">
-            <Users className="size-4 text-primary" /> Runs on your audience's devices
-          </div>
-        )}
-        <ul className="list-disc space-y-0.5 pl-5 text-sm text-muted-foreground">
-          {manifest.surfaces.map((s) => <li key={s}>{SURFACES[s]}</li>)}
-          {buttons.map((l) => <li key={l}>{BUTTONS[l]}</li>)}
-          {manifest.contributes.keybindings.length > 0 && <li>Adds keyboard shortcuts</li>}
-        </ul>
-      </Section>
-    </>
   );
 }
 

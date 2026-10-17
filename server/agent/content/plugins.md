@@ -26,6 +26,9 @@ except what the plugin should do (ask that if they haven't said). Pick a short s
    gh repo edit --add-topic presio-plugin
    ```
 
+   The topic is what lists it in Settings → Discover plugins (and
+   in `GET BASE/api/plugins`), so people can find it.
+
 2. **Start from the template**, a complete single-file plugin (a button that
    puts a banner on every viewer screen):
 

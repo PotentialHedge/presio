@@ -2,7 +2,7 @@
 title: Presio API
 description: REST reference for starting local PDF presentations and validating sidecars, with curl examples.
 canonical: BASE/api.md
-last_updated: 2026-08-28
+last_updated: 2026-10-17
 ---
 
 # Presio API
@@ -59,6 +59,16 @@ curl -s -F file=@deck.pdf BASE/api/check
 ```
 
 **200:** CheckReport JSON (see `BASE/schema/check-report.schema.json`)
+
+## GET /api/plugins
+
+Published plugins: public GitHub repos with the `presio-plugin` topic, most starred first. The server searches GitHub at most every 5 minutes and serves everyone from that.
+
+```bash
+curl -s BASE/api/plugins | jq '.plugins[] | {source, description}'
+```
+
+**200:** `{ plugins: [{ source, id, owner, repo, description, stars, pushedAt, htmlUrl, avatarUrl, topics }], fetchedAt }`. Load one with `BASE/?plugins=<source>` (add `@<tag>` to pin a release). **502** when GitHub can't be searched and nothing is cached yet.
 
 ## Handoff (used by the start page)
 

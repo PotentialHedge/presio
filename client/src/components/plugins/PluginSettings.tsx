@@ -1,52 +1,25 @@
 import { useState } from "react";
-import { Check, Copy, Trash2 } from "lucide-react";
+import { Check, Copy, Star, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { agentPrompt } from "@/lib/plugins/agentPrompt";
 import type { PluginHost } from "@/lib/plugins/host";
-import {
-  findCommand,
-  type ButtonLocation,
-  type LoadedPlugin,
-  type PluginPermission,
-  type PluginSettingSpec,
-  type PluginSurface,
-} from "@/lib/plugins/manifest";
+import { findCommand, type LoadedPlugin, type PluginSettingSpec } from "@/lib/plugins/manifest";
 import { resolvePluginSettings, setPluginSetting, useSetting, useSettingsDocument } from "@/lib/settings";
 import { formatBinding, pluginBindings, shortcutTakenBy, type PluginShortcutSet } from "@/lib/keymap";
-import { describeEntry, removePlugin, setPluginEnabled } from "@/lib/plugins/registry";
+import { describeEntry, removePlugin, setPluginEnabled, usePluginEntries } from "@/lib/plugins/registry";
+import { useDiscoveredPlugins, type DiscoveredPlugin } from "@/lib/plugins/discover";
 import { requestPlugin } from "@/lib/plugins/prompts";
 import { promptUpdate, useUpdateInfo, type UpdateInfo } from "@/lib/plugins/updates";
 import { pluginLabel, type InstalledPlugin } from "@/lib/plugins/installed";
 import { qualify } from "@shared/plugin/sources";
+import { PluginAccess } from "./PluginAccess";
 import { PluginButtons } from "./PresenterPlugins";
 
 // Settings for plugins: one page per installed plugin (switch it on or off,
-// see what it adds and may do, use its actions, edit its settings) and a page
-// to add one by URL. The Settings dialog lists them in its sidebar.
-
-const PERMISSION_LABELS: Record<PluginPermission, string> = {
-  deck: "Reads the deck: its pages and attachments",
-  editDeck: "Saves changes into your deck",
-  history: "Keeps an edit history for the deck, shared with every screen",
-  audience: "Collects input from your audience's devices",
-};
-
-const SURFACE_LABELS: Record<PluginSurface, string> = {
-  background: "Runs in the background while you present",
-  panel: "A card on your dashboard",
-  viewerSheet: "A panel on your audience's devices",
-  viewer: "A layer on every viewer's screen, including your audience's devices",
-  slide: "A layer on the slide, on your current slide and every viewer's screen",
-};
-
-const LOCATION_LABELS: Record<ButtonLocation, string> = {
-  "controller.toolbar": "in the bottom bar",
-  "controller.currentSlide": "in the current slide's header",
-  "thumbnail.context": "in a thumbnail's menu",
-  "viewer.toolbar": "on your audience's toolbar",
-  settings: "on this page",
-};
+// see what it adds and may do, use its actions, edit its settings), a page to
+// add one by URL and one to pick from the published ones. The Settings dialog
+// lists them in its sidebar.
 
 /** One plugin's page. */
 export function PluginPage({
@@ -71,9 +44,15 @@ export function PluginPage({
   const pluginId = loaded?.id ?? entry.id ?? entry.key;
   const [keymap] = useSetting("keybindings");
   const settings = manifest ? Object.keys(manifest.contributes.settings) : [];
-  // Its actions are on this page, so the list of what it adds leaves them out.
   const actions = manifest?.contributes.buttons.filter((b) => b.location === "settings") ?? [];
-  const buttons = manifest?.contributes.buttons.filter((b) => b.location !== "settings") ?? [];
+  // Its shortcuts as they're bound now, with any key Presio (or an earlier
+  // plugin) already uses: that one never reaches it, so say so here, where
+  // the plugin was just added.
+  const shortcuts = (manifest?.contributes.keybindings ?? []).map((k) => {
+    const keys = pluginBindings(keymap, pluginId, k);
+    const clash = keys.map((b) => ({ b, by: shortcutTakenBy(keymap, b, shortcutsBefore) })).find((c) => c.by);
+    return { command: k.command, title: findCommand(manifest!, k.command)?.title ?? k.command, keys, clash };
+  });
   const details = [
     manifest && `v${manifest.version}`,
     manifest?.author && `by ${manifest.author}`,
@@ -106,43 +85,24 @@ export function PluginPage({
 
       {manifest && (
         <div className="space-y-1.5">
-          <h4 className="text-sm font-medium">What it adds</h4>
-          <ul className="text-sm text-muted-foreground list-disc pl-5 space-y-0.5">
-            {buttons.map((b) => (
-              <li key={`${b.command}:${b.location}`}>
-                A “{b.label ?? findCommand(manifest, b.command)?.title ?? b.command}” button {LOCATION_LABELS[b.location]}
+          <h4 className="text-sm font-medium">It can</h4>
+          <PluginAccess
+            manifest={manifest}
+            shortcuts={shortcuts.map((k) => (
+              <li key={k.command}>
+                {k.title}
+                {k.keys.length > 0 && ` (${k.keys.map(formatBinding).join(", ")})`}
               </li>
             ))}
-            {manifest.contributes.keybindings.map((k) => {
-              const keys = pluginBindings(keymap, pluginId, k);
-              // A key Presio (or an earlier plugin) already uses never reaches
-              // this one: say so here, where the plugin was just added.
-              const clash = keys
-                .map((b) => ({ b, by: shortcutTakenBy(keymap, b, shortcutsBefore) }))
-                .find((c) => c.by);
-              return (
-                <li key={k.command}>
-                  A keyboard shortcut: {findCommand(manifest, k.command)?.title ?? k.command}
-                  {keys.length > 0 && ` (${keys.map(formatBinding).join(", ")})`}
-                  {clash && (
-                    <span className="block text-amber-600 dark:text-amber-400" data-testid={`plugin-shortcut-clash-${k.command}`}>
-                      {formatBinding(clash.b)} is already {clash.by}, which wins — rebind it under Keyboard shortcuts.
-                    </span>
-                  )}
-                </li>
-              );
-            })}
-            {/* A background part that only serves its buttons or shortcuts
-                says nothing those lines didn't already. */}
-            {manifest.surfaces
-              .filter((s: PluginSurface) => s !== "background" || (buttons.length === 0 && manifest.contributes.keybindings.length === 0))
-              .map((s) => (
-                <li key={s}>{SURFACE_LABELS[s]}</li>
-              ))}
-            {manifest.permissions.map((p: PluginPermission) => (
-              <li key={p} className="text-amber-600 dark:text-amber-400">{PERMISSION_LABELS[p] ?? p}</li>
-            ))}
-          </ul>
+          />
+          {shortcuts.map(
+            (k) =>
+              k.clash && (
+                <p key={k.command} className="text-xs text-amber-600 dark:text-amber-400" data-testid={`plugin-shortcut-clash-${k.command}`}>
+                  {formatBinding(k.clash.b)} for {k.title} is already {k.clash.by}, which wins — rebind it under Keyboard shortcuts.
+                </p>
+              )
+          )}
         </div>
       )}
 
@@ -185,44 +145,120 @@ export function PluginPage({
   );
 }
 
-/** The page for adding a plugin: its source goes through the trust prompt,
- *  like a ?plugins= link. */
-export function AddPluginPage({ onAdded }: { onAdded?: (key: string, plugin: LoadedPlugin) => void }) {
+type OnAdded = (key: string, plugin: LoadedPlugin) => void;
+
+/** Add a plugin by its source, through the trust prompt like a ?plugins= link. */
+function addPlugin(input: string, onAdded: OnAdded) {
+  requestPlugin(input, {
+    reason: "add",
+    onDone: ({ choice, key, plugin }) => {
+      if (choice === "skip" || !key || !plugin) return;
+      onAdded(key, plugin);
+    },
+  });
+}
+
+/** The page for adding a plugin by its source. */
+export function AddPluginPage({ onAdded, onDiscover }: { onAdded?: OnAdded; onDiscover?: () => void }) {
   const [url, setUrl] = useState("");
 
   const add = () => {
     const input = url.trim();
     if (!input) return;
-    requestPlugin(input, {
-      reason: "add",
-      onDone: ({ choice, key, plugin }) => {
-        if (choice === "skip" || !key || !plugin) return;
-        setUrl("");
-        onAdded?.(key, plugin);
-      },
+    addPlugin(input, (key, plugin) => {
+      setUrl("");
+      onAdded?.(key, plugin);
     });
   };
 
   return (
-    <div className="space-y-2">
-      <div className="flex gap-2">
-        <input
-          type="url"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter" && url) add(); }}
-          placeholder="you/name, github:you/repo@v1.0.0, https://… or http://localhost:5174/"
-          data-testid="plugin-url-input"
-          className={`flex-1 min-w-0 ${fieldClass}`}
-        />
-        <Button size="sm" disabled={!url} onClick={add}>
-          Add
-        </Button>
+    <div className="space-y-6">
+      <div className="space-y-1.5">
+        <div className="flex gap-2">
+          <input
+            type="url"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && url) add(); }}
+            placeholder="owner/name or https://…"
+            title={'owner/name@v1.2.0 pins a version (or a range like ^1.0.0); @main follows the branch. A URL can be a dev server, http://localhost:5174/.'}
+            data-testid="plugin-url-input"
+            className={`flex-1 min-w-0 ${fieldClass}`}
+          />
+          <Button size="sm" disabled={!url} onClick={add}>
+            Add
+          </Button>
+        </div>
+        {onDiscover && (
+          <p className="text-xs text-muted-foreground">
+            Looking for one?{" "}
+            <button type="button" onClick={onDiscover} className="text-foreground underline underline-offset-2 hover:no-underline">
+              Discover plugins
+            </button>
+          </p>
+        )}
       </div>
-      <p className="text-xs text-muted-foreground">
-        A version after "@" pins it (v1.2.0, or a range like ^1.0.0); a branch (@main) follows its newest commit.
-      </p>
       <BuildWithAgent />
+    </div>
+  );
+}
+
+/** The page of published plugins: GitHub repos tagged presio-plugin, most
+ *  starred first. */
+export function DiscoverPluginsPage({ onAdded }: { onAdded?: OnAdded }) {
+  const discovery = useDiscoveredPlugins();
+  const entries = usePluginEntries();
+  const installed = new Set(entries.map((e) => e.key.toLowerCase()));
+  const [query, setQuery] = useState("");
+  const q = query.trim().toLowerCase();
+  const matches = (p: DiscoveredPlugin) =>
+    !q || [p.id, p.repo, p.description ?? "", ...p.topics].some((text) => text.toLowerCase().includes(q));
+
+  return (
+    <div className="space-y-2" data-testid="plugin-discover">
+      {discovery.status === "ready" && discovery.plugins.length > 5 && (
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search plugins"
+          aria-label="Search plugins"
+          className={`w-full ${fieldClass}`}
+        />
+      )}
+      {discovery.status === "loading" && <p className="text-xs text-muted-foreground">Looking for plugins…</p>}
+      {discovery.status === "error" && <p className="text-xs text-muted-foreground">{discovery.error}</p>}
+      {discovery.status === "ready" &&
+        (discovery.plugins.filter(matches).length === 0 ? (
+          <p className="text-xs text-muted-foreground">
+            {discovery.plugins.length ? "No plugin matches." : "No plugins published yet."}
+          </p>
+        ) : (
+          <ul className="divide-y rounded-md border">
+            {discovery.plugins.filter(matches).map((p) => {
+              const added = installed.has(p.source.toLowerCase());
+              return (
+                <li key={p.source} className="flex items-center gap-3 px-3 py-2" data-testid={`plugin-discover-${p.id}`}>
+                  {p.avatarUrl && <img src={p.avatarUrl} alt="" className="size-6 shrink-0 rounded-full" />}
+                  <div className="min-w-0 flex-1 text-sm">
+                    <div className="flex items-center gap-2">
+                      <a href={p.htmlUrl} target="_blank" rel="noreferrer" className="truncate font-medium hover:underline">
+                        {p.id}
+                      </a>
+                      <span className="flex shrink-0 items-center gap-0.5 text-xs text-muted-foreground">
+                        <Star className="size-3" /> {p.stars.toLocaleString()}
+                      </span>
+                    </div>
+                    {p.description && <div className="truncate text-xs text-muted-foreground">{p.description}</div>}
+                  </div>
+                  <Button size="sm" variant="outline" disabled={added} onClick={() => addPlugin(p.source, (key, plugin) => onAdded?.(key, plugin))}>
+                    {added ? "Added" : "Add"}
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
+        ))}
     </div>
   );
 }
@@ -241,32 +277,25 @@ function BuildWithAgent() {
     );
   };
   return (
-    <section className="mt-5 space-y-2 rounded-lg border p-3" data-testid="plugin-agent-prompt">
+    <section className="space-y-2" data-testid="plugin-agent-prompt">
       <div>
         <h3 className="text-sm font-medium">Build one with your agent</h3>
-        <p className="text-xs text-muted-foreground">
-          Say what it should do and paste the prompt into a coding agent (Claude Code, Codex, Cursor…). It builds the
-          plugin in a GitHub repo of yours and gives you a link that loads it here.
-        </p>
+        <p className="text-xs text-muted-foreground">Copy a prompt for Claude Code, Codex or Cursor.</p>
       </div>
-      <input
-        value={what}
-        onChange={(e) => setWhat(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter") copy(); }}
-        placeholder="lets viewers answer multiple-choice polls"
-        aria-label="What the plugin should do"
-        className={`w-full ${fieldClass}`}
-      />
-      <div className="flex items-start gap-2">
-        <p className="flex-1 min-w-0 rounded-md bg-muted px-2.5 py-2 text-xs leading-relaxed break-words select-all">{prompt}</p>
-        <Button size="sm" variant="outline" onClick={copy} aria-label="Copy the prompt">
+      <div className="flex gap-2">
+        <input
+          value={what}
+          onChange={(e) => setWhat(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") copy(); }}
+          placeholder="What should it do?"
+          aria-label="What the plugin should do"
+          className={`flex-1 min-w-0 ${fieldClass}`}
+        />
+        <Button size="sm" variant="outline" onClick={copy} title={prompt} aria-label="Copy the prompt">
           {copied ? <Check size={14} /> : <Copy size={14} />}
-          {copied ? "Copied" : "Copy"}
+          {copied ? "Copied" : "Copy prompt"}
         </Button>
       </div>
-      <p className="text-xs text-muted-foreground">
-        Load only plugins you trust: a plugin can act as you on this device. You'll be asked before it runs.
-      </p>
     </section>
   );
 }

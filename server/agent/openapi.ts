@@ -83,6 +83,50 @@ export function buildOpenApi(base: string) {
           },
         },
       },
+      "/api/plugins": {
+        get: {
+          summary: "List published plugins",
+          description:
+            "Public GitHub repos with the presio-plugin topic, most starred first, from a GitHub search the server caches for 5 minutes. Add one in the app by its source (or open BASE/?plugins=<source>); its manifest is read and the presenter asked to trust it then.",
+          operationId: "listPlugins",
+          responses: {
+            "200": {
+              description: "Plugins",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    required: ["plugins", "fetchedAt"],
+                    properties: {
+                      plugins: {
+                        type: "array",
+                        items: {
+                          type: "object",
+                          required: ["source", "id", "owner", "repo", "stars", "htmlUrl"],
+                          properties: {
+                            source: { type: "string", description: "github:<owner>/<repo>" },
+                            id: { type: "string", description: "The plugin id it will get, e.g. alice/poll" },
+                            owner: { type: "string" },
+                            repo: { type: "string" },
+                            description: { type: ["string", "null"] },
+                            stars: { type: "integer" },
+                            pushedAt: { type: ["string", "null"], format: "date-time" },
+                            htmlUrl: { type: "string", format: "uri" },
+                            avatarUrl: { type: ["string", "null"], format: "uri" },
+                            topics: { type: "array", items: { type: "string" } },
+                          },
+                        },
+                      },
+                      fetchedAt: { type: "string", format: "date-time", description: "When GitHub was last asked" },
+                    },
+                  },
+                },
+              },
+            },
+            "502": { description: "GitHub couldn't be searched and nothing is cached yet" },
+          },
+        },
+      },
       "/api/check": {
         post: {
           summary: "Validate PDF sidecar attachments",

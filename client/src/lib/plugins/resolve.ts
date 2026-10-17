@@ -3,7 +3,8 @@
 //
 // Everything happens here in the browser, against the GitHub API (which
 // allows any origin, at 60 requests an hour per address without a token) —
-// the Presio server never fetches or inspects a plugin. A repo's details and
+// the Presio server never fetches or inspects a plugin (it only lists the
+// published ones, see lib/plugins/discover.ts). A repo's details and
 // tags are cached in localStorage for a day; a branch's newest commit is
 // looked up once per page load, so dev mode picks up a push on reload.
 //

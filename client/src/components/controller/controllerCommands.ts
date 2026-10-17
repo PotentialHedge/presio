@@ -19,6 +19,7 @@ import {
   Settings,
   Keyboard,
   LayoutGrid,
+  Compass,
   Plus,
   Puzzle,
   Power,
@@ -129,6 +130,7 @@ export function useControllerCommands(s: ControllerCommandState, a: ControllerCo
         run: () => a.openSettings(page.id),
       })
     ),
+    { id: "discoverPlugins", title: "Discover plugins…", category: settings, icon: Compass, keywords: "browse find extension", run: () => a.openSettings("discover-plugins") },
     { id: "addPlugin", title: "Add a plugin…", category: settings, icon: Plus, keywords: "install extension", run: () => a.openSettings("add-plugin") },
     ...(["light", "dark", "system"] as const)
       .filter((t) => t !== s.theme)

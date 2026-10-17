@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { cn, getSessionAuth, setSessionAuth } from "@/lib/utils";
-import { Settings, TriangleAlert, Check, Option, Plus, Share2, ExternalLink, User, LayoutGrid, Puzzle, KeyRound, Keyboard, FileJson, Search } from "lucide-react";
+import { Settings, TriangleAlert, Check, Option, Plus, Share2, ExternalLink, User, LayoutGrid, Puzzle, KeyRound, Keyboard, FileJson, Search, Compass } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { DialogOverlay } from "@/components/ui/dialog-overlay";
@@ -75,7 +75,7 @@ import { appPaletteItems, useAppCommands } from "@/lib/commands";
 import { useTheme } from "@/lib/useTheme";
 import { SettingsFileSection } from "@/components/SettingsFileSection";
 import { SettingsDialog } from "@/components/controller/SettingsDialog";
-import { AddPluginPage, PluginPage } from "@/components/plugins/PluginSettings";
+import { AddPluginPage, DiscoverPluginsPage, PluginPage } from "@/components/plugins/PluginSettings";
 import { pluginLabel, useInstalledPlugins } from "@/lib/plugins/installed";
 import { findCommand, type LoadedPlugin } from "@/lib/plugins/manifest";
 
@@ -942,7 +942,23 @@ export function ControllerView({
               description: "All of these settings, plugins' included, as one settings.json — to back up or use in another browser.",
               content: <SettingsFileSection />,
             },
-            // One page per installed plugin, then one to add another.
+            // A page to discover plugins, one per installed plugin, then one to add another.
+            {
+              id: "discover-plugins",
+              group: "Plugins",
+              label: "Discover plugins",
+              icon: Compass,
+              description:
+                "Published on GitHub by anyone. Only add plugins you trust.",
+              content: (
+                <DiscoverPluginsPage
+                  onAdded={(key, plugin) => {
+                    showPluginPanels(plugin);
+                    setSettingsCategory(pluginPageId(key));
+                  }}
+                />
+              ),
+            },
             ...installedPlugins.map((plugin) => ({
               id: pluginPageId(plugin.entry.key),
               group: "Plugins",
@@ -966,9 +982,10 @@ export function ControllerView({
               label: "Add plugin",
               icon: Plus,
               description:
-                "Load a plugin from GitHub (owner/name for a presio-<name> repo) or a URL — your dev server while you build one. Only load plugins you trust: a plugin can act as you on this device.",
+                "From GitHub or a URL. Only add plugins you trust.",
               content: (
                 <AddPluginPage
+                  onDiscover={() => setSettingsCategory("discover-plugins")}
                   onAdded={(key, plugin) => {
                     showPluginPanels(plugin);
                     setSettingsCategory(pluginPageId(key));
