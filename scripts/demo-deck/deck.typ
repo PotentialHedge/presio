@@ -9,7 +9,7 @@
 // The recorder choreographs against this page order, so slides cannot be
 // added or reordered without re-timing scripts/record-demo.mts:
 //   1 cover · 2 title · 3 laser target · 4 pen target · 5 list
-//   6 media (the j6 jump lands here) · 7 payoff · 8 close
+//   6 media (the j6 jump lands here) · 7 payoff · 8 make it your own
 //
 // muybridge-horse.gif is Eadweard Muybridge's "The Horse in Motion" (1878),
 // public domain, via Wikimedia Commons:
@@ -165,8 +165,52 @@ Share online only if you want people on other devices to follow along.
   Land on this slide. The packages only add notes and media; a deck with neither needs nothing beyond the PDF itself.
 ]
 
-== Questions?
+==
+
+// The same ideas the home page's "Make it yours" section floats behind its
+// button (IDEAS in client/src/components/CustomizeWithAgent.tsx), faded out
+// towards the middle so the heading sits in a clear patch, the way the page's
+// radial mask does it.
+#let ideas = (
+  ("multiple-choice polls", 26pt, false),
+  ("live captions", 18pt, true),
+  ("a countdown on every screen", 22pt, false),
+  ("audience Q&A", 30pt, false),
+  ("emoji reactions", 18pt, true),
+  ("a speaker timer", 22pt, true),
+  ("a QR code to join", 26pt, false),
+  ("quiz with a leaderboard", 18pt, false),
+  ("confetti on the last slide", 22pt, true),
+  ("a laser pointer from your phone", 18pt, true),
+  ("word clouds from the audience", 26pt, true),
+  ("slide notes on your watch", 18pt, false),
+  ("live translation", 22pt, false),
+  ("a progress bar", 18pt, true),
+)
+
+#let word((idea, size, faded)) = box(text(size: size, fill: if faded { luma(185) } else { luma(135) })[#idea])
+
+#place(center + horizon, block(width: 100%)[
+  #set par(leading: 1.5em, justify: false)
+  #align(center, ideas.map(word).join(h(1.1em)))
+])
+
+#place(center + horizon, rect(
+  width: 120%,
+  height: 120%,
+  stroke: none,
+  fill: gradient.radial(
+    (white, 0%),
+    (white, 32%),
+    (white.transparentize(100%), 58%),
+    (white.transparentize(100%), 100%),
+  ),
+))
+
+#place(center + horizon)[
+  #text(size: 48pt, weight: "bold")[Customize Presio]
+]
 
 #speaker-notes[
-  Expect: where the file goes, whether viewers need an account, and self-hosting.
+  Close on plugins: anything missing, a coding agent can build in minutes. Then take questions.
 ]

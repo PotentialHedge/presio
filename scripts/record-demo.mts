@@ -145,15 +145,19 @@ async function record(browser: Browser, theme: "light" | "dark", BASE: string) {
 
   // A running clock sells the presenter-tools half of the story; start it just
   // before T0 so it reads as a live talk rather than a fresh page.
-  await controller.getByRole("button", { name: "Start", exact: true }).click().catch(() => {});
+  await controller
+    .frameLocator('[data-testid="plugin-frame-presio/timer-panel-timer"]')
+    .getByRole("button", { name: "Start", exact: true })
+    .click()
+    .catch(() => {});
 
   // The tool palette is the built-in drawing plugin's, in its layer over the
   // slide. Make sure it's showing so the laser and pen buttons are hittable
   // once the clock starts.
-  const palette = controller.frameLocator('[data-testid="plugin-frame-drawing-slide"]').first();
+  const palette = controller.frameLocator('[data-testid="plugin-frame-presio/drawing-slide"]').first();
   const anyTool = palette.getByTestId("tool-laser").or(palette.getByTestId("tool-collapsed"));
   if (!(await anyTool.first().isVisible().catch(() => false))) {
-    await controller.getByTestId("plugin-button-drawing-palette").click().catch(() => {});
+    await controller.getByTestId("plugin-button-presio/drawing-palette").click().catch(() => {});
     await anyTool.first().waitFor({ timeout: 10_000 });
   }
 
@@ -209,16 +213,12 @@ async function record(browser: Browser, theme: "light" | "dark", BASE: string) {
   const at_ = (fx: number, fy: number) =>
     ({ x: box.x + box.width * fx, y: box.y + box.height * fy });
 
-  // With a tool active and the pointer away, the palette collapses to just the
-  // active tool, so the others have to be revealed before they can be clicked.
-  const pickTool = async (key: "none" | "laser" | "pen") => {
-    const btn = palette.getByTestId(`tool-${key}`);
-    if (!(await btn.isVisible().catch(() => false))) {
-      await palette.getByTestId("tool-collapsed").dispatchEvent("click");
-      await btn.waitFor({ timeout: 5_000 });
-    }
-    await btn.click();
-  };
+  // Tools are picked by their keyboard shortcuts, not the palette: clicking a
+  // tool there pins the palette open with its colour popover, which sits over
+  // the heading the pen is about to underline and swallows the stroke. Picked
+  // from the keyboard, the palette stays collapsed to just the active tool.
+  const pickTool = (key: "none" | "laser" | "pen") =>
+    controller.keyboard.press({ none: "Escape", laser: "l", pen: "p" }[key]);
 
   // Trace a path with the pointer, optionally holding the button down (a
   // stroke) rather than just hovering (a laser).
@@ -306,7 +306,7 @@ async function record(browser: Browser, theme: "light" | "dark", BASE: string) {
   await next(); // -> "Try it on your own deck!"
 
   await at(28_500);
-  await next(); // -> "Questions?"
+  await next(); // -> "Customize Presio"
 
   // Land back on slide 1 so the loop seam is invisible. firstSlide is bound to
   // Meta+ArrowLeft, which Playwright can't press portably — reuse the jump.
