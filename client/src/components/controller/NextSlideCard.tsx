@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
+import { useElementRef } from "@/hooks/useElementRef";
 import { renderPage } from "@/lib/pdf";
 import { useRenderTargetWidth } from "@/hooks/useRenderTargetWidth";
 import type { Deck } from "@/lib/deck";
@@ -15,16 +16,16 @@ export function NextSlideCard({
   plugins?: PluginHostState;
 }) {
   const { pdf, totalSlides } = deck;
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerRef, container] = useElementRef<HTMLDivElement>();
 
   // Tracks the resolution this canvas should be rendered at — container size
   // and device pixel ratio both, so browser zoom and a move to a differently
   // scaled monitor re-render rather than upscale.
-  const width = useRenderTargetWidth(containerRef);
+  const width = useRenderTargetWidth(container);
 
   useEffect(() => {
     if (!containerRef.current || !width) return;
-    const container = containerRef.current;
+    const el = containerRef.current;
     if (currentSlide < totalSlides) {
       // Renders resolve out of order (cache hits are near-instant); drop any
       // that finish after the effect has moved to another slide.
@@ -34,18 +35,19 @@ export function NextSlideCard({
       const targetWidth = width;
       renderPage(pdf, currentSlide + 1, { targetWidth }).then((canvas) => {
         if (stale) return;
-        container.innerHTML = "";
+        el.innerHTML = "";
         canvas.style.width = "100%";
         canvas.style.height = "100%";
         canvas.style.objectFit = "contain";
-        container.appendChild(canvas);
+        el.appendChild(canvas);
       });
       return () => { stale = true; };
     } else {
-      container.innerHTML =
+      el.innerHTML =
         '<div class="flex items-center justify-center h-full text-muted-foreground text-sm">End of presentation</div>';
     }
-  }, [pdf, currentSlide, totalSlides, width]);
+    // containerRef is stable; `container` re-runs this for a new element.
+  }, [pdf, currentSlide, totalSlides, width, container, containerRef]);
 
   return (
     <div className="h-full relative rounded overflow-hidden bg-white">

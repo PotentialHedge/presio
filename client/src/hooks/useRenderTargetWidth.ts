@@ -7,7 +7,7 @@ const MIN_CHANGE = 0.01;
 
 /**
  * The width, in device pixels, that a slide canvas should be rendered at to
- * fill `containerRef` crisply — its CSS width times the device pixel ratio.
+ * fill `container` crisply — its CSS width times the device pixel ratio.
  *
  * Recomputed when the container resizes (window resize, fullscreen, layout
  * change) and when the device pixel ratio changes (browser zoom, or dragging
@@ -17,16 +17,11 @@ const MIN_CHANGE = 0.01;
  *
  * Returns 0 until the container has been measured.
  */
-export function useRenderTargetWidth(
-  containerRef: React.RefObject<HTMLElement | null>,
-  enabled = true
-): number {
+export function useRenderTargetWidth(container: HTMLElement | null, enabled = true): number {
   const [width, setWidth] = useState(0);
 
   useEffect(() => {
-    if (!enabled) return;
-    const container = containerRef.current;
-    if (!container) return;
+    if (!enabled || !container) return;
 
     let frame = 0;
     const measure = () => {
@@ -73,7 +68,7 @@ export function useRenderTargetWidth(
       mq?.removeEventListener("change", onDprChange);
       window.removeEventListener("resize", measure);
     };
-  }, [containerRef, enabled]);
+  }, [container, enabled]);
 
   return width;
 }

@@ -97,6 +97,8 @@ interface ControllerViewProps {
   onSynced: () => void;
   onReplacePdf: (file: File, handle?: FileSystemFileHandle) => Promise<void>;
   currentCanvasRef: React.RefObject<HTMLDivElement | null>;
+  /** The element that ref is on now (a layout change replaces it). */
+  currentCanvasEl: HTMLDivElement | null;
   blanked: boolean;
   onBlankToggle: () => void;
   /** The deck on screen, shown in the header's deck control. */
@@ -127,6 +129,7 @@ export function ControllerView({
   onSynced,
   onReplacePdf,
   currentCanvasRef,
+  currentCanvasEl,
   blanked,
   onBlankToggle,
   filename,
@@ -262,7 +265,7 @@ export function ControllerView({
   // fingers off a zoomed slide never flips pages. (A plugin layer taking the
   // slide's input — a drawing tool — gets the taps instead.)
   const [slideZoomActive, setSlideZoomActive] = useState(false);
-  useSlideTapNav(currentCanvasRef, {
+  useSlideTapNav(currentCanvasEl, {
     enabled: !slideZoomActive,
     onPrev: () => onGoTo(currentSlide - 1),
     onNext: () => onGoTo(currentSlide + 1),

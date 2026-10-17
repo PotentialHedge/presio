@@ -4,7 +4,8 @@ import type { PDFDocumentProxy } from "pdfjs-dist";
 import { loadPdf, loadPdfData, freshPdfUrl, loadLatestPdf, renderPage, clearCache, openPdf, destroyPdf } from "@/lib/pdf";
 import { loadDeck, type Deck } from "@/lib/deck";
 import { useRenderTargetWidth } from "@/hooks/useRenderTargetWidth";
-import { lsGetString, lsSetString, deckWatchKey } from "@/lib/storage";
+import { useElementRef } from "@/hooks/useElementRef";
+import { lsGetString, lsSetString, lsRemove, deckWatchKey, slideKey } from "@/lib/storage";
 import { socket } from "@/lib/socket";
 import { useLatestRef } from "@/hooks/useLatestRef";
 import { startClockSync } from "@/lib/clock";
@@ -69,7 +70,9 @@ export default function Presentation() {
     return () => { cancelled = true; };
   }, [pdf, pdfUrl, filename]);
 
-  const currentCanvasRef = useRef<HTMLDivElement>(null);
+  // The current slide's container, which a dashboard layout change replaces:
+  // rendering follows the element, not just the ref.
+  const [currentCanvasRef, currentCanvasEl] = useElementRef<HTMLDivElement>();
   const channelRef = useRef<BroadcastChannel | null>(null);
   // Object URL backing a local session's PDF, swapped when notes are edited.
   const localUrlRef = useRef("");
@@ -198,6 +201,11 @@ export default function Presentation() {
     };
   }, [canWatchDeck, id, watchedHandleEpoch, deckWatchMode, deckWatchModeRef]);
 
+  // A local deck's controller keeps its slide across a reload.
+  useEffect(() => {
+    if (local && role === "controller") lsSetString(slideKey(id!), String(currentSlide));
+  }, [currentSlide, local, role, id]);
+
   // Persist the live-reload choice per deck, so it survives a reload.
   useEffect(() => {
     if (local && role === "controller") lsSetString(deckWatchKey(id!), deckWatchMode);
@@ -296,6 +304,9 @@ export default function Presentation() {
         if (rec) {
           if (cancelled) return;
           setLocal(true);
+          // Back on the slide it was on. Restored with `local`, before the
+          // effect that saves it can see this deck on slide 1.
+          setCurrentSlide(Math.min(Math.max(Number(lsGetString(slideKey(id!))) || 1, 1), rec.totalSlides));
           localUrl = URL.createObjectURL(rec.blob);
           localUrlRef.current = localUrl;
           const doc = await loadPdf(localUrl);
@@ -574,11 +585,11 @@ export default function Presentation() {
   // changes that size or scale — entering fullscreen, dragging the viewer onto
   // a projector, browser zoom, a move to a differently scaled monitor — has to
   // re-render, or the slide stays an upscaled canvas from the old size.
-  const viewWidth = useRenderTargetWidth(currentCanvasRef, !!deck);
+  const viewWidth = useRenderTargetWidth(currentCanvasEl, !!deck);
 
   useEffect(() => {
-    if (!pdf || !currentCanvasRef.current || !viewWidth) return;
-    const container = currentCanvasRef.current;
+    if (!pdf || !currentCanvasEl || !viewWidth) return;
+    const container = currentCanvasEl;
     // renderPage resolves out of order (cached pages are near-instant, fresh
     // ones aren't), so a rapid slide change could leave a stale page on screen
     // — with plugins' layers already showing the new slide over it. Drop any
@@ -593,9 +604,9 @@ export default function Presentation() {
       container.appendChild(canvas);
     });
     return () => { stale = true; };
-    // deck gates mounting of the view that owns the container, and refs
-    // don't trigger effects — re-run once the container actually exists.
-  }, [pdf, displaySlide, role, deck, viewWidth]);
+    // The container comes and goes with the view (and card) that owns it:
+    // render into whichever one is mounted now.
+  }, [pdf, displaySlide, currentCanvasEl, viewWidth]);
 
   // Mirror a local state change outward: always to other same-browser windows
   // (BroadcastChannel) and, for synced sessions, to the server (socket). The
@@ -641,6 +652,7 @@ export default function Presentation() {
   const endPresentation = useCallback(async () => {
     if (local) {
       await idbDelete(id!).catch(() => { /* ignore */ });
+      lsRemove(slideKey(id!));
       channelRef.current?.postMessage({ type: "session_ended" });
     } else {
       await endSession(id!);
@@ -1101,6 +1113,7 @@ export default function Presentation() {
         onSynced={() => setLocal(false)}
         onReplacePdf={replacePdf}
         currentCanvasRef={currentCanvasRef}
+        currentCanvasEl={currentCanvasEl}
         blanked={blanked}
         filename={filename}
         deckWatchMode={deckWatchable ? deckWatchMode : null}

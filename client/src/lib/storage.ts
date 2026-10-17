@@ -46,6 +46,9 @@ export const sessionKey = (id: string) => `session_${id}`;
  *  preference (the file being watched is on this machine), not session state. */
 export const deckWatchKey = (id: string) => `presio_deck_watch_${id}`;
 export const viewerOpenedKey = (id: string) => `presio_viewer_opened_${id}`;
+/** The slide a local deck's controller is on, so a reload stays there. (A
+ *  synced deck's is on the server.) */
+export const slideKey = (id: string) => `presio_slide_${id}`;
 
 /** Read and JSON-parse a value, returning `fallback` if absent or malformed. */
 export function lsGet<T>(key: string, fallback: T): T {

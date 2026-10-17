@@ -1,5 +1,4 @@
 import { useEffect, useRef } from "react";
-import type { RefObject } from "react";
 
 // How far a finger may drift before a touch stops counting as a tap.
 const MAX_TAP_SLOP_PX = 10;
@@ -33,7 +32,7 @@ interface TapNavOptions {
 // stops the browser from ever leaving the slide surface in a text-selected
 // state (the stray selection seen on slow or long-press strokes).
 export function useSlideTapNav(
-  ref: RefObject<HTMLElement | null>,
+  el: HTMLElement | null,
   options: TapNavOptions
 ) {
   // Latest options, read by the listeners; kept in a ref so the listeners are
@@ -46,7 +45,6 @@ export function useSlideTapNav(
   const pendingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    const el = ref.current;
     if (!el) return;
 
     const onPointerDown = (e: PointerEvent) => {
@@ -110,5 +108,5 @@ export function useSlideTapNav(
       el.removeEventListener("pointercancel", onPointerCancel);
       el.removeEventListener("selectstart", onSelectStart);
     };
-  }, [ref]);
+  }, [el]);
 }
