@@ -148,9 +148,7 @@ export function useSlidePinchZoom(
       }
       // Double-tap resets — but only while zoomed, so taps keep reaching
       // slide navigation untouched.
-      // (Not where a plugin takes a pen's input: a finger double-tap may be
-      // its own there — see useSlideTapNav.)
-      if (zoomRef.current.scale > 1 && !wasPinching && !el.querySelector("[data-pen-input]")) {
+      if (zoomRef.current.scale > 1 && !wasPinching) {
         const now = performance.now();
         const prev = lastTap.current;
         if (

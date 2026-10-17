@@ -5,7 +5,7 @@
   "displayName": "Drawing",
   "version": "1.0.0",
   "author": "Presio",
-  "description": "A pen, a highlighter and a laser pointer on your current slide, drawn live on every screen, shown in your previews and kept in the PDF you download. With a pen (Apple Pencil) it also erases, selects and moves, and snaps lines and boxes.",
+  "description": "A pen, a highlighter and a laser pointer on your current slide, drawn live on every screen, shown in your previews and kept in the PDF you download. With a pen (Apple Pencil) only the pen draws, while fingers turn the page; it also erases, selects and moves, and snaps lines and boxes.",
   "main": "index.html",
   "surfaces": ["background", "slide"],
   "slideSurface": "area",
@@ -69,6 +69,11 @@
         "type": "boolean",
         "default": true,
         "description": "Advanced tools: the eraser, the lasso, and snapping a stroke held still at its end to a line or a box."
+      },
+      "fingers": {
+        "type": "boolean",
+        "default": false,
+        "description": "With a pen (Apple Pencil): fingers draw too. Off, only the pen draws and fingers turn the page, pan and zoom."
       },
       "hidden": {
         "type": "boolean",

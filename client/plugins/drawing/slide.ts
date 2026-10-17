@@ -111,7 +111,7 @@ export function runSlide() {
   const selectionEl = document.createElement("div");
   selectionEl.className = "selection";
   selectionEl.dataset.testid = "lasso-selection";
-  // A finger moves it even in pencil mode.
+  // A finger moves it even when only the pen draws.
   selectionEl.dataset.control = "";
   selectionEl.hidden = true;
   for (const corner of ["nw", "ne", "sw", "se"]) {
@@ -549,35 +549,38 @@ export function runSlide() {
   // --- Presenter input ---
 
   const drawingTool = () => tool === "pen" || tool === "highlighter";
-  // Pencil mode: only a pen draws, and fingers pan, pinch and turn the page.
-  // This device's, for the session: unset until a pen is first seen here,
-  // which turns it on.
-  const pencil = (): boolean | null => {
-    const v = presio.storage.get("pencil");
-    return typeof v === "boolean" ? v : null;
-  };
+  // Whether a pen (an Apple Pencil) has been seen on this device. From then
+  // on only the pen draws — it always has a tool, there's no "pointer" to
+  // pick first — and fingers turn the page, pan and pinch, unless the
+  // "fingers" setting has them draw too.
+  const pencil = () => presio.storage.get("pencil") === true;
+  const penOnly = () => pencil() && presio.settings.get("fingers") !== true;
+  // The tool a pen-only palette shows in place of "none".
+  const resolve = (t: Tool): Tool => (t === "none" && palette && penOnly() ? lastDrawTool : t);
   const advanced = () => presio.settings.get("advanced") === true;
   // The pointer the current stroke, drag or line belongs to.
   let owner: number | null = null;
   const onPalette = (e: Event) => !!palette && palette.el.contains(e.target as Node);
   const onSelection = (e: Event) => selectionEl.contains(e.target as Node);
-  // Whether this pointer may start something: in pencil mode a pen or a
-  // mouse, not a finger (except on the selection, which a finger moves).
+  // Whether this pointer may start something: with only the pen drawing, a
+  // pen or a mouse, not a finger (except on the selection, which a finger moves).
   // Pressed, a mouse draws the laser's line; a finger or a pen, the dot or
   // the line as the palette says (they have no hover to show the dot).
   const pressedLine = (e: PointerEvent) => e.pointerType === "mouse" || laserStyle().trail;
   const accepts = (e: PointerEvent) =>
-    pencil() ? e.pointerType !== "touch" || (tool === "lasso" && onSelection(e)) : e.isPrimary && !pinching;
+    penOnly() ? e.pointerType !== "touch" || (tool === "lasso" && onSelection(e)) : e.isPrimary && !pinching;
   let lastDrawTool: "pen" | "highlighter" = "pen";
 
   if (presenter) {
     window.addEventListener("pointerdown", (e) => {
-      if (e.pointerType === "pen" && pencil() === null) {
+      // The first pen here: it draws, now, with this very touch.
+      if (e.pointerType === "pen" && !pencil()) {
         presio.storage.set("pencil", true);
+        applyTool(resolve(tool));
         updateInteractive();
         palette?.render();
       }
-      if (e.pointerType === "touch" && !pencil()) {
+      if (e.pointerType === "touch" && !penOnly()) {
         touches.add(e.pointerId);
         if (touches.size >= 2) {
           pinching = true;
@@ -595,7 +598,7 @@ export function runSlide() {
           return;
         }
       }
-      if (owner !== null || !accepts(e) || onPalette(e)) return;
+      if (owner !== null || tool === "none" || !accepts(e) || onPalette(e)) return;
       if (tool === "lasso" && selected && onSelection(e)) {
         if (e.target === deleteBtn) return;
         owner = e.pointerId;
@@ -632,7 +635,7 @@ export function runSlide() {
 
     window.addEventListener("pointermove", (e) => {
       if (tool === "eraser" && e.pointerType !== "touch") showRing(onPage(e) ? e : null);
-      if (pinching && !pencil()) return;
+      if (pinching && !penOnly()) return;
       if (owner === null) {
         // A mouse's dot follows it hovering; the line needs the button down.
         if (tool === "laser" && e.pointerType === "mouse" && !onPalette(e) && onPage(e)) {
@@ -710,25 +713,8 @@ export function runSlide() {
       if (e.pointerType === "mouse") showRing(null);
     });
 
-    // Finger taps: in pencil mode a double-tap swaps between the eraser and
-    // the drawing tool, standing in for the Apple Pencil's own; with any tool,
-    // a two-finger double-tap undoes.
-    const flash = document.createElement("div");
-    flash.className = "tool-flash";
-    flash.style.opacity = "0";
-    root.append(flash);
-    let flashTimer: ReturnType<typeof setTimeout> | null = null;
+    // A two-finger double-tap undoes, with any tool.
     watchTaps({
-      oneFinger: () => pencil() === true && (drawingTool() || tool === "eraser"),
-      onDoubleTap: (x, y) => {
-        const next = tool === "eraser" ? lastDrawTool : "eraser";
-        setTool(next);
-        flash.innerHTML = icon(next);
-        flash.style.transform = `translate(${x}px, ${y}px)`;
-        flash.style.opacity = "1";
-        if (flashTimer) clearTimeout(flashTimer);
-        flashTimer = setTimeout(() => (flash.style.opacity = "0"), 600);
-      },
       twoFinger: () => tool !== "none",
       onTwoFingerDoubleTap: () => commitAll(history, undoOps(history, slide)),
       ignore: (target) => !!palette && palette.el.contains(target as Node),
@@ -741,11 +727,13 @@ export function runSlide() {
   let palette: Palette | null = null;
 
   const setTool = (next: Tool) => {
+    next = resolve(next);
     presio.storage.set("tool", next);
     applyTool(next);
   };
 
   const applyTool = (next: Tool) => {
+    next = resolve(next);
     if (next === tool) return;
     if (draft) finishStroke();
     if (tool === "laser") hideLaser();
@@ -761,10 +749,14 @@ export function runSlide() {
     updateInteractive();
   };
 
+  // With a tool, the frame takes the input (only a pen's and a mouse's when
+  // only the pen draws). With none, only the palette's — except on a touch
+  // screen no pen has touched yet, where the pen's is listened for anyway:
+  // the first one draws as soon as it touches.
   let interactiveKey = "";
   const updateInteractive = () => {
     if (!presenter) return;
-    const value = tool !== "none" ? (pencil() ? "pen" : true) : palette ? [palette.region()] : false;
+    const value = tool !== "none" ? (penOnly() ? "pen" : true) : !palette ? false : touchFirst && !pencil() ? "pen" : [palette.region()];
     const key = JSON.stringify(value);
     if (key === interactiveKey) return;
     interactiveKey = key;
@@ -784,19 +776,14 @@ export function runSlide() {
           if (style.size && style.size !== current.size) void presio.settings.set(`${t}Size`, style.size);
         },
         laser: laserStyle,
-        laserModes: () => touchFirst || pencil() === true,
+        laserModes: () => touchFirst || pencil(),
         setLaser: (style) => {
           const current = laserStyle();
           if (style.size !== undefined && style.size !== current.size) void presio.settings.set("laserSize", style.size);
           if (style.trail !== undefined && style.trail !== current.trail) void presio.settings.set("laserTrail", style.trail);
         },
         advanced,
-        pencil,
-        setPencil: (on) => {
-          presio.storage.set("pencil", on);
-          updateInteractive();
-          palette?.render();
-        },
+        penOnly,
         hidden: () => presio.settings.get("hidden") === true,
         setHidden: (hidden) => void presio.settings.set("hidden", hidden),
         canUndo: () => canUndo(history, slide),
@@ -814,6 +801,9 @@ export function runSlide() {
       palette = null;
       setTool("none");
     }
+    // A pen-only palette has no "none" (and the "fingers" setting may just
+    // have changed which that is).
+    applyTool(tool);
     updateInteractive();
   };
 

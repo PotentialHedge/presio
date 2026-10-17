@@ -34,6 +34,7 @@ import { useJoinUrls } from "@/lib/joinUrl";
 import { ConfirmReplaceDialog } from "@/components/controller/ConfirmReplaceDialog";
 import { useIsLandscape, useIsMobile } from "@/hooks/useIsMobile";
 import { useSlideTapNav } from "@/hooks/useSlideTapNav";
+import { useTouchPresenting } from "@/hooks/useTouchPresenting";
 import {
   isDeckWatchSupported,
   PDF_PICKER_OPTIONS,
@@ -272,6 +273,8 @@ export function ControllerView({
   // fingers off a zoomed slide never flips pages. (A plugin layer taking the
   // slide's input — a drawing tool — gets the taps instead.)
   const [slideZoomActive, setSlideZoomActive] = useState(false);
+  // On a touch screen: fullscreen, and only the slide zooms, never the page.
+  useTouchPresenting();
   useSlideTapNav(currentCanvasEl, {
     enabled: !slideZoomActive,
     onPrev: () => onGoTo(currentSlide - 1),

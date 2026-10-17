@@ -726,6 +726,11 @@
         if (replay.defaultPrevented) e.preventDefault();
       } catch (err) { /* not embedded by Presio's page */ }
     });
+    // A pinch on a frame never zooms the page around it (Safari's gesture
+    // events); the slide's own pinch-zoom works from pointer events.
+    function noPageZoom(e) { e.preventDefault(); }
+    window.addEventListener("gesturestart", noPageZoom);
+    window.addEventListener("gesturechange", noPageZoom);
     send({ kind: "event", method: "frame.ready", params: {} });
   }
 })();

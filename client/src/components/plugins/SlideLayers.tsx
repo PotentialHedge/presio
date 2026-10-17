@@ -219,6 +219,9 @@ function onTop(frame: HTMLIFrameElement, x: number, y: number): boolean {
 const PALM_QUIET_MS = 250;
 /** "pen" mode: what in a plugin's frame a finger works, rather than the slide. */
 const PLUGIN_CONTROL = "button, a, input, select, textarea, [role='button'], [data-control]";
+/** "pen" mode: a finger's tap, forwarded as a click to a link on the slide. */
+const TAP_MS = 500;
+const TAP_SLOP_PX = 10;
 
 function SlideSurface({ host, plugin, view, page }: { host: PluginHost; plugin: LoadedPlugin; view: SlideView; page: SlidePage }) {
   const frameRef = useRef<HTMLIFrameElement | null>(null);
@@ -283,11 +286,6 @@ function SlideSurface({ host, plugin, view, page }: { host: PluginHost; plugin: 
   const penOnlyRef = useRef(penOnly);
   useEffect(() => {
     penOnlyRef.current = penOnly;
-    const frame = frameRef.current;
-    // For the page's own touch handling (useSlideTapNav, useSlidePinchZoom):
-    // a finger double-tap here may be the plugin's, so taps wait for it.
-    if (penOnly) frame?.setAttribute("data-pen-input", "");
-    else frame?.removeAttribute("data-pen-input");
   }, [penOnly]);
   useEffect(() => {
     const frame = frameRef.current;
@@ -297,7 +295,9 @@ function SlideSurface({ host, plugin, view, page }: { host: PluginHost; plugin: 
     let forwarding = false;
     let pens = 0;
     let penAt = -Infinity;
-    const forward = (type: string, e: PointerEvent) => {
+    // "pen" mode: a lone finger's tap, which a link under it takes as a click.
+    let tap: { id: number; x: number; y: number; t: number; target: Element | null } | null = null;
+    const forward = (type: string, e: PointerEvent): Element | null => {
       const box = frame.getBoundingClientRect();
       const scale = frame.clientWidth ? box.width / frame.clientWidth : 1;
       const x = box.left + e.clientX * scale;
@@ -309,7 +309,8 @@ function SlideSurface({ host, plugin, view, page }: { host: PluginHost; plugin: 
       const stack = document.elementsFromPoint(x, y);
       const at = stack.indexOf(frame);
       const under = at < 0 ? null : stack.slice(at + 1).find((el) => !layer?.contains(el));
-      (under ?? layer)?.dispatchEvent(
+      const target = under ?? layer;
+      target?.dispatchEvent(
         new PointerEvent(type, {
           pointerId: e.pointerId,
           pointerType: "touch",
@@ -320,11 +321,13 @@ function SlideSurface({ host, plugin, view, page }: { host: PluginHost; plugin: 
           cancelable: true,
         })
       );
+      return target ?? null;
     };
     const onDown = (e: PointerEvent) => {
       if (e.pointerType === "pen") {
         pens++;
         penAt = performance.now();
+        tap = null;
         if (penOnlyRef.current && forwarding) for (const d of down.values()) forward("pointercancel", d);
         if (penOnlyRef.current) {
           down.clear();
@@ -335,13 +338,19 @@ function SlideSurface({ host, plugin, view, page }: { host: PluginHost; plugin: 
       if (e.pointerType !== "touch") return;
       if (penOnlyRef.current && (pens > 0 || performance.now() - penAt < PALM_QUIET_MS)) return;
       // The plugin's own controls (its buttons, a handle to drag) take a
-      // finger even in "pen" mode.
-      if (penOnlyRef.current && down.size === 0 && e.target instanceof Element && e.target.closest(PLUGIN_CONTROL)) return;
+      // finger even in "pen" mode. (The target is the frame's own: not an
+      // instance of this window's Element, so it's duck-typed.)
+      const own = e.target as Element | null;
+      if (penOnlyRef.current && down.size === 0 && typeof own?.closest === "function" && own.closest(PLUGIN_CONTROL)) return;
       down.set(e.pointerId, e);
+      tap = null;
       if (forwarding) forward("pointerdown", e);
       else if (down.size >= 2 || penOnlyRef.current) {
         forwarding = true;
-        for (const d of down.values()) forward("pointerdown", d);
+        for (const d of down.values()) {
+          const target = forward("pointerdown", d);
+          if (down.size === 1) tap = { id: d.pointerId, x: d.clientX, y: d.clientY, t: performance.now(), target };
+        }
       }
     };
     const onMove = (e: PointerEvent) => {
@@ -358,6 +367,19 @@ function SlideSurface({ host, plugin, view, page }: { host: PluginHost; plugin: 
       if (!down.delete(e.pointerId)) return;
       if (forwarding) forward(e.type, e);
       if (!down.size) forwarding = false;
+      // Synthetic pointer events make no click of their own: a quick, still
+      // tap on a link (or another control on the slide) gets one.
+      const t = tap;
+      tap = null;
+      if (
+        t?.id === e.pointerId &&
+        e.type === "pointerup" &&
+        performance.now() - t.t < TAP_MS &&
+        Math.hypot(e.clientX - t.x, e.clientY - t.y) < TAP_SLOP_PX
+      ) {
+        const control = t.target?.closest("a, button, [role='button']");
+        if (control instanceof HTMLElement) control.click();
+      }
     };
     inner.addEventListener("pointerdown", onDown, true);
     inner.addEventListener("pointermove", onMove, true);
