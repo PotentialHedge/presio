@@ -2,7 +2,7 @@
 // every mounted plugin frame's MessagePort: it boots frames, keeps them up to
 // date (slide, session, theme), and answers their calls through a dispatch
 // table built from namespace modules — messages, storage, settings, commands,
-// deck, layers, history, ui — each registering its methods with the
+// deck, layers, history, ui, audience — each registering its methods with the
 // permission they need (see dispatch.ts). The wire format is
 // shared/plugin/protocol.ts.
 //
@@ -23,7 +23,7 @@ import {
 } from "@shared/plugin/protocol";
 import type { LoadedPlugin, PluginSurface } from "../manifest";
 import type { HistoryHub } from "../history";
-import { audienceMethods } from "./audience";
+import { Audience } from "./audience";
 import { Commands } from "./commands";
 import { Deck, type ExportMode, type PageSize } from "./deck";
 import { dispatch } from "./dispatch";
@@ -51,10 +51,11 @@ export { retainKey, forgetDeckRetained, type Retain, type WireEvent } from "./me
 export type { ButtonState, ButtonMenuEntry } from "./ui";
 export type { LayerItem, PluginLayer } from "./layers";
 export type { DeckChange, ExportMode, PageSize } from "./deck";
+export { audienceViewerId, type AudienceLink } from "./audience";
 
 /** What this host implements (presio.supports()). */
 export const HOST_CAPABILITIES: Capability[] = [
-  "slide", "context", "settings", "storage", "messages", "commands", "deck", "layers", "history", "blobs", "clock", "ui", "panels",
+  "slide", "context", "settings", "storage", "messages", "commands", "deck", "layers", "history", "blobs", "clock", "ui", "panels", "audience",
 ];
 
 /** A file the presenter picked for a button that asks for one. */
@@ -97,6 +98,8 @@ export class PluginHost implements HostCore {
   private layers: Layers;
   private historyModule: History;
   private ui: Ui;
+  /** presio.audience: viewers' input, and the way to wherever it's held. */
+  readonly audience: Audience;
   private table: MethodTable;
 
   constructor(ctx: PluginContext) {
@@ -109,6 +112,7 @@ export class PluginHost implements HostCore {
     this.layers = new Layers();
     this.historyModule = new History(this);
     this.ui = new Ui(this);
+    this.audience = new Audience(this);
     this.table = {
       ...this.messages.methods,
       ...this.storage.methods,
@@ -118,7 +122,7 @@ export class PluginHost implements HostCore {
       ...this.layers.methods,
       ...this.historyModule.methods,
       ...this.ui.methods,
-      ...audienceMethods,
+      ...this.audience.methods,
     };
   }
 
@@ -188,6 +192,7 @@ export class PluginHost implements HostCore {
       ...this.ctx,
       settings: this.settings.of(plugin.id),
       storage: this.storage.read(plugin.id),
+      audience: this.audience.frameState(plugin.id),
       clockOffset: this.clock,
       shortcuts: this.commands.shortcuts(plugin),
       view: FULL_VIEW,

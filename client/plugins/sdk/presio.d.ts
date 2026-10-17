@@ -81,6 +81,24 @@ interface PresioHistory<S, Op> {
   onError(cb: (id: string, message: string) => void): Unsubscribe;
 }
 
+/** Viewers' values under a key, counted (presio.audience.summary). */
+interface PresioAudienceSummary {
+  /** How many viewers have a value. */
+  total: number;
+  /** Identical values (compared as JSON with sorted keys), most common first. */
+  values: { value: unknown; count: number }[];
+}
+
+/** Viewers' values under a key changed (presio.audience.onChange). */
+interface PresioAudienceChange {
+  key: string;
+  summary: PresioAudienceSummary;
+  /** By viewer id, since the last change: the new value, or null when removed. */
+  changes: Record<string, unknown>;
+  /** The values were replaced wholesale (cleared, or re-synced): read all(). */
+  reset: boolean;
+}
+
 /** What a host can do (presio.supports()); see shared/plugin/protocol.ts. */
 type PresioCapability =
   | "slide" | "context" | "settings" | "storage" | "messages" | "commands" | "deck" | "layers"
@@ -177,15 +195,31 @@ interface Presio {
     put(data: Blob | Uint8Array | ArrayBuffer): Promise<string>;
     get(sha: string): Promise<Blob | null>;
   };
-  /** Each viewer's input ("audience" permission). Not served yet: every
-   *  call rejects with "Unavailable" unless presio.supports("audience"). */
+  /** Each viewer's input ("audience" permission): one slot per viewer under
+   *  each key the presenter opens. Values are JSON, at most 16 KB. */
   readonly audience: {
+    /** Viewer: write this viewer's own value under an open key (null removes
+     *  it). Rejects with "Unavailable" when the key is closed. */
     set(key: string, value: unknown): Promise<void>;
+    /** Viewer: this viewer's own value under a key, or null. */
+    get(key: string): unknown;
+    state(key: string): { open: boolean };
+    onState(cb: (e: { key: string; open: boolean }) => void): Unsubscribe;
+    onState(key: string, cb: (e: { key: string; open: boolean }) => void): Unsubscribe;
+    /** Viewer: this viewer's own value changed (cleared, or set by another surface). */
+    onMine(cb: (e: { key: string; value: unknown }) => void): Unsubscribe;
+    onMine(key: string, cb: (e: { key: string; value: unknown }) => void): Unsubscribe;
+    /** Presenter: start, stop or reset taking viewers' values for a key. */
     open(key: string): Promise<void>;
     close(key: string): Promise<void>;
     clear(key: string): Promise<void>;
-    summary(key: string): Promise<Record<string, number>>;
-    onChange(cb: (key: string) => void): Unsubscribe;
+    /** Presenter: every viewer's value, by anonymous viewer id. */
+    all(key: string): Promise<Record<string, unknown>>;
+    /** Presenter: identical values counted, most common first. */
+    summary(key: string): Promise<PresioAudienceSummary>;
+    /** Presenter: viewers' values changed (a few times a second at most). */
+    onChange(cb: (e: PresioAudienceChange) => void): Unsubscribe;
+    onChange(key: string, cb: (e: PresioAudienceChange) => void): Unsubscribe;
   };
   readonly ui: {
     setVisible(visible: boolean): void;

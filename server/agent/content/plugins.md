@@ -101,8 +101,8 @@ index.html
 - `permissions` — `"deck"` to read the PDF (its bytes and embedded
   attachments); `"editDeck"` to save an edited PDF over it from the presenter's
   device; `"history"` to keep an edit history for the deck (`presio.history`)
-  and blobs (`presio.blobs`). `"audience"` is reserved for collecting
-  viewers' input and not served yet. An unknown permission is an error.
+  and blobs (`presio.blobs`); `"audience"` to collect each viewer's input
+  (`presio.audience`). An unknown permission is an error.
 - `contributes.commands` — what the plugin can do: `{ "id", "title", "icon"?,
   "category"? }`. Handle each with `presio.commands.register(id, handler)` in
   a frame (usually `background`); the handler gets the call's args and what it
@@ -247,6 +247,19 @@ h.onChange((state, { kind, entry }) => {})  // kind: "state" | "entry" | "pendin
 h.onError((id, message) => {})              // an op was refused (and dropped)
 presio.blobs.put(data)      // presenter: Blob | Uint8Array | ArrayBuffer, at most 5 MB → Promise<sha256>
 presio.blobs.get(sha)       // → Promise<Blob | null>, fetched only when asked for ("history")
+
+presio.audience.set(key, value)     // viewer: → Promise; this viewer's own value under an open key ("audience")
+                                    // JSON, at most 16 KB; null removes it; rejects ("Unavailable") when closed
+presio.audience.get(key)            // viewer: its own value under a key, or null (restored after a reload)
+presio.audience.state(key)          // { open }: whether the key takes viewers' values (every role)
+presio.audience.onState(key?, ({ key, open }) => {})
+presio.audience.onMine(key?, ({ key, value }) => {})  // viewer: its own value changed (cleared by the presenter)
+presio.audience.open(key)           // presenter: → Promise; start taking values for a key
+presio.audience.close(key)          // presenter: stop (values are kept)
+presio.audience.clear(key)          // presenter: forget every viewer's value under it
+presio.audience.all(key)            // presenter: → Promise<{ [viewerId]: value }>
+presio.audience.summary(key)        // presenter: → Promise<{ total, values: [{ value, count }] }>, most common first
+presio.audience.onChange(key?, ({ key, summary, changes, reset }) => {})  // presenter: a few times a second at most
 ```
 
 Storage: `presio.storage` is the presenter's per-session state on their own
@@ -286,6 +299,31 @@ Messaging:
   (rate-limited), with `from: "audience"` and a per-connection `sender` id.
   The presenter aggregates and broadcasts results back.
 - Payloads are JSON, at most 16 KB; `type` is up to 64 of `A-Za-z0-9_.:-`.
+
+Audience input: `presio.audience` (the `"audience"` permission) is for
+collecting something from every viewer — a poll's answers, a quiz, questions.
+Each viewer has one slot per key: `set` replaces its own value, so a viewer
+who changes their answer is counted once. The presenter `open`s a key to take
+values, `close`s it to stop (viewers see `state(key).open` go false and their
+`set` rejects), and `clear`s it to start over.
+
+- Viewers are anonymous ids, kept per browser and session, so a reload or a
+  reconnect keeps a viewer's slot (and `get` gives its value back). They are
+  for counting, not for knowing who someone is.
+- `onChange` gives the presenter both views of a change: `summary` (identical
+  values counted, compared as JSON with sorted keys — what a poll shows) and
+  `changes`, `{ [viewerId]: value | null }` since the last call — what a Q&A
+  list needs. They arrive batched, a few times a second at most. `reset: true`
+  means the values were replaced wholesale (cleared, or re-synced after a
+  reconnect): read `all(key)` again if you keep your own list.
+- For a shared deck the server holds the slots, for the session, and the
+  presenter's page keeps a copy that restores them after a server restart.
+  For a local deck the audience is the viewer window, and the presenter's page
+  holds them.
+- Keys are up to 64 of `A-Za-z0-9_.:-`; a value is JSON, at most 16 KB.
+  Viewers' writes are rate-limited like their messages. Only plugins with a
+  `viewer`, `viewerSheet` or `slide` surface are published to viewers, so
+  only they can collect input.
 
 History: `presio.history` is for edits that should last — a drawing's
 strokes, a board's cards. The presenter commits ops; they're put in one order
