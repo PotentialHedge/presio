@@ -1,4 +1,4 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { ThemeProvider } from "@/lib/theme";
 import { AuthProvider } from "@/lib/auth";
@@ -9,7 +9,8 @@ import Presentation from "@/pages/Presentation";
 import Present from "@/pages/Present";
 import Start from "@/pages/Start";
 import Share from "@/pages/Share";
-import { misplacedUrl } from "@/lib/origins";
+import { misplacedUrl, onViewerOrigin } from "@/lib/origins";
+import { startRecording } from "@/lib/analytics";
 
 const CheckerPage = lazy(() => import("@/pages/checker/CheckerPage"));
 
@@ -23,6 +24,17 @@ function OriginGuard({ children }: { children: React.ReactNode }) {
     return null;
   }
   return children;
+}
+
+/** Starts session recording on any page but a presentation, which decides
+ *  for itself once its role settles — viewers are never recorded. The viewer
+ *  origin serves nothing else, so it never records at all. */
+function SessionRecording() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    if (!onViewerOrigin && !/^\/s\/[^/]+\/?$/.test(pathname)) startRecording();
+  }, [pathname]);
+  return null;
 }
 
 export default function App() {
@@ -47,6 +59,7 @@ export default function App() {
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </OriginGuard>
+          <SessionRecording />
           <PasswordRecoveryDialog />
           {/* ?plugins= links, Settings' "Add plugin" and plugin updates all
               ask here, on whichever page the presenter is on. */}

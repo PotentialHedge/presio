@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { CornerDownLeft, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { filterItems, type PaletteItem } from "@/lib/commands";
+import { track } from "@/lib/analytics";
 
 const IS_MAC = /Mac|iPhone|iPad|iPod/.test(navigator.platform);
 
@@ -68,6 +69,7 @@ export function CommandPalette({
     // Close first: the command may open something of its own (a file
     // picker, a dialog) that should have the focus.
     onClose();
+    track("command", { id: item.id });
     item.run?.();
   };
 

@@ -3,6 +3,7 @@ import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
 import { authEnabled } from "@/lib/authMode";
 import { AuthContext, type AuthContextValue } from "@/lib/useAuth";
+import { track } from "@/lib/analytics";
 
 // Dev-only: set VITE_DEV_USER (e.g. "dev@example.com") to start signed in as a
 // fake user. Lets us exercise the logged-in UI without a real Supabase session.
@@ -18,6 +19,19 @@ const devUser: User | null =
 // to silently do nothing.
 const currentPageUrl = () =>
   window.location.origin + window.location.pathname + window.location.search;
+
+// Marks a GitHub sign-in in flight across its redirect, so the return can be
+// counted as a login (see onAuthStateChange below).
+const GITHUB_PENDING_KEY = "presio-github-login";
+function takeGitHubPending(): boolean {
+  try {
+    const pending = sessionStorage.getItem(GITHUB_PENDING_KEY) !== null;
+    sessionStorage.removeItem(GITHUB_PENDING_KEY);
+    return pending;
+  } catch {
+    return false;
+  }
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -48,6 +62,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
       setSession(s);
+      // SIGNED_IN also fires when a stored session is restored (tab focus,
+      // reload), so only the return from our own GitHub redirect counts.
+      if (event === "SIGNED_IN" && takeGitHubPending()) track("login", { method: "github" });
       if (event === "PASSWORD_RECOVERY") setPasswordRecovery(true);
     });
     return () => sub.subscription.unsubscribe();
@@ -58,6 +75,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     session,
     loading,
     signInWithGitHub: async (redirectTo) => {
+      try {
+        sessionStorage.setItem(GITHUB_PENDING_KEY, "1");
+      } catch {
+        // Storage blocked: the login just goes uncounted.
+      }
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "github",
         options: { redirectTo: redirectTo ?? currentPageUrl() },
@@ -67,6 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signInWithPassword: async (email, password) => {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
+      track("login", { method: "password" });
     },
     signUp: async (email, password) => {
       const { error } = await supabase.auth.signUp({
@@ -76,6 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         options: { emailRedirectTo: currentPageUrl() },
       });
       if (error) throw error;
+      track("signup");
     },
     signOut: async () => {
       const { error } = await supabase.auth.signOut();

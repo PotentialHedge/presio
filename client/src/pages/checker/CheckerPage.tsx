@@ -13,6 +13,7 @@ import { ValidityBadge, ValidityDot } from "./ValidityBadge";
 import { PageDetailModal } from "./PageDetailModal";
 import "@/lib/pdf"; // ensure worker is configured
 import { saveFile } from "@/lib/saveFile";
+import { track } from "@/lib/analytics";
 
 type PageModalState = { page: number; tab: "notes" | "media" } | null;
 
@@ -61,6 +62,7 @@ export default function CheckerPage() {
       pdfRef.current = pdf;
 
       const deck = await inspectAttachments(pdf);
+      track("check", { slides: pdf.numPages });
       setReport(deck);
       setFilename(file.name);
 

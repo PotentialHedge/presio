@@ -45,6 +45,7 @@ export const sessionKey = (id: string) => `session_${id}`;
 /** Live-reload preference for a local deck: "off" | "prompt" | "auto". A device
  *  preference (the file being watched is on this machine), not session state. */
 export const deckWatchKey = (id: string) => `presio_deck_watch_${id}`;
+/** Set once the "Open viewer" prompt is answered for a deck (opened or dismissed). */
 export const viewerOpenedKey = (id: string) => `presio_viewer_opened_${id}`;
 /** The slide a local deck's controller is on, so a reload stays there. (A
  *  synced deck's is on the server.) */

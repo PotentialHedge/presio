@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, Highlighter, Laptop, MonitorPlay, PenLine, Share
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { markControllerOnboarded } from "@/lib/onboarding";
+import { track } from "@/lib/analytics";
 
 // A small reusable key cap, matching the kbd styling used elsewhere.
 function Key({ children }: { children: React.ReactNode }) {
@@ -150,6 +151,7 @@ export function ControllerOnboarding({
   const [step, setStep] = useState(0);
 
   const finish = () => {
+    track("onboarding", { completed: step >= lastStep, step });
     markControllerOnboarded();
     onClose();
   };

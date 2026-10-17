@@ -631,6 +631,7 @@ export default function Home() {
         // so assigning a bare { controllerToken } would drop a passphrase.
         setSessionAuth(r.id, { ...getSessionAuth(r.id), controllerToken: r.controllerToken });
       }
+      track("open-recent", { kind: r.kind });
       navigate(`/s/${r.id}?role=controller`);
     },
     [navigate]
@@ -904,7 +905,9 @@ export default function Home() {
         }
         await createDeck({ file, blob, sha256, filename, totalSlides, handle });
       } catch (e: unknown) {
-        setError(e instanceof Error ? e.message : "Upload failed");
+        const message = e instanceof Error ? e.message : "Upload failed";
+        track("upload-error", { error: message });
+        setError(message);
       } finally {
         setUploading(false);
       }
@@ -954,9 +957,12 @@ export default function Home() {
         const meta = await loadExternalPdfMeta(pdfUrl);
         const { data: sessionData } = await supabase.auth.getSession();
         const id = await createExternalSession(meta, sessionData.session?.access_token);
+        track("open-url", { ok: true });
         navigate(`/s/${id}/share`);
       } catch (e: unknown) {
-        setError(e instanceof Error ? e.message : "Failed to create session");
+        const message = e instanceof Error ? e.message : "Failed to create session";
+        track("open-url", { ok: false, error: message });
+        setError(message);
       } finally {
         setUrlBusy(false);
       }
@@ -970,6 +976,7 @@ export default function Home() {
       setExampleError("");
       setExampleBusy(kind);
       try {
+        track("open-example", { kind });
         const url = kind === "typst" ? TYPST_EXAMPLE_PDF_URL : LATEX_EXAMPLE_PDF_URL;
         const meta = await loadExternalPdfMeta(url);
         const { data: sessionData } = await supabase.auth.getSession();
@@ -1056,7 +1063,9 @@ export default function Home() {
   );
 
   useEffect(() => {
-    if (code.length === CODE_LENGTH) navigate(`/s/${code}?role=viewer`);
+    if (code.length !== CODE_LENGTH) return;
+    track("join-code");
+    navigate(`/s/${code}?role=viewer`);
   }, [code, navigate]);
 
   return (

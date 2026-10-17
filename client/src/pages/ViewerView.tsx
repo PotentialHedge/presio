@@ -20,6 +20,7 @@ import { CommandPalette } from "@/components/CommandPalette";
 import { goToSlideItems } from "@/components/controller/controllerCommands";
 import { appPaletteItems, slideArg, useAppCommands, type AppCommand } from "@/lib/commands";
 import { runsOnViewer, useViewerPluginSwitches } from "@/lib/plugins/viewerSwitches";
+import { track } from "@/lib/analytics";
 
 export function ViewerView({
   id,
@@ -97,7 +98,10 @@ export function ViewerView({
 
   const toggleFullscreen = useCallback(() => {
     if (document.fullscreenElement) void document.exitFullscreen();
-    else void document.documentElement.requestFullscreen();
+    else {
+      track("viewer-fullscreen");
+      void document.documentElement.requestFullscreen();
+    }
   }, []);
 
   // The viewer's own commands, for the palette; navigating ones only where

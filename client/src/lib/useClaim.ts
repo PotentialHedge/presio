@@ -8,6 +8,7 @@ import { getSessionAuth, setSessionAuth } from "@/lib/utils";
 import { lsRemove, sessionKey, rekeySessionStorage } from "@/lib/storage";
 import { rekeyHistories } from "@/lib/plugins/historyDb";
 import { MAX_PDF_BYTES, MAX_PDF_MB } from "@/lib/limits";
+import { track } from "@/lib/analytics";
 
 // Shares a deck that until now lived only in this browser: the PDF is uploaded
 // and the session becomes a normal synced one. Two shapes of local deck exist,
@@ -105,9 +106,12 @@ export function useClaim(id: string) {
         }
       }
       await idbDelete(id).catch(() => { /* ignore */ });
+      track("go-online", { ok: true, registering });
       return newId;
     } catch (e: unknown) {
-      setSyncError(e instanceof Error ? e.message : "Failed to sync presentation");
+      const message = e instanceof Error ? e.message : "Failed to sync presentation";
+      track("go-online", { ok: false, error: message });
+      setSyncError(message);
       return null;
     } finally {
       setSyncing(false);

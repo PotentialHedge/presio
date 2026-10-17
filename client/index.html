@@ -51,7 +51,8 @@
     <style>#root main { display: block; }</style>
   </noscript>
   <script defer src="https://analytics.presio.ch/script.js" data-website-id="3b9c85c6-1dae-4a30-9508-200f274cb857"></script>
-  <script defer src="https://analytics.presio.ch/recorder.js" data-website-id="3b9c85c6-1dae-4a30-9508-200f274cb857" data-sample-rate="0.1" data-mask-level="moderate" data-max-duration="300000"></script>
+  <!-- Session recording (recorder.js) is not loaded here: lib/analytics.ts
+       injects it on demand, so viewers — the audience — are never recorded. -->
 </head>
 
 <body>

@@ -5,6 +5,7 @@ import { DialogOverlay } from "@/components/ui/dialog-overlay";
 import { useIsTouchDevice } from "@/hooks/useIsMobile";
 import { useIsStandalone } from "@/hooks/useIsStandalone";
 import { lsGetString, lsSetString, STORAGE_KEYS } from "@/lib/storage";
+import { track } from "@/lib/analytics";
 
 // Chrome/Edge's beforeinstallprompt event — not part of the DOM lib.
 interface BeforeInstallPromptEvent extends Event {
@@ -75,6 +76,7 @@ export function InstallPrompt() {
 
   const install = async () => {
     if (!deferred) return; // fallback is instructions-only
+    track("install-app");
     await deferred.prompt();
     // Accepted or declined, the browser dialog is the answer — don't re-ask.
     dismiss();

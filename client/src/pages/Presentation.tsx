@@ -22,7 +22,7 @@ import {
   type DeckWatchStatus,
 } from "@/lib/deckWatcher";
 import { ConfirmDeckReloadDialog } from "@/components/controller/ConfirmDeckReloadDialog";
-import { track, sha256Hex } from "@/lib/analytics";
+import { track, sha256Hex, startRecording } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { usePluginHost } from "@/lib/plugins/usePluginHost";
@@ -579,7 +579,14 @@ export default function Presentation() {
     if (trackedRoleRef.current === settledRole) return;
     trackedRoleRef.current = settledRole;
     track("session-role", { role: settledRole, mode: local ? "local" : "server" });
+    if (settledRole === "controller") startRecording();
   }, [settledRole, local]);
+
+  // A deck that failed to open is the one thing a presenter can't work
+  // around, so every distinct message is worth a data point.
+  useEffect(() => {
+    if (error) track("presentation-error", { error, role: requestedRole });
+  }, [error, requestedRole]);
 
   // The canvas is rendered at the container's pixel size, so anything that
   // changes that size or scale — entering fullscreen, dragging the viewer onto
@@ -623,6 +630,9 @@ export default function Presentation() {
     [local]
   );
 
+  // Opening a deck isn't presenting it. A few slide changes is the signal
+  // that a talk actually happened, counted once per page.
+  const slideChangesRef = useRef(0);
   const goTo = useCallback(
     (slide: number) => {
       if (slide < 1 || slide > totalSlides) return;
@@ -631,8 +641,9 @@ export default function Presentation() {
         { event: "slide_change", payload: { slideNumber: slide } }
       );
       setCurrentSlide(slide);
+      if (++slideChangesRef.current === 3) track("present", { mode: local ? "local" : "server", slides: totalSlides });
     },
-    [totalSlides, broadcast]
+    [totalSlides, broadcast, local]
   );
 
   const viewerGoTo = useCallback(

@@ -78,6 +78,7 @@ import { SettingsDialog } from "@/components/controller/SettingsDialog";
 import { AddPluginPage, DiscoverPluginsPage, PluginPage } from "@/components/plugins/PluginSettings";
 import { pluginLabel, useInstalledPlugins } from "@/lib/plugins/installed";
 import { findCommand, type LoadedPlugin } from "@/lib/plugins/manifest";
+import { track } from "@/lib/analytics";
 
 // How long a pending "j<number>" jump waits for another digit before it
 // commits on its own. Long enough to type a second digit, short enough that the
@@ -259,6 +260,12 @@ export function ControllerView({
     !isMobile &&
     !onboardingOpen &&
     lsGetString(viewerOpenedKey(id)) !== "true";
+  // Waving the prompt away answers it for this presentation too, so it does
+  // not come back on reload.
+  const dismissViewerPrompt = () => {
+    lsSetString(viewerOpenedKey(id), "true");
+    setViewerPromptDismissed(true);
+  };
 
   // Tap the left/right half of the current slide to go back/forward on touch
   // devices. Disabled while pinch-zoom is active so panning or lifting
@@ -503,10 +510,8 @@ export function ControllerView({
     const features = "popup,width=1280,height=800";
     const w = window.open(viewerUrl, `presio-viewer-${id}`, features);
     setViewerBlocked(!w);
-    if (w) {
-      lsSetString(viewerOpenedKey(id), "true");
-      setViewerPromptDismissed(true);
-    }
+    track("open-viewer", { blocked: !w });
+    if (w) dismissViewerPrompt();
   };
 
   // Dashboard card content + optional toolbar action for each key.
@@ -1060,7 +1065,7 @@ export function ControllerView({
       )}
 
       {!isMobile && viewerPromptOpen && (
-        <DialogOverlay onClose={() => setViewerPromptDismissed(true)}>
+        <DialogOverlay onClose={dismissViewerPrompt}>
           <div className="flex flex-col items-center gap-4 text-center">
             <p className="text-xs text-muted-foreground">
               Hold <span className="font-medium text-foreground">{isMac ? "⌥ Option" : "Option/Alt"}</span> and click to open it in its own window.
@@ -1083,7 +1088,7 @@ export function ControllerView({
             </div>
             <button
               type="button"
-              onClick={() => setViewerPromptDismissed(true)}
+              onClick={dismissViewerPrompt}
               className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-4 mt-2"
             >
               Not now

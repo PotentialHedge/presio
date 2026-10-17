@@ -8,6 +8,7 @@
 import { useSyncExternalStore } from "react";
 import type { LoadedPlugin } from "./manifest";
 import type { Resolution } from "./resolve";
+import { track } from "@/lib/analytics";
 
 /** Why the prompt is up, which sets its wording and buttons. */
 export type PromptReason =
@@ -57,6 +58,7 @@ export function finishPrompt(id: number, outcome: PromptOutcome) {
   const request = queue.find((r) => r.id === id);
   queue = queue.filter((r) => r.id !== id);
   emit();
+  if (request) track("plugin-prompt", { reason: request.reason, choice: outcome.choice, source: request.input });
   request?.onDone?.(outcome);
 }
 
