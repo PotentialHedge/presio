@@ -75,7 +75,8 @@ function check(folder: string, presio: string): Report {
     id = checkRepo(git, manifest, error, warn);
     const tag = `v${manifest.version}`;
     const atHead = git.tagsAtHead.filter((t) => /^v\d/.test(t));
-    const other = atHead.filter((t) => t !== tag);
+    // (With uncommitted changes, they're the next release, not this commit.)
+    const other = git.dirty ? [] : atHead.filter((t) => t !== tag);
     if (other.length) {
       error(`The commit is tagged ${other.join(", ")}, but presio-plugin.json says version ${manifest.version}: the tag must be "v" + version. Set "version" to match, or tag ${tag} instead`);
     }
