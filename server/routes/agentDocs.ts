@@ -26,6 +26,11 @@ function withBase(text: string, base: string): string {
   return text.replaceAll("BASE", base);
 }
 
+/** One of the agent docs, with its links pointing at `base`. */
+export function agentDoc(name: "plugins.md", base: string): string {
+  return withBase(readContent(name), base);
+}
+
 function sendText(res: express.Response, type: string, body: string, canonical?: string) {
   res.setHeader("Content-Type", `${type}; charset=utf-8`);
   res.setHeader("Cache-Control", CACHE);
@@ -59,6 +64,9 @@ const SITEMAP_PATHS = [
   "/api.md",
   "/glossary.md",
   "/plugins.md",
+  "/plugins/check.mjs",
+  "/plugins/template/presio-plugin.json",
+  "/sdk/v1/presio.d.ts",
   "/openapi.json",
   "/robots.txt",
   "/sitemap.xml",

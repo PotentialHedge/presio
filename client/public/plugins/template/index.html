@@ -1,0 +1,77 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; height: 100%; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: transparent; }
+  .banner {
+    position: fixed; left: 50%; bottom: 8vmin; transform: translateX(-50%);
+    max-width: 80vw; padding: 2vmin 4vmin; border-radius: 1.5vmin;
+    background: rgba(0, 0, 0, .8); color: #fff; font-size: 4vmin; text-align: center;
+  }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="banner" id="banner" hidden></div>
+
+<script>
+  // A Presio plugin: one file, run on every surface listed in
+  // presio-plugin.json. Branch on presio.surface.
+  //  - background (the presenter's device, hidden): owns the state, handles
+  //    the "toggle" command (the bottom-bar button and the G key), and sends
+  //    the state to every device. Retained, so a phone that joins later, and
+  //    the presenter's own page after a reload, get it too.
+  //  - viewer (every viewer screen, a full-screen layer): draws the banner
+  //    while it's on.
+  // The full API: /plugins.md. Its types: /sdk/v1/presio.d.ts.
+
+  if (presio.surface === "background") background();
+  else if (presio.surface === "viewer") viewer();
+
+  function background() {
+    let on = false;
+
+    function render() {
+      presio.ui.setButton("toggle", { active: on, label: on ? "Hide banner" : "Banner" });
+      presio.ui.setStatus("state", on ? { text: "Banner up", icon: "megaphone", command: "toggle" } : null);
+    }
+
+    presio.commands.register("toggle", () => {
+      on = !on;
+      presio.messages.send("state", { on }, { retain: true });
+      render();
+    });
+    // The presenter's own retained messages come back here too, so after a
+    // reload the banner's state is picked up where it was.
+    presio.messages.onMessage(({ type, payload, from }) => {
+      if (type !== "state" || from !== "presenter") return;
+      on = !!(payload && payload.on);
+      render();
+    });
+    render();
+  }
+
+  function viewer() {
+    const banner = document.getElementById("banner");
+    let on = false;
+
+    function render() {
+      banner.textContent = presio.settings.get("text");
+      banner.hidden = !on;
+      // A viewer layer stays hidden (and lets clicks through to the slide)
+      // until the plugin shows it.
+      presio.ui.setVisible(on);
+    }
+
+    presio.messages.onMessage(({ type, payload, from }) => {
+      if (type !== "state" || from !== "presenter") return;
+      on = !!(payload && payload.on);
+      render();
+    });
+    presio.settings.onChange(render);
+    render();
+  }
+</script>
+</body>
+</html>

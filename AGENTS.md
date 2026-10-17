@@ -20,9 +20,10 @@ These are served live by the Express app (not static files):
 | `/llms-full.txt` | Present + check playbook |
 | `/AGENTS.md` | Product agent brief |
 | `/api.md` / `/openapi.json` | API docs |
-| `/plugins.md` | Writing a plugin (`window.presio` API) |
+| `/plugins.md` | Building a plugin: agent workflow, manifest, `window.presio` API |
+| `/plugins/template/`, `/plugins/check.mjs`, `/sdk/v1/presio.d.ts` | Plugin template, checker and API types (built by `client/plugins/build.ts`) |
 | `/robots.txt` / `/sitemap.xml` | Crawl discovery |
-| `/.well-known/mcp.json` / `/mcp` | MCP tools `present_pdf`, `check_pdf` |
+| `/.well-known/mcp.json` / `/mcp` | MCP tools `present_pdf`, `check_pdf`, `plugin_guide` |
 | `POST /api/present` | Upload PDF → local handoff URL (update in place with `session_id` + controller token) |
 | `POST /api/check` | Sidecar validity report |
 

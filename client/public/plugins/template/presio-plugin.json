@@ -1,0 +1,29 @@
+{
+  "$schema": "https://presio.ch/schema/plugin-manifest.schema.json",
+  "presio": 1,
+  "name": "hello",
+  "displayName": "Hello",
+  "version": "0.1.0",
+  "author": "you",
+  "description": "Put a banner up on every viewer screen from a button in the controller's bottom bar.",
+  "main": "index.html",
+  "surfaces": ["background", "viewer"],
+  "activation": ["always"],
+  "permissions": [],
+  "contributes": {
+    "commands": [{ "id": "toggle", "title": "Show the banner", "icon": "megaphone" }],
+    "buttons": [
+      {
+        "command": "toggle",
+        "location": "controller.toolbar",
+        "label": "Banner",
+        "tooltip": "Show the banner on every viewer screen"
+      }
+    ],
+    "keybindings": [{ "command": "toggle", "keys": [{ "key": "g" }] }],
+    "status": [{ "id": "state", "location": "controller.header", "tooltip": "The banner is up on every screen" }],
+    "settings": {
+      "text": { "type": "string", "default": "Hello!", "maxLength": 120, "description": "What the banner says." }
+    }
+  }
+}

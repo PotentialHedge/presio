@@ -140,3 +140,58 @@ export function builtinPlugins(): Plugin {
     },
   }
 }
+
+// What a plugin's author needs besides the docs: the checker, bundled from
+// kit/check.ts with the shared validator into one dependency-free Node
+// script, and the API's types. The template is plain files in
+// public/plugins/template/.
+const KIT_FILES: Record<string, () => Promise<string>> = {
+  "plugins/check.mjs": bundleChecker,
+  "sdk/v1/presio.d.ts": async () => fs.readFileSync(path.join(ROOT, "sdk", "presio.d.ts"), "utf8"),
+}
+
+async function bundleChecker(): Promise<string> {
+  const result = await build({
+    configFile: false,
+    envDir: false,
+    logLevel: "warn",
+    build: {
+      write: false,
+      ssr: path.join(ROOT, "kit", "check.ts"),
+      target: "node18",
+      minify: false,
+      rollupOptions: { output: { format: "es", entryFileNames: "check.mjs" } },
+    },
+  })
+  const chunk = (Array.isArray(result) ? result : [result])
+    .flatMap((r) => ("output" in r ? r.output : []))
+    .find((o) => o.type === "chunk" && o.isEntry)
+  if (!chunk || chunk.type !== "chunk") throw new Error("The plugin checker didn't build")
+  return `#!/usr/bin/env node\n${chunk.code}`
+}
+
+export function pluginKit(): Plugin {
+  return {
+    name: "presio-plugin-kit",
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const file = (req.url ?? "").split("?")[0].slice(1)
+        const make = KIT_FILES[file]
+        if (!make) return next()
+        make().then(
+          (body) => {
+            res.setHeader("Content-Type", file.endsWith(".mjs") ? "text/javascript" : "text/plain; charset=utf-8")
+            res.setHeader("Cache-Control", "no-cache")
+            res.end(body)
+          },
+          (err) => next(err)
+        )
+      })
+    },
+    async generateBundle() {
+      for (const [fileName, make] of Object.entries(KIT_FILES)) {
+        this.emitFile({ type: "asset", fileName, source: await make() })
+      }
+    },
+  }
+}

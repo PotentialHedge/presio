@@ -4,7 +4,7 @@ import fs from "fs"
 import path from "path"
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
-import { builtinPlugins } from './plugins/build'
+import { builtinPlugins, pluginKit } from './plugins/build'
 
 // Bake the built asset list into the shipped service worker so a fresh install
 // precaches the whole app up front. The pdf.js worker and its wasm helper are
@@ -75,7 +75,7 @@ function devOrigins(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), builtinPlugins(), devOrigins(), precacheServiceWorker()],
+  plugins: [react(), builtinPlugins(), pluginKit(), devOrigins(), precacheServiceWorker()],
   build: {
     // Keep in step with "browserslist" in package.json (read by
     // eslint-plugin-compat and scripts/check-compat.mjs). This lowers syntax

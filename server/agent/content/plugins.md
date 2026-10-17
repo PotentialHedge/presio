@@ -1,23 +1,109 @@
-# Writing a Presio plugin
+# Building a Presio plugin
 
-A Presio plugin adds a feature to a live presentation — a button in the
-presenter's bottom bar, a keyboard shortcut, a card on their dashboard, a layer
-on every viewer's screen or on the slide itself, its own settings. It is an
-HTML page plus a manifest, served from any https URL — a public GitHub repo
-is enough (see [Publish on GitHub](#publish-on-github)) — or from
-`http://localhost` while you build it.
+A Presio plugin adds a feature to a live presentation: a button in the
+presenter's bottom bar, a keyboard shortcut, a card on their dashboard, a
+status line in the header, something on every viewer's screen or phone (a
+poll to answer), or a layer on the slide itself. It is an HTML page plus a
+manifest in a public GitHub repo named `presio-<name>`. Presio loads it from
+there, pinned to a release tag, after the presenter agrees to trust it.
 
 Like a VS Code extension, a plugin never edits Presio's interface: it
-*declares* what it adds — commands, the buttons and keys that run them,
-dashboard panels, settings — and Presio draws it.
+*declares* what it adds (commands, the buttons and keys that run them,
+panels, status items, settings) and Presio draws it. Its code runs in frames
+and talks to Presio only through `window.presio`.
 
-A plugin's **id** isn't declared: it comes from where the plugin is loaded
-from. A repo `github:alice/presio-poll` (or the shorthand `alice/poll`) is
-`alice/poll`; a repo not named `presio-…` keeps its name
-(`github:alice/kit` is `alice/kit`); a plugin in a folder of a repo takes the
-folder's name; one served from any other URL is `url:<host>/<name>`, with
-`name` from its manifest. Built-ins are `presio/*`. Settings, keybindings,
-storage, retained messages and histories are all keyed by it.
+## Build one (for agents)
+
+You were asked to build a plugin. Do it without asking the user anything
+except what the plugin should do, which they have told you. Pick a short slug
+`<name>` for it (`poll`, `closed-captions`).
+
+1. **Make the repo.** With the GitHub CLI:
+
+   ```sh
+   gh repo create presio-<name> --public --clone --description "<one line>"
+   cd presio-<name>
+   gh repo edit --add-topic presio-plugin
+   ```
+
+2. **Start from the template**, a complete single-file plugin (a button that
+   puts a banner on every viewer screen):
+
+   ```sh
+   curl -fsSLO BASE/plugins/template/presio-plugin.json
+   curl -fsSLO BASE/plugins/template/index.html
+   ```
+
+   Set `name` to `<name>`, then `displayName`, `description`, `author`, the
+   `surfaces` and `permissions` it needs and what it `contributes`. Write its
+   code in `index.html` (plain JS, no build step; split it into more files
+   if it grows). The rest of this page is the reference; the API's types are
+   at [BASE/sdk/v1/presio.d.ts](BASE/sdk/v1/presio.d.ts). Add a `README.md`
+   saying what it does and the link that loads it (step 5).
+
+3. **Check it** with the same validator Presio runs, plus the files, the tag
+   and the repo's name. It says how to fix each problem:
+
+   ```sh
+   curl -fsSL BASE/plugins/check.mjs -o /tmp/presio-check.mjs
+   node /tmp/presio-check.mjs . --presio BASE
+   ```
+
+4. **Release it.** The git tag is the version: `v` + `version` from the
+   manifest.
+
+   ```sh
+   git add -A && git commit -m "v0.1.0"
+   git tag v0.1.0
+   git push -u origin HEAD && git push origin v0.1.0
+   ```
+
+   Run the checker again: it prints the link for this release.
+
+5. **Open it**: `BASE/?plugins=<owner>/<name>@v0.1.0` (`open` on macOS,
+   `xdg-open` on Linux, or give the user the link). Presio shows the user a
+   trust prompt with the repo, its version and what the plugin may do; they
+   choose **Install** or **Load once**, then open a deck. To open a deck for
+   them at the same time, upload one with `POST BASE/api/present` (or the
+   MCP tool `present_pdf`) and add `&plugins=<owner>/<name>@v0.1.0` to the
+   `url` it returns.
+
+6. **Ship changes** as new releases: bump `version`, commit, tag, push, and
+   open the link with the new tag. An installed plugin also moves to a newer
+   release in the same major by itself, unless it asks for more permissions.
+   While iterating, `?plugins=<owner>/<name>@main` runs the newest pushed
+   commit, re-checked on every page load.
+
+Without the GitHub CLI or a GitHub account, serve the folder with CORS and
+load it by URL: `npx http-server --cors -p 5174 .`, then open
+`BASE/?plugins=http://localhost:5174/`. That reaches the presenter's own
+browser and the viewer window on the same machine, not phones (see
+[Develop](#develop)).
+
+If the user wants a change later, edit the same repo and release the next
+version. The template, the [examples](#examples) and the built-ins are all
+plugins written this way.
+
+## What a plugin is
+
+- **Trusted code.** A plugin runs with the presenter's rights on their
+  device, as an editor extension does. Presenters are told to load only
+  plugins they trust, and Presio asks before running one. Don't do anything
+  a user wouldn't expect from what the plugin says it does.
+- **Its id comes from where it's loaded from**, not from the manifest. A
+  repo `github:alice/presio-poll` (shorthand `alice/poll`) is `alice/poll`; a
+  repo not named `presio-…` keeps its name (`github:alice/kit` is
+  `alice/kit`); a plugin in a folder of a repo takes the folder's name; one
+  served from any other URL is `url:<host>/<name>`, with `name` from its
+  manifest. Built-ins are `presio/*`. Settings, keybindings, storage,
+  retained messages and histories are all keyed by it.
+- **One HTML page, run on each surface** it lists: hidden on the presenter's
+  device (`background`), as dashboard cards (`panel`), on every viewer
+  (`viewer`, `viewerSheet`) and over the slide (`slide`). `presio.surface`
+  says which; `presio.role` says whether it's the presenter's device or an
+  audience one.
+- **Viewers install nothing.** They run what the presenter runs, and each
+  viewer can switch a plugin off on their own device.
 
 ## Files
 
@@ -60,8 +146,10 @@ index.html
 - `presio` — the plugin API's major version, `1`. Required.
 - `name` — a slug (`a-z`, `0-9`, `-`); `displayName` is what people see.
 - `version` — semver; release it under the git tag `v` + version.
-- `dependencies` — other plugins it needs, `{ "github:alice/presio-quiz-core": "^1.0.0" }`
-  (validated; loading them comes later).
+- `dependencies` — other plugins it needs, by source and semver range:
+  `{ "github:alice/presio-quiz-core": "^1.0.0" }`. They're shown in the same
+  trust prompt, load first, and run as plugins of their own; use their
+  commands with `presio.commands.execute("alice/quiz-core.<command>")`.
 
 - `surfaces` — where the plugin runs (the same HTML in each):
   - `background`: hidden, on the presenter's device, for as long as the deck
@@ -187,11 +275,12 @@ URLs. Split what only some surfaces need into separate chunks (a dynamic
 PDF library used only for a download.
 
 Nothing goes through Presio's server: every device loads the plugin from its
-URL directly, like a web page, so your server must send CORS headers (and
-should cache hashed files). The presenter publishes the plugin's URL and the
-SHA-256 of its `main` page; a viewer only runs the plugin if the page it
-loads matches, so everyone runs the same version. Built-in plugins are served
-by Presio itself, on the app and viewer origins alike.
+URL directly, like a web page (jsDelivr for a GitHub repo, which sends CORS
+headers; a server of your own must send them too). The presenter publishes
+the plugin's URL, pinned to a commit for GitHub, and the SHA-256 of its
+`main` page; a viewer only runs the plugin if the page it loads matches, so
+everyone runs the same version. Built-in plugins are served by Presio itself,
+on the app and viewer origins alike.
 
 The same file runs on every surface; branch on `presio.surface`. Keys pressed
 while a frame has focus (after a click on one of its buttons) are handed on to
@@ -381,63 +470,90 @@ seq, pending }`; `by` is the device that committed it (compare with
   screen, not everything, and draw a placeholder until it arrives. At most
   5 MB each and 50 MB per session.
 
+## Versions, trust and updates
+
+- **A release is a git tag** `vX.Y.Z` equal to the manifest's `version`.
+  Presio resolves the tag to its commit and loads the plugin from
+  `cdn.jsdelivr.net/gh/<owner>/<repo>@<commit>/`. Content at a commit never
+  changes, so the presenter and every viewer run exactly what was approved.
+  Never move a tag: release a new version instead.
+- **What a link can ask for**, after `@`: a tag (`@v1.2.0`), a range
+  (`@^1.0.0`, the newest matching tag), a branch (`@main`: dev mode, the
+  newest commit, looked up on each load and shown as `main@abc1234`) or a
+  commit. With no `@`, the newest release tag, else the default branch.
+- **The trust prompt** shows the repo, author, stars, last push, version and
+  exactly what the plugin may do (its permissions, where it shows up, whether
+  it runs on audience devices) plus its dependencies. **Install** keeps it,
+  **Load once** runs it in this tab only, **Skip** doesn't run it.
+- **Trust is per repo and permission set.** A newer release in the same
+  major, or a new commit on a dev branch, runs without asking as long as it
+  asks for nothing more. New permissions, a new major or a new dependency ask
+  again and say what changed. Installed plugins look for a newer release in
+  their major once a day and update by themselves; a new major is offered in
+  Settings.
+- **`?plugins=`** takes a comma-separated list of sources:
+  `BASE/?plugins=alice/poll@v0.1.0,github:bob/presio-x`. It works on the home
+  page, `/present`, a `/start/…` link and a presenter's controller (not on
+  viewer pages), and is removed from the URL once read. A link to a plugin
+  that's already installed and trusted just updates it to that version.
+- Sources also work in **Settings → Plugins → Add plugin**:
+
+  ```
+  alice/poll                         # github:alice/presio-poll, newest release
+  alice/poll@v1.2.0                  # a tag; @^1.0.0 a range; @main a branch
+  github:alice/kit@v1.2.0/plugins/poll   # a plugin in a folder (id alice/poll)
+  https://github.com/alice/presio-poll   # a repo's link
+  http://localhost:5174/             # a dev server ("unpinned")
+  ```
+
 ## Develop
 
-1. Serve the folder, e.g. `npx vite --port 5174 --cors` or any static server
-   that sends CORS headers.
-2. In Presio, open a deck as the controller → **Settings → Plugins**, paste
-   `http://localhost:5174/` and **Add**. Reload the presentation to pick up
-   edits.
-3. For a shared deck, open the viewer link on another device: viewers load the
-   plugin from the URL the presenter added — they install nothing. So a plugin
-   served on `localhost` only reaches viewers on the same machine (the viewer
-   window); for phones, serve it where they can reach it. With Presio itself
-   running locally over http, that can be your LAN address (`npx vite --host`,
-   then add `http://<your-ip>:5174/`); a hosted Presio is https, so there it
-   takes an https URL — a tunnel (e.g. `cloudflared tunnel --url
-   http://localhost:5174`) or a real host.
-   Reload the viewers after editing, or they'll refuse the changed plugin.
+The quickest loop is a pushed branch: `?plugins=<owner>/<name>@main` runs its
+newest commit, so push and reload. jsDelivr may take a minute to serve a new
+commit.
 
-## Publish on GitHub
+For a loop without pushing, serve the folder with CORS
+(`npx http-server --cors -p 5174 .`, `npx vite --port 5174 --cors`) and open
+`BASE/?plugins=http://localhost:5174/`. Reload the presentation to pick up
+edits. Viewers load the plugin from the same URL as the presenter, so
+`localhost` only reaches the viewer window on the same machine. For phones,
+serve it where they can reach it: with Presio itself running locally over
+http, your LAN address (`npx vite --host`, then
+`http://<your-ip>:5174/`); with a hosted Presio, an https URL such as a
+tunnel (`cloudflared tunnel --url http://localhost:5174`). A URL that isn't
+GitHub is unpinned: viewers refuse the plugin if its page changed since the
+presenter loaded it, so reload viewers after an edit.
 
-A public GitHub repo is all a plugin needs: put `presio-plugin.json` and its
-files at the repo root (or in a folder), commit, and presenters add it as
+Notes on hosting:
 
-```
-you/name                          # shorthand for github:you/presio-name
-github:you/presio-name            # latest release, else newest tag, else main's current commit
-github:you/presio-name@v1.2.0     # a tag, branch or commit
-github:you/kit@v1.2.0/plugins/poll   # the plugin in a folder (id you/poll)
-```
-
-Name the repo `presio-<name>`: its plugin's id is then `you/<name>`.
-
-(or paste the repo's `github.com` link). Presio serves it through jsDelivr
-(`https://cdn.jsdelivr.net/gh/you/your-plugin@<ref>/`) and always pins the
-URL: a branch becomes the commit it's on, because viewers only run the exact
-version the presenter loaded and a CDN caches a branch for hours. Tag a
-release to ship an update; presenters re-add the plugin to move to it.
-
-- A plugin with a build step must commit its built files (jsDelivr serves the
-  repo, not release assets).
-- `raw.githubusercontent.com` URLs only work for a single-file plugin (inline
-  scripts and styles): it serves every file as `text/plain` with `nosniff`, so
-  browsers won't run a separate script. Presio turns such links into jsDelivr
-  ones. GitHub release downloads can't be loaded at all (no CORS).
+- A plugin with a build step must commit its built files (jsDelivr serves
+  the repo, not release assets).
 - Private repos can't be served to viewers.
-
-If some viewers can't load a plugin (a `localhost` URL phones can't reach, a
-version that changed under its URL), the presenter sees a warning in the
-controller's header, and the reason under the plugin in Settings.
+- `raw.githubusercontent.com` links are turned into jsDelivr ones; GitHub
+  release downloads can't be loaded (no CORS).
+- If some viewers can't load a plugin, the presenter sees a warning in the
+  controller's header and the reason under the plugin in Settings.
 
 Keyboard shortcuts: Presio's own (`←` `→` Space PgUp PgDn `b` `c` `j`) win,
 then plugins in the order they're listed. A clashing key is flagged in the
 plugin's Settings page and under Keyboard shortcuts, where the presenter can
-rebind it — so pick a key Presio doesn't use.
+rebind it, so pick a key Presio doesn't use.
 
-## Example
+## Examples
 
-The built-in Join Code plugin is a complete example:
+- The [template](BASE/plugins/template/index.html)
+  ([manifest](BASE/plugins/template/presio-plugin.json)): a command, a
+  toolbar button, a key, a status item, a setting and a viewer layer, kept in
+  step by a retained message.
+- [Closed captions](https://github.com/benedict-armstrong/presio-closed-captions):
+  speech recognition on the presenter's device, captions in the `slide`
+  surface beside the page (`"slideSurface": "area"`), a button with a
+  microphone menu, settings, and a per-viewer switch.
+- [Poll](https://github.com/benedict-armstrong/presio-poll): questions from
+  PDF attachments or made up live, answered in each viewer's `viewerSheet`
+  through `presio.audience`, results on every screen.
+
+The built-in Join Code plugin is a complete example too:
 [manifest](BASE/plugins/join-code/presio-plugin.json),
 [index.html](BASE/plugins/join-code/index.html). The built-in Timer
 ([manifest](BASE/plugins/timer/presio-plugin.json)) shows a panel and a

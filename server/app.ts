@@ -192,6 +192,9 @@ export function createApp({ supabase, io, socketState }: AppDeps): express.Expre
     express.static(clientDist, {
       index: false,
       setHeaders: (res, filePath) => {
+        // The plugin API's types (/sdk/v1/presio.d.ts), which mime lookup
+        // would call MPEG video.
+        if (filePath.endsWith(".d.ts")) res.setHeader("Content-Type", "text/plain; charset=utf-8");
         if (!filePath.startsWith(pluginDir)) return;
         res.setHeader(
           "Cache-Control",

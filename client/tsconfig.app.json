@@ -29,5 +29,5 @@
     "noUncheckedSideEffectImports": true
   },
   "include": ["src", "plugins", "../shared"],
-  "exclude": ["plugins/build.ts"]
+  "exclude": ["plugins/build.ts", "plugins/kit"]
 }

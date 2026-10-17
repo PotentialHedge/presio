@@ -1,6 +1,8 @@
 import { useState } from "react";
-import { Trash2 } from "lucide-react";
+import { Check, Copy, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { appOrigin } from "@/lib/origins";
 import type { PluginHost } from "@/lib/plugins/host";
 import {
   findCommand,
@@ -220,7 +222,59 @@ export function AddPluginPage({ onAdded }: { onAdded?: (key: string, plugin: Loa
       <p className="text-xs text-muted-foreground">
         A version after "@" pins it (v1.2.0, or a range like ^1.0.0); a branch (@main) follows its newest commit.
       </p>
+      <BuildWithAgent />
     </div>
+  );
+}
+
+/** The prompt that has a coding agent build a plugin: it reads /plugins.md,
+ *  makes the repo, and hands back a ?plugins= link to open. */
+function agentPrompt(what: string): string {
+  const task = what.trim().replace(/\.$/, "") || "…";
+  return `Read ${appOrigin}/plugins.md and build me a Presio plugin that ${task}.`;
+}
+
+function BuildWithAgent() {
+  const [what, setWhat] = useState("");
+  const [copied, setCopied] = useState(false);
+  const prompt = agentPrompt(what);
+  const copy = () => {
+    navigator.clipboard.writeText(prompt).then(
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      },
+      () => {}
+    );
+  };
+  return (
+    <section className="mt-5 space-y-2 rounded-lg border p-3" data-testid="plugin-agent-prompt">
+      <div>
+        <h3 className="text-sm font-medium">Build one with your agent</h3>
+        <p className="text-xs text-muted-foreground">
+          Say what it should do and paste the prompt into a coding agent (Claude Code, Codex, Cursor…). It builds the
+          plugin in a GitHub repo of yours and gives you a link that loads it here.
+        </p>
+      </div>
+      <input
+        value={what}
+        onChange={(e) => setWhat(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter") copy(); }}
+        placeholder="lets viewers answer multiple-choice polls"
+        aria-label="What the plugin should do"
+        className={`w-full ${fieldClass}`}
+      />
+      <div className="flex items-start gap-2">
+        <p className="flex-1 min-w-0 rounded-md bg-muted px-2.5 py-2 text-xs leading-relaxed break-words select-all">{prompt}</p>
+        <Button size="sm" variant="outline" onClick={copy} aria-label="Copy the prompt">
+          {copied ? <Check size={14} /> : <Copy size={14} />}
+          {copied ? "Copied" : "Copy"}
+        </Button>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Load only plugins you trust: a plugin can act as you on this device. You'll be asked before it runs.
+      </p>
+    </section>
   );
 }
 
@@ -245,34 +299,6 @@ function PluginUpdates({ entryKey, version, update }: { entryKey: string; versio
         </div>
       )}
     </div>
-  );
-}
-
-function Switch({
-  checked,
-  onChange,
-  label,
-  testId,
-}: {
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-  label: string;
-  testId?: string;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      data-testid={testId}
-      onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${checked ? "bg-primary" : "bg-muted-foreground/35"}`}
-    >
-      <span
-        className={`inline-block h-4 w-4 rounded-full bg-background shadow transition-transform ${checked ? "translate-x-[18px]" : "translate-x-0.5"}`}
-      />
-    </button>
   );
 }
 

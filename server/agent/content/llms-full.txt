@@ -65,8 +65,13 @@ Tools:
 
 - `present_pdf` — same as `POST /api/present` (pass `pdf_base64` + optional `filename`; add optional `session_id` + `controller_token` to update an existing presentation's deck in place and get the same link back)
 - `check_pdf` — same as `POST /api/check`
+- `plugin_guide` — the plugin guide, same as `GET /plugins.md`
 
 If you are a chat assistant with no shell/HTTP tools and Presio is not among your connectors, ask your user to add it once (Claude: Settings → Connectors → Add custom connector → `BASE/mcp`; ChatGPT: Settings → Connectors, developer mode), then retry.
+
+## Build a plugin
+
+Asked to "build a Presio plugin that …"? Read BASE/plugins.md and follow its "Build one" steps: a public `presio-<name>` GitHub repo from the template at BASE/plugins/template/, the checker (`node check.mjs` from BASE/plugins/check.mjs), a `v0.1.0` tag, then open `BASE/?plugins=<owner>/<name>@v0.1.0`. API types: BASE/sdk/v1/presio.d.ts.
 
 ## Other surfaces
 

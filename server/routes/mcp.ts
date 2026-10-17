@@ -7,6 +7,7 @@ import * as z from "zod/v4";
 import { baseUrl, canonicalBaseUrl } from "../lib/baseUrl.js";
 import { createPresentHandoff, updatePresentDeck } from "../lib/presentHandoff.js";
 import { buildCheckReport } from "./check.js";
+import { agentDoc } from "./agentDocs.js";
 import { resolveOptionalUserId } from "../auth.js";
 import type { SocketState } from "../socket.js";
 
@@ -132,6 +133,18 @@ function createPresioMcp(supabase: SupabaseClient, origin: string, req: express.
     }
   );
 
+  server.registerTool(
+    "plugin_guide",
+    {
+      title: "How to build a Presio plugin",
+      description:
+        "The guide to building a Presio plugin: the workflow (a presio-<name> GitHub repo from the template, the checker, a tag, and a ?plugins= link that loads it), the manifest, and the full window.presio API. Read it before writing a plugin. Same as GET /plugins.md.",
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+      inputSchema: {},
+    },
+    async () => ({ content: [{ type: "text" as const, text: agentDoc("plugins.md", origin) }] })
+  );
+
   return server;
 }
 
@@ -148,13 +161,13 @@ export function registerMcpRoutes(app: express.Express, supabase: SupabaseClient
       // that expect a flat server card rather than the nested shape.
       name: "presio",
       version: "1.0.0",
-      description: "Start local PDF presentations and validate Presio sidecars",
+      description: "Start local PDF presentations, validate Presio sidecars, and learn to build Presio plugins",
       endpoint: `${origin}/mcp`,
       protocolVersion: "2025-11-25",
       serverInfo: {
         name: "presio",
         version: "1.0.0",
-        description: "Start local PDF presentations and validate Presio sidecars",
+        description: "Start local PDF presentations, validate Presio sidecars, and learn to build Presio plugins",
       },
       transport: { type: "streamable-http", endpoint: `${origin}/mcp` },
       capabilities: { tools: true },

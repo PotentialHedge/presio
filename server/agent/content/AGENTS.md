@@ -12,6 +12,7 @@ last_updated: 2026-08-27
 1. **Start a local presentation** from a PDF via `POST /api/present` or MCP tool `present_pdf`.
 2. **Update a presentation you already created** by repeating the present call with its `session_id` + `controller_token` (the `t=` parameter of the returned url) — the deck is replaced in place and the same link keeps working.
 3. **Validate** Presio notes/media sidecars via `POST /api/check` or MCP tool `check_pdf`.
+4. **Build a plugin** the user describes ("build me a Presio plugin that …"): follow `BASE/plugins.md` (MCP tool `plugin_guide`). You make a `presio-<name>` GitHub repo from the template, check it with `BASE/plugins/check.mjs`, tag a release and open `BASE/?plugins=<owner>/<name>@v0.1.0`; the user only confirms a trust prompt.
 
 ## Preferred workflow
 
