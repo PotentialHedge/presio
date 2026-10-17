@@ -85,9 +85,14 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      // Code the server imports too (see shared/README.md).
+      "@shared": path.resolve(__dirname, "../shared"),
     },
   },
   server: {
+    // shared/ is outside the client's root, which the dev server otherwise
+    // refuses to serve from.
+    fs: { allow: [".", "../shared"] },
     proxy: {
       "/api": "http://localhost:3001",
       // Local mode's uploaded decks (server/local/blobStore.ts).

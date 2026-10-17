@@ -15,6 +15,8 @@ WORKDIR /app/client
 COPY client/package*.json ./
 RUN npm ci
 COPY client/ .
+# Code the client and server share (imported as @shared and ../shared).
+COPY shared/ /app/shared
 ARG VITE_SUPABASE_URL
 ARG VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY
 ARG VITE_SENTRY_DSN
@@ -36,6 +38,7 @@ RUN apk add --no-cache --virtual .build-deps python3 make g++ \
   && npm ci \
   && apk del .build-deps
 COPY server/ .
+COPY shared/ /app/shared
 COPY --from=client-build /app/client/dist /app/client/dist
 
 # Baked in so a running container can say which build it is (served on

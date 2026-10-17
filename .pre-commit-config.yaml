@@ -35,14 +35,14 @@ repos:
       - id: client-tsc
         name: tsc (client)
         language: system
-        files: ^client/.*\.(ts|tsx)$
+        files: ^(client/.*\.(ts|tsx)|shared/.*\.ts)$
         pass_filenames: false
         entry: bash -c 'cd client && npx --no-install tsc -b --noEmit'
 
       - id: server-tsc
         name: tsc (server)
         language: system
-        files: ^server/.*\.ts$
+        files: ^(server|shared)/.*\.ts$
         pass_filenames: false
         entry: bash -c 'cd server && npx --no-install tsc --noEmit'
 
