@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import type { LoadedPlugin } from "./manifest";
-import { describePluginUrl, loadPlugin, usePluginEntries, type PluginEntry } from "./registry";
+import { describeEntry, loadEntry, usePluginEntries, type PluginEntry } from "./registry";
 
 export interface InstalledPlugin {
   entry: PluginEntry;
@@ -20,11 +20,11 @@ export function useInstalledPlugins(errors: Record<string, string>): InstalledPl
   const entries = usePluginEntries();
   const [loaded, setLoaded] = useState<Record<string, LoadedPlugin | string>>({});
 
-  const key = entries.map((e) => `${e.key}\n${e.url}`).join("\n\n");
+  const key = entries.map((e) => `${e.key}\n${e.url}\n${e.source.kind === "github" ? e.source.ref : ""}`).join("\n\n");
   useEffect(() => {
     let cancelled = false;
     for (const entry of entries) {
-      loadPlugin(entry.url, { source: entry.source, key: entry.key }).then(
+      loadEntry(entry).then(
         (p) => !cancelled && setLoaded((m) => ({ ...m, [entry.key]: p })),
         (e: Error) => !cancelled && setLoaded((m) => ({ ...m, [entry.key]: e.message }))
       );
@@ -46,5 +46,5 @@ export function useInstalledPlugins(errors: Record<string, string>): InstalledPl
 
 /** A readable name before the manifest has loaded (or when it can't). */
 export function pluginLabel({ entry, plugin }: InstalledPlugin): string {
-  return plugin ? plugin.manifest.displayName : entry.builtin ? entry.key : describePluginUrl(entry.url);
+  return plugin ? plugin.manifest.displayName : entry.builtin ? entry.key : describeEntry(entry);
 }

@@ -13,8 +13,9 @@ import { socket } from "@/lib/socket";
 import { readAttachments, type PdfAttachment } from "@/lib/pdf";
 import { useJoinUrl } from "@/lib/joinUrl";
 import { PluginHost, retainKey, type PageSize, type PluginContext, type WireEvent } from "./host";
-import { isActivatedBy, type LoadedPlugin, type PluginManifest } from "./manifest";
-import { loadPlugin, usePluginEntries } from "./registry";
+import type { LoadedPlugin, PluginManifest } from "./manifest";
+import { loadEntries, usePluginEntries, useSessionPluginRelay } from "./registry";
+import { loadPlugin } from "./resolve";
 import { clockOffset, onClockSample } from "@/lib/clock";
 import { resolvePluginSettings, useSettingsDocument } from "@/lib/settings";
 import { getSessionAuth } from "@/lib/utils";
@@ -117,7 +118,8 @@ function usePagesReader(pdf: PDFDocumentProxy | null) {
   }, [pdf]);
 }
 
-/** Enabled plugins from this browser's registry that the deck activates. */
+/** Enabled plugins from this browser's registry (installed, or loaded for
+ *  this tab) that the deck activates, with what they depend on. */
 function useLocallyActivePlugins(enabled: boolean, readAll: () => Promise<PdfAttachment[]>) {
   const entries = usePluginEntries();
   const enabledEntries = entries.filter((e) => e.enabled);
@@ -132,20 +134,7 @@ function useLocallyActivePlugins(enabled: boolean, readAll: () => Promise<PdfAtt
     let cancelled = false;
     (async () => {
       const names = (await readAll()).map((a) => a.filename);
-      const loaded: LoadedPlugin[] = [];
-      const failed: Record<string, string> = {};
-      for (const entry of entriesRef.current) {
-        try {
-          const plugin = await loadPlugin(entry.url, { source: entry.source, key: entry.key });
-          // Ids come from sources, so two entries only share one if the same
-          // plugin was added twice (as a URL and as GitHub): the first runs.
-          if (isActivatedBy(plugin.manifest, names) && !loaded.some((p) => p.id === plugin.id)) {
-            loaded.push(plugin);
-          }
-        } catch (e) {
-          failed[entry.key] = e instanceof Error ? e.message : String(e);
-        }
-      }
+      const { plugins: loaded, errors: failed } = await loadEntries(entriesRef.current, names);
       if (cancelled) return;
       // Keep the objects of plugins that didn't change: a new one for the
       // same plugin would remount its frames (this runs again once the deck's
@@ -304,6 +293,7 @@ export function usePluginHost({
   // Server viewers get their plugin list from the session; everyone else
   // (the presenter, and a local deck's viewer window) from this browser.
   const fromSession = local === false && !isPresenter;
+  useSessionPluginRelay(id, local, isPresenter);
   const localActive = useLocallyActivePlugins(local !== null && !fromSession, readAll);
   const [sessionPlugins, setSessionPlugins] = useState<LoadedPlugin[]>([]);
   const plugins = fromSession ? sessionPlugins : localActive.plugins;

@@ -12,7 +12,9 @@ import {
 } from "@/lib/plugins/manifest";
 import { resolvePluginSettings, setPluginSetting, useSetting, useSettingsDocument } from "@/lib/settings";
 import { formatBinding, pluginBindings, shortcutTakenBy, type PluginShortcutSet } from "@/lib/keymap";
-import { addPlugin, describePluginUrl, removePlugin, setPluginEnabled } from "@/lib/plugins/registry";
+import { describeEntry, removePlugin, setPluginEnabled } from "@/lib/plugins/registry";
+import { requestPlugin } from "@/lib/plugins/prompts";
+import { promptUpdate, useUpdateInfo, type UpdateInfo } from "@/lib/plugins/updates";
 import { pluginLabel, type InstalledPlugin } from "@/lib/plugins/installed";
 import { qualify } from "@shared/plugin/sources";
 import { PluginButtons } from "./PresenterPlugins";
@@ -73,8 +75,10 @@ export function PluginPage({
   const details = [
     manifest && `v${manifest.version}`,
     manifest?.author && `by ${manifest.author}`,
-    entry.builtin ? "built in" : describePluginUrl(entry.url),
+    describeEntry(entry),
+    entry.session && "this tab only",
   ].filter(Boolean);
+  const update = useUpdateInfo(entry.key);
 
   return (
     <div className="space-y-5">
@@ -95,6 +99,8 @@ export function PluginPage({
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
+
+      <PluginUpdates entryKey={entry.key} version={manifest?.version} update={update} />
 
       {manifest && (
         <div className="space-y-1.5">
@@ -177,24 +183,22 @@ export function PluginPage({
   );
 }
 
-/** The page for adding a plugin by URL. */
+/** The page for adding a plugin: its source goes through the trust prompt,
+ *  like a ?plugins= link. */
 export function AddPluginPage({ onAdded }: { onAdded?: (key: string, plugin: LoadedPlugin) => void }) {
   const [url, setUrl] = useState("");
-  const [adding, setAdding] = useState(false);
-  const [error, setError] = useState("");
 
-  const add = async () => {
-    setAdding(true);
-    setError("");
-    try {
-      const added = await addPlugin(url);
-      setUrl("");
-      onAdded?.(added.key, added.plugin);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setAdding(false);
-    }
+  const add = () => {
+    const input = url.trim();
+    if (!input) return;
+    requestPlugin(input, {
+      reason: "add",
+      onDone: ({ choice, key, plugin }) => {
+        if (choice === "skip" || !key || !plugin) return;
+        setUrl("");
+        onAdded?.(key, plugin);
+      },
+    });
   };
 
   return (
@@ -204,16 +208,42 @@ export function AddPluginPage({ onAdded }: { onAdded?: (key: string, plugin: Loa
           type="url"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter" && url) void add(); }}
+          onKeyDown={(e) => { if (e.key === "Enter" && url) add(); }}
           placeholder="you/name, github:you/repo@v1.0.0, https://… or http://localhost:5174/"
           data-testid="plugin-url-input"
           className={`flex-1 min-w-0 ${fieldClass}`}
         />
-        <Button size="sm" disabled={!url || adding} onClick={add}>
-          {adding ? "Adding…" : "Add"}
+        <Button size="sm" disabled={!url} onClick={add}>
+          Add
         </Button>
       </div>
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      <p className="text-xs text-muted-foreground">
+        A version after "@" pins it (v1.2.0, or a range like ^1.0.0); a branch (@main) follows its newest commit.
+      </p>
+    </div>
+  );
+}
+
+/** "Updated to v1.3.0", or a newer version waiting for the presenter. */
+function PluginUpdates({ entryKey, version, update }: { entryKey: string; version?: string; update?: UpdateInfo }) {
+  const updated = update?.updated && version && update.updated.to.replace(/^v/, "") === version ? update.updated : null;
+  if (!updated && !update?.available) return null;
+  return (
+    <div className="space-y-1.5 text-sm" data-testid="plugin-updates">
+      {updated && (
+        <p className="text-muted-foreground">
+          Updated to {updated.to}
+          {updated.from && ` from ${updated.from}`} on {new Date(updated.at).toLocaleDateString()}.
+        </p>
+      )}
+      {update?.available && (
+        <div className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+          <span>{update.available} is available.</span>
+          <Button size="sm" variant="outline" onClick={() => promptUpdate(entryKey, update.available!)}>
+            Update…
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
