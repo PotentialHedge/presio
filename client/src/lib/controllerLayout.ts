@@ -1,7 +1,7 @@
 // Controller dashboard card layout: configuration + persistence.
 //
 // The controller is a tiling window manager (react-mosaic) of cards: current
-// slide, next slide, thumbnails, and plugins' tiles. Cards always tile to fill the
+// slide, next slide, thumbnails, and plugins' panels. Cards always tile to fill the
 // screen, so removing or resizing one makes its neighbours grow rather than
 // leaving a hole. The layout is a tree (`MosaicNode`); a card is visible iff it
 // appears as a leaf in that tree. This module owns the card catalog, the
@@ -25,6 +25,7 @@ import {
 } from "react-mosaic-component";
 import type { MosaicNode, MosaicPath } from "react-mosaic-component";
 import { lsGet, lsSet, STORAGE_KEYS } from "./storage";
+import { PLUGIN_ID_RE } from "@shared/plugin/sources";
 
 interface CardConfig {
   key: string;
@@ -42,18 +43,20 @@ export const CARD_LABELS: Record<string, string> = Object.fromEntries(
   CARD_CONFIGS.map((c) => [c.key, c.label]),
 );
 
-/** Plugins with a tile surface get a card of their own, keyed by plugin id.
- *  Switching a plugin on adds its tile; only built-ins that used to be cards
- *  (the timer, speaker notes) are in the default layouts, where they were. */
-export const pluginTileKey = (pluginId: string) => `plugin:${pluginId}`;
-const TIMER_TILE = pluginTileKey("timer");
-const NOTES_TILE = pluginTileKey("notes");
-const PLUGIN_TILE_RE = /^plugin:[a-z0-9][a-z0-9-]{0,63}$/;
+/** Each panel a plugin contributes gets a card of its own, keyed by plugin id
+ *  and panel. Switching a plugin on adds its panels; only built-ins that used
+ *  to be cards (the timer, speaker notes) are in the default layouts, where
+ *  they were. */
+export const pluginPanelKey = (pluginId: string, panel: string) => `plugin:${pluginId}#${panel}`;
+const TIMER_TILE = pluginPanelKey("presio/timer", "timer");
+const NOTES_TILE = pluginPanelKey("presio/notes", "notes");
+const PLUGIN_PANEL_RE = /^plugin:(.+)#[A-Za-z][A-Za-z0-9_-]{0,63}$/;
 
 /** Whether a leaf can be a card: a built-in one, or a plugin's. Saved layouts
  *  keep plugin tiles even while that plugin isn't running (see restrictLayout). */
 function isCardKey(key: string): boolean {
-  return CARD_KEYS.includes(key) || PLUGIN_TILE_RE.test(key);
+  const panel = PLUGIN_PANEL_RE.exec(key);
+  return CARD_KEYS.includes(key) || (!!panel && PLUGIN_ID_RE.test(panel[1]));
 }
 
 /** Which form factor a layout belongs to. The phone and the desktop keep
@@ -194,7 +197,7 @@ function renameLeaf(node: MosaicNode<string> | null, from: string, to: string): 
 
 /**
  * The saved layout narrowed to the cards that can render right now: a plugin
- * tile stays in the stored tree while its plugin is off or still loading, but
+ * panel stays in the stored tree while its plugin is off or still loading, but
  * the dashboard can't draw it. Nothing is saved from here.
  */
 export function restrictLayout(

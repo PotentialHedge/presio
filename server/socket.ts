@@ -310,7 +310,7 @@ export function registerSocketHandlers(
       const next = new Map<string, PublishedPlugin>();
       for (const raw of payload.plugins.slice(0, MAX_PLUGINS_PER_SESSION)) {
         const plugin = sanitizePublishedPlugin(raw);
-        if (plugin) next.set(plugin.manifest.id, plugin);
+        if (plugin) next.set(plugin.id, plugin);
       }
       publishedPlugins.set(sessionId, next);
       io.to(sessionId).emit("plugins_state", pluginsState(sessionId));

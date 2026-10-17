@@ -60,19 +60,19 @@ import {
   addLeaf,
   removeLeaf,
   restrictLayout,
-  pluginTileKey,
+  pluginPanelKey,
   visibleKeys,
 } from "@/lib/controllerLayout";
 import { lsGetString, lsSetString, viewerOpenedKey } from "@/lib/storage";
 import { type MosaicNode } from "react-mosaic-component";
 import type { Deck } from "@/lib/deck";
 import type { PluginHostState } from "@/lib/plugins/usePluginHost";
-import { PluginBackgrounds, PluginButtons, PluginTile } from "@/components/plugins/PresenterPlugins";
+import { PluginBackgrounds, PluginButtons, PluginPanel } from "@/components/plugins/PresenterPlugins";
 import { SettingsFileSection } from "@/components/SettingsFileSection";
 import { SettingsDialog } from "@/components/controller/SettingsDialog";
 import { AddPluginPage, PluginPage } from "@/components/plugins/PluginSettings";
 import { pluginLabel, useInstalledPlugins } from "@/lib/plugins/installed";
-import type { PluginManifest } from "@/lib/plugins/manifest";
+import { findCommand, type LoadedPlugin } from "@/lib/plugins/manifest";
 
 // How long a pending "j<number>" jump waits for another digit before it
 // commits on its own. Long enough to type a second digit, short enough that the
@@ -108,8 +108,8 @@ interface ControllerViewProps {
   plugins: PluginHostState;
 }
 
-/** The Settings page for an installed plugin, by its URL. */
-const pluginPageId = (url: string) => `plugin:${url}`;
+/** The Settings page for an installed plugin, by its registry key (its source). */
+const pluginPageId = (key: string) => `plugin:${key}`;
 
 export function ControllerView({
   id,
@@ -317,7 +317,7 @@ export function ControllerView({
   useEffect(() => cancelJump, [cancelJump]);
 
   const { host: pluginHost, plugins: runningPlugins } = plugins;
-  // Plugins show the presenter's keys in their tooltips (presio.shortcut).
+  // Plugins show the presenter's keys in their tooltips (presio.commands.shortcut).
   useEffect(() => pluginHost.setKeymap(keymap), [pluginHost, keymap]);
 
   useEffect(() => {
@@ -363,7 +363,7 @@ export function ControllerView({
       } else if (!e.repeat) {
         // Plugins' keybindings, after Presio's own: a key both claim is ours.
         for (const plugin of runningPlugins) {
-          const { id: pluginId, contributes } = plugin.manifest;
+          const { id: pluginId, manifest: { contributes } } = plugin;
           const hit = contributes.keybindings.find((kb) => matchesBinding(e, pluginBindings(keymap, pluginId, kb)));
           if (hit) {
             e.preventDefault();
@@ -493,25 +493,37 @@ export function ControllerView({
   };
 
   // Dashboard card content + optional toolbar action for each key.
-  // Running plugins that contribute a dashboard tile, and every card the
+  // Running plugins' panels (a card each), and every card the
   // Layout settings can toggle.
-  const tilePlugins = plugins.plugins.filter((p) => p.manifest.surfaces.includes("tile"));
+  const panels = plugins.plugins.flatMap((plugin) =>
+    plugin.manifest.contributes.panels.map((panel) => ({ plugin, panel, key: pluginPanelKey(plugin.id, panel.id) }))
+  );
   const pluginErrors = useMemo(() => ({ ...plugins.errors, ...plugins.viewerErrors }), [plugins.errors, plugins.viewerErrors]);
   const installedPlugins = useInstalledPlugins(pluginErrors);
   // A plugin some viewers couldn't load: worth a look, but only in Settings.
-  const viewerFailedUrl = Object.keys(plugins.viewerErrors)[0];
+  const viewerFailedKey = Object.keys(plugins.viewerErrors)[0];
   // Enabled plugins' shortcuts in order: an earlier one wins a shared key.
-  const pluginShortcuts = installedPlugins.flatMap(({ entry, manifest }) =>
-    entry.enabled && manifest ? [{ id: manifest.id, name: manifest.name, keybindings: manifest.contributes.keybindings }] : []
+  const pluginShortcuts = installedPlugins.flatMap(({ entry, plugin }) =>
+    entry.enabled && plugin
+      ? [{
+          id: plugin.id,
+          name: plugin.manifest.displayName,
+          keybindings: plugin.manifest.contributes.keybindings.map((kb) => ({
+            ...kb,
+            label: findCommand(plugin.manifest, kb.command)?.title ?? kb.command,
+          })),
+        }]
+      : []
   );
-  // Switching on a plugin with a tile is asking to see it.
-  const showPluginTile = (manifest: PluginManifest) => {
-    const key = pluginTileKey(manifest.id);
-    if (manifest.surfaces.includes("tile") && !visible.has(key)) toggleCard(key);
+  // Switching on a plugin with panels is asking to see them.
+  const showPluginPanels = (plugin: LoadedPlugin) => {
+    for (const panel of plugin.manifest.contributes.panels) {
+      const key = pluginPanelKey(plugin.id, panel.id);
+      if (!visible.has(key)) toggleCard(key);
+    }
   };
-  const layoutKeys = [...CARD_KEYS, ...tilePlugins.map((p) => pluginTileKey(p.manifest.id))];
-  const cardLabel = (key: string) =>
-    CARD_LABELS[key] ?? tilePlugins.find((p) => pluginTileKey(p.manifest.id) === key)?.manifest.name ?? key;
+  const layoutKeys = [...CARD_KEYS, ...panels.map((p) => p.key)];
+  const cardLabel = (key: string) => CARD_LABELS[key] ?? panels.find((p) => p.key === key)?.panel.title ?? key;
 
   const cardContent: Record<string, CardEntry> = {
     currentSlide: {
@@ -534,11 +546,11 @@ export function ControllerView({
     thumbnails: {
       content: <ThumbnailsCard deck={deck} currentSlide={currentSlide} onGoTo={onGoTo} plugins={plugins} />,
     },
-    // Each running plugin with a tile surface gets a card of its own.
+    // Each panel a running plugin contributes gets a card of its own.
     ...Object.fromEntries(
-      tilePlugins.map((plugin) => [
-        pluginTileKey(plugin.manifest.id),
-        { title: plugin.manifest.name, content: <PluginTile host={plugins.host} plugin={plugin} /> },
+      panels.map(({ plugin, panel, key }) => [
+        key,
+        { title: panel.title, content: <PluginPanel host={plugins.host} plugin={plugin} panel={panel.id} /> },
       ])
     ),
   };
@@ -548,14 +560,14 @@ export function ControllerView({
 
   const desktopActions = (
     <>
-      {viewerFailedUrl && (
+      {viewerFailedKey && (
         <button
           type="button"
           onClick={() => {
-            setSettingsCategory(pluginPageId(viewerFailedUrl));
+            setSettingsCategory(pluginPageId(viewerFailedKey));
             setSettingsOpen(true);
           }}
-          title={plugins.viewerErrors[viewerFailedUrl]}
+          title={plugins.viewerErrors[viewerFailedKey]}
           data-testid="plugin-viewer-errors"
           className="inline-flex items-center justify-center h-8 w-8 rounded-md text-amber-500 hover:bg-amber-500/10 transition-colors"
         >
@@ -867,19 +879,19 @@ export function ControllerView({
             },
             // One page per installed plugin, then one to add another.
             ...installedPlugins.map((plugin) => ({
-              id: pluginPageId(plugin.entry.url),
+              id: pluginPageId(plugin.entry.key),
               group: "Plugins",
               label: pluginLabel(plugin),
               icon: Puzzle,
               dimmed: !plugin.entry.enabled,
-              description: plugin.manifest?.description,
+              description: plugin.plugin?.manifest.description,
               content: (
                 <PluginPage
                   plugin={plugin}
                   host={plugins.host}
-                  running={plugins.plugins.find((p) => p.url === plugin.entry.url)}
-                  onEnabled={showPluginTile}
-                  shortcutsBefore={pluginShortcuts.slice(0, Math.max(0, pluginShortcuts.findIndex((p) => p.id === plugin.manifest?.id)))}
+                  running={plugins.plugins.find((p) => p.key === plugin.entry.key)}
+                  onEnabled={showPluginPanels}
+                  shortcutsBefore={pluginShortcuts.slice(0, Math.max(0, pluginShortcuts.findIndex((p) => p.id === plugin.plugin?.id)))}
                 />
               ),
             })),
@@ -889,12 +901,12 @@ export function ControllerView({
               label: "Add plugin",
               icon: Plus,
               description:
-                "Load a plugin from its URL — its own site, or your dev server while you build one. Plugins can do anything Presio can, so only add ones you trust.",
+                "Load a plugin from GitHub (owner/name for a presio-<name> repo) or a URL — your dev server while you build one. Only load plugins you trust: a plugin can act as you on this device.",
               content: (
                 <AddPluginPage
-                  onAdded={(url, manifest) => {
-                    showPluginTile(manifest);
-                    setSettingsCategory(pluginPageId(url));
+                  onAdded={(key, plugin) => {
+                    showPluginPanels(plugin);
+                    setSettingsCategory(pluginPageId(key));
                   }}
                 />
               ),

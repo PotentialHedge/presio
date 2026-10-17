@@ -44,7 +44,7 @@ export function SlideLayers({
   const { host } = plugins;
   const layers = useSyncExternalStore(host.subscribeLayers, () => host.slideLayers(slide));
   const live = mode === "live" ? plugins.plugins.filter((p) => p.manifest.surfaces.includes("slide")) : [];
-  const liveIds = new Set(live.map((p) => p.manifest.id));
+  const liveIds = new Set(live.map((p) => p.id));
   const stills = layers.filter((l) => !liveIds.has(l.pluginId));
   const onPage = live.filter((p) => p.manifest.slideSurface !== "area");
   const onArea = live.filter((p) => p.manifest.slideSurface === "area");

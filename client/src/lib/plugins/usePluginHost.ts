@@ -20,9 +20,11 @@ import { resolvePluginSettings, useSettingsDocument } from "@/lib/settings";
 import { getSessionAuth } from "@/lib/utils";
 import { blobSha, type HistoryEntry, type HistoryLink, type SyncReply } from "./history";
 
-/** A plugin viewers run: where to load it, and what it must hash to. */
+/** A plugin viewers run: its id, where to load it, and what it must hash to. */
 interface PublishedPlugin {
-  manifest: Pick<PluginManifest, "id" | "name" | "version" | "author" | "description" | "surfaces" | "permissions">;
+  /** The id its source gives it; a viewer checks what it loads has the same. */
+  id: string;
+  manifest: Pick<PluginManifest, "name" | "displayName" | "version" | "author" | "description" | "surfaces" | "permissions">;
   /** As the presenter registered it: built-ins by path, so each viewer
    *  loads them from its own origin; others by absolute URL. */
   url: string;
@@ -67,7 +69,7 @@ function loadFailureReason(e: unknown, url: string): string {
 
 /** Plugins that run on audience devices, which the presenter publishes. */
 function runsOnViewers(manifest: Pick<PluginManifest, "surfaces">): boolean {
-  return manifest.surfaces.includes("viewer") || manifest.surfaces.includes("slide");
+  return manifest.surfaces.some((s) => s === "viewer" || s === "viewerSheet" || s === "slide");
 }
 
 function useTheme(): "light" | "dark" {
@@ -118,7 +120,10 @@ function usePagesReader(pdf: PDFDocumentProxy | null) {
 /** Enabled plugins from this browser's registry that the deck activates. */
 function useLocallyActivePlugins(enabled: boolean, readAll: () => Promise<PdfAttachment[]>) {
   const entries = usePluginEntries();
-  const urls = entries.filter((e) => e.enabled).map((e) => e.url).join("\n");
+  const enabledEntries = entries.filter((e) => e.enabled);
+  const entriesKey = enabledEntries.map((e) => `${e.key}\n${e.url}`).join("\n\n");
+  const entriesRef = useRef(enabledEntries);
+  useEffect(() => { entriesRef.current = enabledEntries; });
   const [plugins, setPlugins] = useState<LoadedPlugin[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -129,15 +134,16 @@ function useLocallyActivePlugins(enabled: boolean, readAll: () => Promise<PdfAtt
       const names = (await readAll()).map((a) => a.filename);
       const loaded: LoadedPlugin[] = [];
       const failed: Record<string, string> = {};
-      for (const url of urls ? urls.split("\n") : []) {
+      for (const entry of entriesRef.current) {
         try {
-          const plugin = await loadPlugin(url);
-          // First one wins if two sources declare the same id.
-          if (isActivatedBy(plugin.manifest, names) && !loaded.some((p) => p.manifest.id === plugin.manifest.id)) {
+          const plugin = await loadPlugin(entry.url, { source: entry.source, key: entry.key });
+          // Ids come from sources, so two entries only share one if the same
+          // plugin was added twice (as a URL and as GitHub): the first runs.
+          if (isActivatedBy(plugin.manifest, names) && !loaded.some((p) => p.id === plugin.id)) {
             loaded.push(plugin);
           }
         } catch (e) {
-          failed[url] = e instanceof Error ? e.message : String(e);
+          failed[entry.key] = e instanceof Error ? e.message : String(e);
         }
       }
       if (cancelled) return;
@@ -145,13 +151,13 @@ function useLocallyActivePlugins(enabled: boolean, readAll: () => Promise<PdfAtt
       // same plugin would remount its frames (this runs again once the deck's
       // attachments are read).
       setPlugins((prev) => {
-        const next = loaded.map((p) => prev.find((q) => q.hash === p.hash && q.manifest.id === p.manifest.id) ?? p);
+        const next = loaded.map((p) => prev.find((q) => q.hash === p.hash && q.id === p.id) ?? p);
         return next.length === prev.length && next.every((p, i) => p === prev[i]) ? prev : next;
       });
       setErrors(failed);
     })();
     return () => { cancelled = true; };
-  }, [enabled, urls, readAll]);
+  }, [enabled, entriesKey, readAll]);
 
   return { plugins: enabled ? plugins : [], errors };
 }
@@ -255,9 +261,9 @@ export interface PluginHostState {
   host: PluginHost;
   /** Plugins running on this device. */
   plugins: LoadedPlugin[];
-  /** Load failures by plugin URL (presenter only), for Settings. */
+  /** Load failures by registry key (presenter only), for Settings. */
   errors: Record<string, string>;
-  /** Presenter of a shared deck: plugins some viewers couldn't load, by URL. */
+  /** Presenter of a shared deck: plugins some viewers couldn't load, by registry key. */
   viewerErrors: Record<string, string>;
 }
 
@@ -306,7 +312,7 @@ export function usePluginHost({
 
   // Static layers belong to running plugins only, and downloads pass through
   // them in this order.
-  const runningIds = plugins.map((p) => p.manifest.id).join(",");
+  const runningIds = plugins.map((p) => p.id).join(",");
   useEffect(() => host.setRunning(runningIds ? runningIds.split(",") : []), [host, runningIds]);
 
   // Plugins keep their own copy of the server clock (presio.clock).
@@ -375,14 +381,14 @@ export function usePluginHost({
   const sentSettingsRef = useRef(new Map<string, string>());
   useEffect(() => {
     if (fromSession) return;
-    for (const { manifest } of plugins) {
-      const values = resolvePluginSettings(manifest.id, manifest.contributes.settings, settingsDoc);
-      host.setPluginSettings(manifest.id, values);
+    for (const { id: pluginId, manifest } of plugins) {
+      const values = resolvePluginSettings(pluginId, manifest.contributes.settings, settingsDoc);
+      host.setPluginSettings(pluginId, values);
       if (local !== false || !isPresenter || !socket.connected) continue;
       const json = JSON.stringify(values);
-      if (sentSettingsRef.current.get(manifest.id) === json) continue;
-      sentSettingsRef.current.set(manifest.id, json);
-      socket.emit("plugin_settings", { plugin: manifest.id, settings: values });
+      if (sentSettingsRef.current.get(pluginId) === json) continue;
+      sentSettingsRef.current.set(pluginId, json);
+      socket.emit("plugin_settings", { plugin: pluginId, settings: values });
     }
   }, [host, plugins, settingsDoc, fromSession, local, isPresenter]);
 
@@ -412,10 +418,11 @@ export function usePluginHost({
     const publish = () => {
       const plugins = pluginsRef.current
         .filter((p) => runsOnViewers(p.manifest))
-        .map(({ manifest, url, hash }): PublishedPlugin => ({
+        .map(({ id, manifest, url, hash }): PublishedPlugin => ({
+          id,
           manifest: {
-            id: manifest.id,
             name: manifest.name,
+            displayName: manifest.displayName,
             version: manifest.version,
             author: manifest.author,
             description: manifest.description,
@@ -439,9 +446,9 @@ export function usePluginHost({
       if (isPresenter) {
         // The server's copy can lag ours (it restarted, or we changed plugins
         // before joining): republish, and re-seed retained state it lost.
-        const server = new Map(state.plugins.map((p) => [p.manifest.id, p.hash]));
+        const server = new Map(state.plugins.map((p) => [p.id, p.hash]));
         const ours = pluginsRef.current.filter((p) => runsOnViewers(p.manifest));
-        const stale = ours.length !== server.size || ours.some((p) => server.get(p.manifest.id) !== p.hash);
+        const stale = ours.length !== server.size || ours.some((p) => server.get(p.id) !== p.hash);
         if (stale) publish();
         // Retained state is merged both ways: ours goes up where the server
         // has none, and a reloaded controller adopts what the server kept.
@@ -454,46 +461,40 @@ export function usePluginHost({
         // And our settings, which the server may not have (or had from an
         // earlier controller).
         sentSettingsRef.current.clear();
-        for (const { manifest } of pluginsRef.current) {
-          const values = resolvePluginSettings(manifest.id, manifest.contributes.settings);
-          sentSettingsRef.current.set(manifest.id, JSON.stringify(values));
-          socket.emit("plugin_settings", { plugin: manifest.id, settings: values });
+        for (const { id: pluginId, manifest } of pluginsRef.current) {
+          const values = resolvePluginSettings(pluginId, manifest.contributes.settings);
+          sentSettingsRef.current.set(pluginId, JSON.stringify(values));
+          socket.emit("plugin_settings", { plugin: pluginId, settings: values });
         }
         return;
       }
       for (const [plugin, values] of Object.entries(state.settings ?? {})) host.setPluginSettings(plugin, values);
       host.seedRetained(state.retained);
       // Fetch only what changed; the watchdog re-joins every 30s.
-      const current = new Map(pluginsRef.current.map((p) => [p.manifest.id, p]));
+      const current = new Map(pluginsRef.current.map((p) => [p.id, p]));
       const next: LoadedPlugin[] = [];
-      for (const { manifest, url, hash } of state.plugins) {
-        const have = current.get(manifest.id);
+      for (const { id, url, hash } of state.plugins) {
+        const have = current.get(id);
         if (have?.hash === hash) {
           next.push(have);
           continue;
         }
         try {
-          const loaded = await loadPlugin(url, hash);
-          next.push({
-            ...loaded,
-            // Run as published: contributions are the presenter's business
-            // (their settings arrive as values), and the deck already
-            // activated it there.
-            manifest: {
-              ...loaded.manifest,
-              activation: ["always"],
-              contributes: { buttons: [], keybindings: [], settings: {} },
-            },
-          });
+          const loaded = await loadPlugin(url, { expectedHash: hash });
+          // The id comes from where it's loaded from; the presenter's says the same.
+          if (loaded.id !== id) throw new Error(`it loaded as "${loaded.id}", not "${id}"`);
+          // Run as published: the deck already activated it there, and its
+          // settings arrive as the presenter's values.
+          next.push({ ...loaded, manifest: { ...loaded.manifest, activation: ["always"] } });
         } catch (e) {
           // Unreachable from here (a presenter's localhost dev server), or
           // changed since: this viewer goes without it, and says so to the
           // presenter (once per version: the watchdog re-joins every 30s).
-          console.warn(`Plugin ${manifest.id} not loaded:`, e);
-          const key = `${manifest.id}:${hash}`;
+          console.warn(`Plugin ${id} not loaded:`, e);
+          const key = `${id}:${hash}`;
           if (!reportedRef.current.has(key)) {
             reportedRef.current.add(key);
-            socket.emit("plugin_load_failed", { plugin: manifest.id, hash, reason: loadFailureReason(e, url) });
+            socket.emit("plugin_load_failed", { plugin: id, hash, reason: loadFailureReason(e, url) });
           }
         }
       }
@@ -539,7 +540,7 @@ export function usePluginHost({
   // the first publish.
   const publishKey = plugins
     .filter((p) => runsOnViewers(p.manifest))
-    .map((p) => `${p.manifest.id}:${p.hash}`)
+    .map((p) => `${p.id}:${p.hash}`)
     .join(",");
   const publishedOnceRef = useRef(false);
   useEffect(() => {
@@ -552,12 +553,12 @@ export function usePluginHost({
   // Only failures for the version running now: a fix republishes a new hash.
   const viewerErrors: Record<string, string> = {};
   for (const plugin of plugins) {
-    const failure = loadFailures[plugin.manifest.id];
+    const failure = loadFailures[plugin.id];
     if (!failure || failure.hash !== plugin.hash) continue;
     const reasons = Object.values(failure.senders);
     if (!reasons.length) continue;
     const n = reasons.length;
-    viewerErrors[plugin.url] = `${n} viewer${n === 1 ? "" : "s"} couldn't load it: ${reasons[0]}`;
+    viewerErrors[plugin.key] = `${n} viewer${n === 1 ? "" : "s"} couldn't load it: ${reasons[0]}`;
   }
 
   return { host, plugins, errors: localActive.errors, viewerErrors };

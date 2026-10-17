@@ -15,14 +15,14 @@ import {
 import { STORAGE_KEYS } from "./storage";
 
 describe("controllerLayout helpers", () => {
-  it("DEFAULT_LAYOUT exposes every card, and the built-in plugins' tiles, as a leaf", () => {
-    expect(visibleKeys(DEFAULT_LAYOUT).sort()).toEqual([...CARD_KEYS, "plugin:notes", "plugin:timer"].sort());
+  it("DEFAULT_LAYOUT exposes every card, and the built-in plugins' panels, as a leaf", () => {
+    expect(visibleKeys(DEFAULT_LAYOUT).sort()).toEqual([...CARD_KEYS, "plugin:presio/notes#notes", "plugin:presio/timer#timer"].sort());
   });
 
   it("removeLeaf drops a card and neighbours remain", () => {
-    const without = removeLeaf(DEFAULT_LAYOUT, "plugin:timer");
+    const without = removeLeaf(DEFAULT_LAYOUT, "plugin:presio/timer#timer");
     const keys = visibleKeys(without);
-    expect(keys).not.toContain("plugin:timer");
+    expect(keys).not.toContain("plugin:presio/timer#timer");
     expect(keys).toContain("nextSlide");
     expect(keys).toHaveLength(visibleKeys(DEFAULT_LAYOUT).length - 1);
   });
@@ -65,9 +65,9 @@ describe("layouts saved by react-mosaic v6", () => {
     const loaded = loadLayout("desktop");
 
     // Not the fallback — the user's own arrangement survived, with the old
-    // timer and notes cards now the built-in plugins' tiles.
+    // timer and notes cards now the built-in plugins' panels.
     expect(loaded).not.toEqual(DEFAULT_LAYOUT);
-    expect(visibleKeys(loaded).sort()).toEqual(["currentSlide", "plugin:notes", "plugin:timer"]);
+    expect(visibleKeys(loaded).sort()).toEqual(["currentSlide", "plugin:presio/notes#notes", "plugin:presio/timer#timer"]);
 
     // And it came back in the n-ary shape the new Mosaic understands.
     expect(loaded).toMatchObject({ type: "split", direction: "row" });

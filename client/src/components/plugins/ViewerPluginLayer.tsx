@@ -24,7 +24,7 @@ export function ViewerPluginLayer({ host, plugins }: { host: PluginHost; plugins
 
 function ViewerPlugin({ host, plugin }: { host: PluginHost; plugin: LoadedPlugin }) {
   const [visible, setVisible] = useState(false);
-  const { name, author } = plugin.manifest;
+  const { displayName: name, author } = plugin.manifest;
   return (
     <div className={cn("absolute inset-0 z-30", !visible && "invisible pointer-events-none")}>
       <PluginFrame host={host} plugin={plugin} surface="viewer" onVisibleChange={setVisible} className="w-full h-full" />

@@ -19,6 +19,7 @@ export function PluginFrame({
   host,
   plugin,
   surface,
+  panel,
   onVisibleChange,
   onInteractiveChange,
   onReady,
@@ -32,6 +33,8 @@ export function PluginFrame({
   host: PluginHost;
   plugin: LoadedPlugin;
   surface: PluginSurface;
+  /** Panel surface: which of the plugin's panels this frame draws. */
+  panel?: string;
   onVisibleChange?: (visible: boolean) => void;
   onInteractiveChange?: (value: Interactive) => void;
   /** The plugin's document is in place — e.g. to listen to it (same origin). */
@@ -70,14 +73,21 @@ export function PluginFrame({
     const boot = () => {
       if (connection) return;
       const { port1, port2 } = new MessageChannel();
-      connection = host.connect(plugin, surface, port1, {
-        onVisible: (v) => hooksRef.current.onVisibleChange?.(v),
-        onInteractive: (v) => hooksRef.current.onInteractiveChange?.(v),
-        onReady: () => hooksRef.current.onReady?.(frame),
-      });
+      connection = host.connect(
+        plugin,
+        surface,
+        port1,
+        {
+          onVisible: (v) => hooksRef.current.onVisibleChange?.(v),
+          onInteractive: (v) => hooksRef.current.onInteractiveChange?.(v),
+          onReady: () => hooksRef.current.onReady?.(frame),
+        },
+        panel
+      );
       setLink(connection);
+      // The handshake: protocol, capabilities and context, with the port.
       frame.contentWindow?.postMessage(
-        { type: "presio:boot", html: plugin.html, context: host.frameContext(plugin, surface) },
+        host.bootMessage(plugin, surface, panel),
         // Same origin as this page: it's the frame page this component loaded.
         window.location.origin,
         [port2]
@@ -93,7 +103,7 @@ export function PluginFrame({
       connection?.disconnect();
       setLink(null);
     };
-  }, [host, plugin, surface, hooksRef, ref]);
+  }, [host, plugin, surface, panel, hooksRef, ref]);
 
   return (
     <iframe
@@ -101,8 +111,8 @@ export function PluginFrame({
       src="/plugin-frame.html"
       // Players inside (YouTube, Vimeo, <video>) may autoplay and go fullscreen.
       allow="autoplay; fullscreen; picture-in-picture"
-      title={plugin.manifest.name}
-      data-testid={`plugin-frame-${plugin.manifest.id}-${surface}`}
+      title={plugin.manifest.displayName}
+      data-testid={`plugin-frame-${plugin.id}-${surface}${panel ? `-${panel}` : ""}`}
       className={cn("border-0 bg-transparent", className)}
       style={style}
     />

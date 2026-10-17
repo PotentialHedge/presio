@@ -8,7 +8,16 @@ is enough (see [Publish on GitHub](#publish-on-github)) — or from
 `http://localhost` while you build it.
 
 Like a VS Code extension, a plugin never edits Presio's interface: it
-*declares* what it adds, and Presio draws it.
+*declares* what it adds — commands, the buttons and keys that run them,
+dashboard panels, settings — and Presio draws it.
+
+A plugin's **id** isn't declared: it comes from where the plugin is loaded
+from. A repo `github:alice/presio-poll` (or the shorthand `alice/poll`) is
+`alice/poll`; a repo not named `presio-…` keeps its name
+(`github:alice/kit` is `alice/kit`); a plugin in a folder of a repo takes the
+folder's name; one served from any other URL is `url:<host>/<name>`, with
+`name` from its manifest. Built-ins are `presio/*`. Settings, keybindings,
+storage, retained messages and histories are all keyed by it.
 
 ## Files
 
@@ -21,8 +30,9 @@ index.html
 
 ```json
 {
-  "id": "hello",
-  "name": "Hello",
+  "presio": 1,
+  "name": "hello",
+  "displayName": "Hello",
   "version": "0.1.0",
   "author": "you",
   "description": "One line shown in Settings → Plugins.",
@@ -31,11 +41,14 @@ index.html
   "activation": ["always"],
   "permissions": [],
   "contributes": {
+    "commands": [
+      { "id": "toggle", "title": "Say hello", "icon": "sparkles" }
+    ],
     "buttons": [
-      { "id": "toggle", "label": "Hello", "icon": "sparkles", "location": "controller.toolbar" }
+      { "command": "toggle", "location": "controller.toolbar", "label": "Hello" }
     ],
     "keybindings": [
-      { "command": "toggle", "label": "Say hello", "keys": [{ "key": "h" }] }
+      { "command": "toggle", "keys": [{ "key": "h" }] }
     ],
     "settings": {
       "greeting": { "type": "string", "default": "Hello!", "description": "What viewers see." }
@@ -44,12 +57,19 @@ index.html
 }
 ```
 
+- `presio` — the plugin API's major version, `1`. Required.
+- `name` — a slug (`a-z`, `0-9`, `-`); `displayName` is what people see.
+- `version` — semver; release it under the git tag `v` + version.
+- `dependencies` — other plugins it needs, `{ "github:alice/presio-quiz-core": "^1.0.0" }`
+  (validated; loading them comes later).
+
 - `surfaces` — where the plugin runs (the same HTML in each):
   - `background`: hidden, on the presenter's device, for as long as the deck
-    is open. Keep state here and handle your buttons.
-  - `tile`: a card of its own on the presenter's dashboard, titled with the
-    plugin's name. Switching the plugin on adds it; the presenter can move,
-    resize and hide it like any other card.
+    is open. Keep state here and handle your commands.
+  - `panel`: a card on the presenter's dashboard for each entry in
+    `contributes.panels` (`{ "id", "title" }`); `presio.panel` says which.
+    Switching the plugin on adds them; the presenter can move, resize and
+    hide them like any other card.
   - `viewer`: a full-screen layer on every viewer screen (projector and
     audience phones), hidden until the plugin calls `presio.ui.setVisible(true)`.
   - `slide`: a layer over the slide itself, sized to the page, on the
@@ -81,35 +101,43 @@ index.html
 - `permissions` — `"deck"` to read the PDF (its bytes and embedded
   attachments); `"editDeck"` to save an edited PDF over it from the presenter's
   device; `"history"` to keep an edit history for the deck (`presio.history`)
-  and blobs (`presio.blobs`).
-- `contributes.buttons` — up to 4 buttons Presio draws natively. `location`:
-  `controller.toolbar` (the controller's bottom bar),
-  `controller.currentSlide` (the current slide card's header, as an icon with
-  the label as its tooltip) or `settings` (under **Actions** on the plugin's
-  page in Settings — for what's used now and then, like exporting its data).
-  `icon` is one of `qr-code bar-chart message users timer bell star sparkles
-  hand check eye megaphone pen download upload`. With `accept` (an `<input
-  accept>` value, e.g. `".json,application/json"`) Presio asks the presenter
-  for a file first and the press arrives with it. Presses go to the
-  `background` surface, or the `tile` when there is none — so a plugin with
-  buttons needs one of the two. A button can also carry a small menu beside
-  it, set at runtime with `presio.ui.setButton(id, { menu })` (e.g. which
-  microphone to use); picks arrive at `presio.onMenu(id, …)`.
-- `contributes.keybindings` — up to 16 keyboard shortcuts for the presenter's
-  controller, each a `command` id, a `label` and default `keys` (up to 3, each
-  `{ "key": KeyboardEvent.key, "meta"?: true }`). They're listed under the
-  plugin's name in **Settings → Keyboard shortcuts**, where the presenter can
-  rebind them (stored in the `keybindings` setting as `<id>.<command>`).
-  Presses reach `presio.onCommand(command, …)` where buttons go (background,
-  else tile). They never fire while the presenter types in a field, and
-  Presio's own shortcuts win where keys overlap (arrows, Space, PgUp/PgDn,
-  `b`, `c`, `j` then digits) — Settings marks such a key as taken. The
-  built-ins use `k` and `r` (media) and `p`, `h`, `l`, `e`, Esc, ⌘Z and ⌘Y
-  (drawing). `presio.shortcut(command)` gives the key the presenter has for
-  one ("E", "⌘Z", or null), to show in a tooltip.
+  and blobs (`presio.blobs`). `"audience"` is reserved for collecting
+  viewers' input and not served yet. An unknown permission is an error.
+- `contributes.commands` — what the plugin can do: `{ "id", "title", "icon"?,
+  "category"? }`. Handle each with `presio.commands.register(id, handler)` in
+  a frame (usually `background`); the handler gets the call's args and what it
+  returns is the result. Buttons and keybindings run commands, and other
+  plugins can too: `presio.commands.execute("alice/poll.open", args)`.
+- `contributes.buttons` — up to 8 buttons Presio draws natively, each running
+  a `command`. `location`: `controller.toolbar` (the controller's bottom
+  bar), `controller.currentSlide` (the current slide card's header, as an icon
+  with the label as its tooltip) or `settings` (under **Actions** on the
+  plugin's page in Settings); `thumbnail.context` and `viewer.toolbar` are
+  reserved. `label` and `icon` default to the command's. `icon` is one of
+  `qr-code bar-chart message users timer bell star sparkles hand check eye
+  megaphone pen download upload`. With `accept` (an `<input accept>` value,
+  e.g. `".json,application/json"`) Presio asks the presenter for a file first
+  and the command runs with `{ file }`. A plugin with presenter buttons needs a
+  `background` or `panel` surface to handle them. A button can carry a small
+  menu, set at runtime with `presio.ui.setButton(command, { menu })`; a pick
+  runs the command with `{ menuItem }`.
+- `contributes.keybindings` — default keys for commands on the presenter's
+  controller: `{ "command", "keys" }`, up to 3 keys each `{ "key":
+  KeyboardEvent.key, "meta"?: true }` (an empty list makes the command
+  bindable with no default). They're listed under the plugin's name in
+  **Settings → Keyboard shortcuts**, where the presenter can rebind them
+  (stored in the `keybindings` setting as `<plugin id>.<command>`). They never
+  fire while the presenter types in a field, and Presio's own shortcuts win
+  where keys overlap (arrows, Space, PgUp/PgDn, `b`, `c`, `j` then digits) —
+  Settings marks such a key as taken. The built-ins use `k` and `r` (media)
+  and `p`, `h`, `l`, `e`, Esc, ⌘Z and ⌘Y (drawing).
+  `presio.commands.shortcut(command)` gives the key the presenter has for one
+  ("E", "⌘Z", or null), to show in a tooltip.
+- `contributes.panels` — dashboard cards for the `panel` surface.
+- `contributes.status` — reserved: small text in the controller's header.
 - `contributes.settings` — settings Presio shows under the plugin in
   **Settings → Plugins** and stores in the presenter's settings file as
-  `<id>.<name>` (e.g. `hello.greeting`). Types: `boolean`, `number`
+  `<plugin id>.<name>` (e.g. `alice/hello.greeting`). Types: `boolean`, `number`
   (`minimum`, `maximum`; a `null` default makes it optional), `string`
   (`maxLength`), `enum` (`values`, optional `labels`). Every setting needs a
   `default` that fits it. Viewers run with the presenter's values.
@@ -129,7 +157,7 @@ audience member's own Presio account is stored.
 ## Files and loading
 
 The manifest's `main` page is written into the frame with its document base
-set to the plugin's own folder (`presio.baseUrl`), so its scripts, styles,
+set to the plugin's own folder (`presio.plugin.baseUrl`), so its scripts, styles,
 images and any chunks it imports load from your server with ordinary relative
 URLs. Split what only some surfaces need into separate chunks (a dynamic
 `import()`), so viewers download only the code their surface runs — e.g. a
@@ -150,8 +178,17 @@ for the next slide) no longer also presses the focused button.
 
 ## The `presio` API
 
+Every call travels over a MessagePort as `{ v: 1, kind: "call" | "result" |
+"error" | "event", id?, method, params }`. A failed call rejects with an
+Error whose `code` is `MethodNotFound`, `PermissionDenied`, `InvalidParams`,
+`Unavailable` or `Internal`.
+
 ```js
-presio.surface          // "background" | "tile" | "viewer" | "slide"
+presio.apiVersion       // 1
+presio.supports(cap)    // what this Presio can do, e.g. presio.supports("audience")
+presio.plugin           // { id, name, displayName, version, baseUrl }
+presio.surface          // "background" | "panel" | "viewerSheet" | "viewer" | "slide"
+presio.panel            // panel surface: which contributes.panels entry; else null
 presio.role             // "presenter" | "audience"
 presio.theme            // "light" | "dark" (the app's theme)
 presio.session          // { id, local, joinUrl } — joinUrl is null for a local deck
@@ -159,10 +196,9 @@ presio.slide.current    // 1-based slide on this device
 presio.slide.total
 presio.slide.onChange(slide => {})         // → unsubscribe()
 presio.onContextChange(presio => {})       // session/role/theme or shortcuts changed
-presio.shortcut(command)                   // the presenter's key for a keybinding: "E", "⌘Z" or null
 
-presio.send(type, payload, { retain, volatile })  // message the plugin's other instances
-presio.onMessage(({ type, payload, from, sender }) => {})
+presio.messages.send(type, payload, { retain, volatile })  // message the plugin's other instances
+presio.messages.onMessage(({ type, payload, from, sender }) => {})
 
 presio.settings.get(name)                  // this plugin's setting (presenter's value)
 presio.settings.all
@@ -174,13 +210,11 @@ presio.storage.set(key, value)             // JSON, 16 KB per plugin; set(key) r
 presio.storage.all
 presio.storage.onChange(storage => {})     // another surface of this plugin changed it
 
-presio.onButton(id, (id, file) => {})      // a contributed button was pressed; with "accept",
-                                           // file is { name, type, bytes: Uint8Array }
-presio.ui.setButton(id, { active, label, disabled, menu })  // presenter: update it (replaces the last call)
-                                           // menu: [{ id, label, checked?, disabled? } | { heading } | { separator: true }],
-                                           // drawn as a small menu beside the button
-presio.onMenu(id, (item, id) => {})        // an item was picked from button `id`'s menu
-presio.onCommand(command, () => {})        // a contributed keybinding was pressed
+presio.commands.register(id, args => result)  // handle a command; buttons pass { file } or { menuItem }
+presio.commands.execute("<plugin id>.<command>", args)  // → Promise of the handler's result (on this device)
+presio.commands.shortcut(id)               // the presenter's key for a command: "E", "⌘Z" or null
+presio.ui.setButton(command, { active, label, disabled, menu })  // update its buttons (replaces the last call)
+                                           // menu: [{ id, label, checked?, disabled? } | { heading } | { separator: true }]
 
 presio.deck.attachments()   // → Promise<[{ filename, bytes: Uint8Array }]> ("deck" permission)
 presio.deck.bytes()         // → Promise<Uint8Array>, the PDF itself ("deck")
@@ -217,7 +251,7 @@ presio.blobs.get(sha)       // → Promise<Blob | null>, fetched only when asked
 
 Storage: `presio.storage` is the presenter's per-session state on their own
 device. It survives a reload and is shared by the plugin's surfaces there
-(e.g. a background and a tile), but never leaves the device — use messages
+(e.g. a background and a panel), but never leaves the device — use messages
 for anything viewers need. On audience devices it is empty and `set` does
 nothing.
 
@@ -228,7 +262,7 @@ gets the PDF in turn, in the presenter's plugin order, and resolves to the PDF
 to pass on — the place to bake in what the plugin shows live (the media plugin
 draws each video's poster onto its page, the drawing plugin each stroke).
 Handlers see the deck with its attachments still in. Register one handler per
-plugin per device — on the presenter's, the `background` surface (or the tile)
+plugin per device — on the presenter's, the `background` surface (or a panel)
 is used first; a viewer's download uses whichever surface registered one. A
 handler that throws or takes over a minute is skipped. "Original file" never
 passes through plugins.
@@ -305,10 +339,13 @@ A public GitHub repo is all a plugin needs: put `presio-plugin.json` and its
 files at the repo root (or in a folder), commit, and presenters add it as
 
 ```
-github:you/your-plugin            # latest release, else newest tag, else main's current commit
-github:you/your-plugin@v1.2.0     # a tag, branch or commit
-github:you/your-plugin@v1.2.0/dist   # the plugin in a folder
+you/name                          # shorthand for github:you/presio-name
+github:you/presio-name            # latest release, else newest tag, else main's current commit
+github:you/presio-name@v1.2.0     # a tag, branch or commit
+github:you/kit@v1.2.0/plugins/poll   # the plugin in a folder (id you/poll)
 ```
+
+Name the repo `presio-<name>`: its plugin's id is then `you/<name>`.
 
 (or paste the repo's `github.com` link). Presio serves it through jsDelivr
 (`https://cdn.jsdelivr.net/gh/you/your-plugin@<ref>/`) and always pins the
@@ -338,7 +375,7 @@ rebind it — so pick a key Presio doesn't use.
 The built-in Join Code plugin is a complete example:
 [manifest](BASE/plugins/join-code/presio-plugin.json),
 [index.html](BASE/plugins/join-code/index.html). The built-in Timer
-([manifest](BASE/plugins/timer/presio-plugin.json)) shows a tile and a
+([manifest](BASE/plugins/timer/presio-plugin.json)) shows a panel and a
 background sharing `presio.storage`, and Speaker Notes
 ([manifest](BASE/plugins/notes/presio-plugin.json)) reads notes out of the PDF
 and saves edits back with `presio.deck.save` — both React. Media and Drawing
@@ -353,5 +390,5 @@ samples stamped with `presio.clock.now()` that viewers follow, posters as
 and laser: a `slide` surface that takes input while a tool is active and only
 its palette otherwise, strokes streamed as they're drawn and kept as
 per-slide `retain: "deck"` chunks, a volatile laser, previews as
-`presio.layers`, a header button and keybindings, and an `onExport` handler
+`presio.layers`, commands run from a header button and keybindings, and an `onExport` handler
 that bakes the strokes into the PDF as vectors.

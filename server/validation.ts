@@ -1,3 +1,6 @@
+import { PLUGIN_ID_RE } from "../shared/plugin/sources.js";
+import { MAX_MESSAGE_BYTES, MESSAGE_TYPE_RE } from "../shared/plugin/protocol.js";
+
 // Pure validation/sanitization helpers, factored out of the request/socket
 // handlers so they can be unit-tested without a server or Supabase.
 
@@ -58,11 +61,13 @@ export function isValidSlideNumber(slideNumber: unknown, total: unknown): boolea
 // published (where to load them — never the plugins themselves). These caps
 // bound what a controller or viewer can make it hold.
 
-export const PLUGIN_ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
-const PLUGIN_TYPE_RE = /^[A-Za-z0-9_.:-]{1,64}$/;
+// Plugin ids are derived from where a plugin is loaded from ("presio/timer",
+// "alice/poll", "url:localhost:5174/demo"; see shared/plugin/sources.ts).
+export { PLUGIN_ID_RE };
+const PLUGIN_TYPE_RE = MESSAGE_TYPE_RE;
 // A plugin page's SHA-256, hex.
 const HASH_RE = /^[0-9a-f]{64}$/;
-const MAX_PLUGIN_PAYLOAD_BYTES = 16 * 1024;
+const MAX_PLUGIN_PAYLOAD_BYTES = MAX_MESSAGE_BYTES;
 export const MAX_PLUGINS_PER_SESSION = 8;
 // Retained messages are a plugin's state for late joiners, one message per
 // piece of it — a drawing keeps each slide's strokes in a few. So a plugin may
@@ -85,8 +90,8 @@ export interface PluginEvent {
 }
 
 interface PluginManifest {
-  id: string;
   name: string;
+  displayName?: string;
   version: string;
   author?: string;
   description?: string;
@@ -94,10 +99,11 @@ interface PluginManifest {
   permissions: string[];
 }
 
-/** A plugin the presenter runs on viewers: where they load it from, and the
- *  hash of its HTML, which viewers check what they load against. The server
- *  never carries the plugin itself. */
+/** A plugin the presenter runs on viewers: its id, where they load it from,
+ *  and the hash of its HTML, which viewers check what they load against. The
+ *  server never carries the plugin itself. */
 export interface PublishedPlugin {
+  id: string;
   manifest: PluginManifest;
   url: string;
   hash: string;
@@ -158,10 +164,10 @@ const shortString = (v: unknown, max: number): string | undefined =>
 // can publish, but it is still client input, so everything is re-checked here.
 export function sanitizePublishedPlugin(raw: unknown): PublishedPlugin | null {
   if (typeof raw !== "object" || raw === null) return null;
-  const b = raw as { manifest?: Record<string, unknown>; url?: unknown; hash?: unknown };
+  const b = raw as { id?: unknown; manifest?: Record<string, unknown>; url?: unknown; hash?: unknown };
   const m = b.manifest;
   if (typeof m !== "object" || m === null) return null;
-  if (typeof m.id !== "string" || !PLUGIN_ID_RE.test(m.id)) return null;
+  if (typeof b.id !== "string" || !PLUGIN_ID_RE.test(b.id)) return null;
   const name = shortString(m.name, 80);
   const version = shortString(m.version, 32);
   if (!name || !version) return null;
@@ -175,9 +181,10 @@ export function sanitizePublishedPlugin(raw: unknown): PublishedPlugin | null {
   if (!/^(\/(?!\/)|https?:\/\/)/i.test(url)) return null;
   if (typeof b.hash !== "string" || !HASH_RE.test(b.hash)) return null;
   return {
+    id: b.id,
     manifest: {
-      id: m.id,
       name,
+      displayName: shortString(m.displayName, 80),
       version,
       author: shortString(m.author, 80),
       description: shortString(m.description, 300),

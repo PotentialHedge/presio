@@ -31,11 +31,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import type { ButtonMenuEntry, PluginHost } from "@/lib/plugins/host";
-import type { ButtonContribution, ButtonLocation, LoadedPlugin } from "@/lib/plugins/manifest";
+import { findCommand, type ButtonContribution, type ButtonLocation, type LoadedPlugin } from "@/lib/plugins/manifest";
 import { PluginFrame } from "./PluginFrame";
 
 // The presenter's side of plugins, drawn by Presio from what each plugin
-// declares: its tile, its hidden background frame, and its buttons.
+// declares: its panels, its hidden background frame, and the buttons that run
+// its commands.
 
 const ICONS: Record<string, LucideIcon> = {
   "qr-code": QrCode,
@@ -55,9 +56,9 @@ const ICONS: Record<string, LucideIcon> = {
   upload: Upload,
 };
 
-/** A plugin's dashboard card. */
-export function PluginTile({ host, plugin }: { host: PluginHost; plugin: LoadedPlugin }) {
-  return <PluginFrame host={host} plugin={plugin} surface="tile" className="w-full h-full" />;
+/** One of a plugin's panels, in its dashboard card. */
+export function PluginPanel({ host, plugin, panel }: { host: PluginHost; plugin: LoadedPlugin; panel: string }) {
+  return <PluginFrame host={host} plugin={plugin} surface="panel" panel={panel} className="w-full h-full" />;
 }
 
 /** Background surfaces: mounted for as long as the deck is open, never shown. */
@@ -95,12 +96,12 @@ export function PluginButtons({
 }
 
 /**
- * Press a plugin's button. One that asks for a file is picked here, by
- * Presio: the click is Presio's, and a plugin's frame couldn't open a file
- * picker on it.
+ * Press a plugin's button: run its command. One that asks for a file is
+ * picked here, by Presio: the click is Presio's, and a plugin's frame
+ * couldn't open a file picker on it.
  */
 function press(host: PluginHost, pluginId: string, button: ButtonContribution) {
-  if (!button.accept) return host.pressButton(pluginId, button.id);
+  if (!button.accept) return host.pressButton(pluginId, button.command);
   const input = document.createElement("input");
   input.type = "file";
   input.accept = button.accept;
@@ -108,20 +109,24 @@ function press(host: PluginHost, pluginId: string, button: ButtonContribution) {
     const file = input.files?.[0];
     if (!file) return;
     const bytes = new Uint8Array(await file.arrayBuffer());
-    host.pressButton(pluginId, button.id, { name: file.name, type: file.type, bytes });
+    host.pressButton(pluginId, button.command, { name: file.name, type: file.type, bytes });
   };
   input.click();
 }
 
 function PluginButtonGroup({ host, plugin, location }: { host: PluginHost; plugin: LoadedPlugin; location: ButtonLocation }) {
-  const { id, name } = plugin.manifest;
+  const { id, manifest } = plugin;
+  const name = manifest.displayName;
   const states = useSyncExternalStore(host.subscribeButtons, () => host.buttonStates(id));
   return (
     <>
-      {plugin.manifest.contributes.buttons
+      {manifest.contributes.buttons
         .filter((b) => b.location === location)
-        .map((button) => {
-          const state = states[button.id] ?? {};
+        .map((b) => {
+          // A button shows its command's title and icon unless it has its own.
+          const command = findCommand(manifest, b.command);
+          const button = { ...b, label: b.label ?? command?.title ?? b.command, icon: b.icon ?? command?.icon };
+          const state = states[button.command] ?? {};
           const Icon = button.icon ? ICONS[button.icon] : undefined;
           const title = `${button.tooltip ?? state.label ?? button.label} (${name})`;
           const menu = state.menu && (
@@ -139,12 +144,12 @@ function PluginButtonGroup({ host, plugin, location }: { host: PluginHost; plugi
             // A card header's small icon action; the label is its tooltip.
             const icon = (
               <button
-                key={button.id}
+                key={button.command}
                 type="button"
                 disabled={state.disabled}
                 aria-pressed={state.active}
                 aria-label={state.label ?? button.label}
-                data-testid={`plugin-button-${id}-${button.id}`}
+                data-testid={`plugin-button-${id}-${button.command}`}
                 title={title}
                 onClick={() => press(host, id, button)}
                 className={cn(
@@ -156,7 +161,7 @@ function PluginButtonGroup({ host, plugin, location }: { host: PluginHost; plugi
               </button>
             );
             return menu ? (
-              <span key={button.id} className="inline-flex items-center">
+              <span key={button.command} className="inline-flex items-center">
                 {icon}
                 {menu}
               </span>
@@ -168,12 +173,12 @@ function PluginButtonGroup({ host, plugin, location }: { host: PluginHost; plugi
           const inSettings = location === "settings";
           const main = (
             <Button
-              key={button.id}
+              key={button.command}
               variant={inSettings ? "outline" : state.active ? "default" : "ghost"}
               size="sm"
               disabled={state.disabled}
               aria-pressed={inSettings ? undefined : state.active}
-              data-testid={`plugin-button-${id}-${button.id}`}
+              data-testid={`plugin-button-${id}-${button.command}`}
               title={inSettings ? button.tooltip : title}
               onClick={() => press(host, id, button)}
             >
@@ -182,7 +187,7 @@ function PluginButtonGroup({ host, plugin, location }: { host: PluginHost; plugi
             </Button>
           );
           return menu ? (
-            <ButtonGroup key={button.id}>
+            <ButtonGroup key={button.command}>
               {main}
               {menu}
             </ButtonGroup>
@@ -196,7 +201,8 @@ function PluginButtonGroup({ host, plugin, location }: { host: PluginHost; plugi
 
 /**
  * The small menu a plugin can put beside one of its buttons (setButton's
- * `menu`): a chevron that opens it, and picks sent to presio.onMenu. It opens
+ * `menu`): a chevron that opens it, a pick running the button's command
+ * with { menuItem }. It opens
  * upward from the bottom bar, like Download PDF's.
  */
 function ButtonMenu({
@@ -210,7 +216,7 @@ function ButtonMenu({
 }: {
   host: PluginHost;
   pluginId: string;
-  button: ButtonContribution;
+  button: ButtonContribution & { label: string };
   entries: ButtonMenuEntry[];
   label: string;
   /** The button's own state, which the toolbar's chevron matches. */
@@ -226,7 +232,7 @@ function ButtonMenu({
           <button
             type="button"
             aria-label={`${label} options`}
-            data-testid={`plugin-menu-${pluginId}-${button.id}`}
+            data-testid={`plugin-menu-${pluginId}-${button.command}`}
             className="inline-flex items-center justify-center h-5 w-3.5 rounded text-muted-foreground hover:text-foreground hover:bg-accent"
           >
             <Chevron size={11} />
@@ -237,7 +243,7 @@ function ButtonMenu({
             variant={location === "settings" ? "outline" : active ? "default" : "ghost"}
             size="sm"
             aria-label={`${label} options`}
-            data-testid={`plugin-menu-${pluginId}-${button.id}`}
+            data-testid={`plugin-menu-${pluginId}-${button.command}`}
             className="px-1.5"
           >
             <Chevron size={14} />
@@ -257,8 +263,8 @@ function ButtonMenu({
               key={i}
               checked={entry.checked ?? false}
               disabled={entry.disabled}
-              data-testid={`plugin-menu-item-${pluginId}-${button.id}-${i}`}
-              onSelect={() => host.pickMenuItem(pluginId, button.id, entry.id)}
+              data-testid={`plugin-menu-item-${pluginId}-${button.command}-${i}`}
+              onSelect={() => host.pickMenuItem(pluginId, button.command, entry.id)}
             >
               <span className="truncate">{entry.label}</span>
             </DropdownMenuCheckboxItem>

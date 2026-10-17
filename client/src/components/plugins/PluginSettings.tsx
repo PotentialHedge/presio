@@ -2,27 +2,46 @@ import { useState } from "react";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { PluginHost } from "@/lib/plugins/host";
-import type { LoadedPlugin, PluginManifest, PluginSettingSpec } from "@/lib/plugins/manifest";
+import {
+  findCommand,
+  type ButtonLocation,
+  type LoadedPlugin,
+  type PluginPermission,
+  type PluginSettingSpec,
+  type PluginSurface,
+} from "@/lib/plugins/manifest";
 import { resolvePluginSettings, setPluginSetting, useSetting, useSettingsDocument } from "@/lib/settings";
 import { formatBinding, pluginBindings, shortcutTakenBy, type PluginShortcutSet } from "@/lib/keymap";
 import { addPlugin, describePluginUrl, removePlugin, setPluginEnabled } from "@/lib/plugins/registry";
 import { pluginLabel, type InstalledPlugin } from "@/lib/plugins/installed";
+import { qualify } from "@shared/plugin/sources";
 import { PluginButtons } from "./PresenterPlugins";
 
 // Settings for plugins: one page per installed plugin (switch it on or off,
 // see what it adds and may do, use its actions, edit its settings) and a page
 // to add one by URL. The Settings dialog lists them in its sidebar.
 
-const PERMISSION_LABELS: Record<string, string> = {
+const PERMISSION_LABELS: Record<PluginPermission, string> = {
   deck: "Reads the deck: its pages and attachments",
   editDeck: "Saves changes into your deck",
+  history: "Keeps an edit history for the deck, shared with every screen",
+  audience: "Collects input from your audience's devices",
 };
 
-const SURFACE_LABELS: Record<string, string> = {
+const SURFACE_LABELS: Record<PluginSurface, string> = {
   background: "Runs in the background while you present",
-  tile: "A card on your dashboard",
+  panel: "A card on your dashboard",
+  viewerSheet: "A panel on your audience's devices",
   viewer: "A layer on every viewer's screen, including your audience's devices",
   slide: "A layer on the slide, on your current slide and every viewer's screen",
+};
+
+const LOCATION_LABELS: Record<ButtonLocation, string> = {
+  "controller.toolbar": "in the bottom bar",
+  "controller.currentSlide": "in the current slide's header",
+  "thumbnail.context": "in a thumbnail's menu",
+  "viewer.toolbar": "on your audience's toolbar",
+  settings: "on this page",
 };
 
 /** One plugin's page. */
@@ -38,11 +57,14 @@ export function PluginPage({
   /** The plugin as it runs for this deck, if it does: its actions need it. */
   running?: LoadedPlugin;
   /** It was just switched on. */
-  onEnabled?: (manifest: PluginManifest) => void;
+  onEnabled?: (plugin: LoadedPlugin) => void;
   /** Enabled plugins listed before this one, whose shortcuts win a shared key. */
   shortcutsBefore?: PluginShortcutSet[];
 }) {
-  const { entry, manifest, error } = plugin;
+  const { entry, error } = plugin;
+  const loaded = plugin.plugin;
+  const manifest = loaded?.manifest ?? null;
+  const pluginId = loaded?.id ?? entry.id ?? entry.key;
   const [keymap] = useSetting("keybindings");
   const settings = manifest ? Object.keys(manifest.contributes.settings) : [];
   // Its actions are on this page, so the list of what it adds leaves them out.
@@ -64,10 +86,10 @@ export function PluginPage({
         <Switch
           checked={entry.enabled}
           label={`Enable ${pluginLabel(plugin)}`}
-          testId={`plugin-toggle-${manifest?.id ?? entry.url}`}
+          testId={`plugin-toggle-${pluginId}`}
           onChange={(on) => {
-            setPluginEnabled(entry.url, on);
-            if (on && manifest) onEnabled?.(manifest);
+            setPluginEnabled(entry.key, on);
+            if (on && loaded) onEnabled?.(loaded);
           }}
         />
       </div>
@@ -79,12 +101,12 @@ export function PluginPage({
           <h4 className="text-sm font-medium">What it adds</h4>
           <ul className="text-sm text-muted-foreground list-disc pl-5 space-y-0.5">
             {buttons.map((b) => (
-              <li key={b.id}>
-                A “{b.label}” button {b.location === "controller.currentSlide" ? "in the current slide's header" : "in the bottom bar"}
+              <li key={`${b.command}:${b.location}`}>
+                A “{b.label ?? findCommand(manifest, b.command)?.title ?? b.command}” button {LOCATION_LABELS[b.location]}
               </li>
             ))}
             {manifest.contributes.keybindings.map((k) => {
-              const keys = pluginBindings(keymap, manifest.id, k);
+              const keys = pluginBindings(keymap, pluginId, k);
               // A key Presio (or an earlier plugin) already uses never reaches
               // this one: say so here, where the plugin was just added.
               const clash = keys
@@ -92,7 +114,7 @@ export function PluginPage({
                 .find((c) => c.by);
               return (
                 <li key={k.command}>
-                  A keyboard shortcut: {k.label}
+                  A keyboard shortcut: {findCommand(manifest, k.command)?.title ?? k.command}
                   {keys.length > 0 && ` (${keys.map(formatBinding).join(", ")})`}
                   {clash && (
                     <span className="block text-amber-600 dark:text-amber-400" data-testid={`plugin-shortcut-clash-${k.command}`}>
@@ -105,11 +127,11 @@ export function PluginPage({
             {/* A background part that only serves its buttons or shortcuts
                 says nothing those lines didn't already. */}
             {manifest.surfaces
-              .filter((s) => s !== "background" || (buttons.length === 0 && manifest.contributes.keybindings.length === 0))
+              .filter((s: PluginSurface) => s !== "background" || (buttons.length === 0 && manifest.contributes.keybindings.length === 0))
               .map((s) => (
                 <li key={s}>{SURFACE_LABELS[s]}</li>
               ))}
-            {manifest.permissions.map((p) => (
+            {manifest.permissions.map((p: PluginPermission) => (
               <li key={p} className="text-amber-600 dark:text-amber-400">{PERMISSION_LABELS[p] ?? p}</li>
             ))}
           </ul>
@@ -124,8 +146,8 @@ export function PluginPage({
               <PluginButtons host={host} plugins={[running]} location="settings" />
             ) : (
               actions.map((b) => (
-                <Button key={b.id} size="sm" variant="outline" disabled>
-                  {b.label}
+                <Button key={b.command} size="sm" variant="outline" disabled>
+                  {b.label ?? findCommand(manifest!, b.command)?.title ?? b.command}
                 </Button>
               ))
             )}
@@ -141,12 +163,12 @@ export function PluginPage({
       {manifest && settings.length > 0 && (
         <div className="space-y-3">
           <h4 className="text-sm font-medium">Settings</h4>
-          <PluginSettingsForm manifest={manifest} />
+          <PluginSettingsForm pluginId={pluginId} specs={manifest.contributes.settings} />
         </div>
       )}
 
       {!entry.builtin && (
-        <Button size="sm" variant="outline" onClick={() => removePlugin(entry.url)}>
+        <Button size="sm" variant="outline" onClick={() => removePlugin(entry.key)}>
           <Trash2 size={14} className="mr-1" />
           Remove plugin
         </Button>
@@ -156,7 +178,7 @@ export function PluginPage({
 }
 
 /** The page for adding a plugin by URL. */
-export function AddPluginPage({ onAdded }: { onAdded?: (url: string, manifest: PluginManifest) => void }) {
+export function AddPluginPage({ onAdded }: { onAdded?: (key: string, plugin: LoadedPlugin) => void }) {
   const [url, setUrl] = useState("");
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState("");
@@ -167,7 +189,7 @@ export function AddPluginPage({ onAdded }: { onAdded?: (url: string, manifest: P
     try {
       const added = await addPlugin(url);
       setUrl("");
-      onAdded?.(added.url, added.plugin.manifest);
+      onAdded?.(added.key, added.plugin);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -183,7 +205,7 @@ export function AddPluginPage({ onAdded }: { onAdded?: (url: string, manifest: P
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && url) void add(); }}
-          placeholder="github:you/repo, https://… or http://localhost:5174/"
+          placeholder="you/name, github:you/repo@v1.0.0, https://… or http://localhost:5174/"
           data-testid="plugin-url-input"
           className={`flex-1 min-w-0 ${fieldClass}`}
         />
@@ -225,19 +247,18 @@ function Switch({
 }
 
 /** A plugin's contributed settings, as a form generated from their specs. */
-function PluginSettingsForm({ manifest }: { manifest: PluginManifest }) {
+function PluginSettingsForm({ pluginId, specs }: { pluginId: string; specs: Record<string, PluginSettingSpec> }) {
   const doc = useSettingsDocument();
-  const specs = manifest.contributes.settings;
-  const values = resolvePluginSettings(manifest.id, specs, doc);
+  const values = resolvePluginSettings(pluginId, specs, doc);
   return (
-    <div className="space-y-4" data-testid={`plugin-settings-${manifest.id}`}>
+    <div className="space-y-4" data-testid={`plugin-settings-${pluginId}`}>
       {Object.entries(specs).map(([name, spec]) => (
         <SettingField
           key={name}
-          id={`${manifest.id}.${name}`}
+          id={qualify(pluginId, name)}
           spec={spec}
           value={values[name]}
-          onChange={(v) => setPluginSetting(manifest.id, name, spec, v)}
+          onChange={(v) => setPluginSetting(pluginId, name, spec, v)}
         />
       ))}
     </div>
