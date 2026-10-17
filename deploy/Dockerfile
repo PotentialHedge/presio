@@ -39,6 +39,8 @@ RUN apk add --no-cache --virtual .build-deps python3 make g++ \
   && apk del .build-deps
 COPY server/ .
 COPY shared/ /app/shared
+# The JSON schemas served at /schema/ (server/app.ts).
+COPY schema/ /app/schema
 COPY --from=client-build /app/client/dist /app/client/dist
 
 # Baked in so a running container can say which build it is (served on

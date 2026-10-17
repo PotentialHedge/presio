@@ -74,7 +74,7 @@ function PluginButtonGroup({ host, plugin, location }: { host: PluginHost; plugi
   return (
     <>
       {manifest.contributes.buttons
-        .filter((b) => b.location === location)
+        .filter((b) => b.location === location && !states[b.command]?.hidden)
         .map((b) => {
           // A button shows its command's title and icon unless it has its own.
           const command = findCommand(manifest, b.command);
@@ -323,7 +323,7 @@ export function PluginThumbnailMenuItems({ host, plugins, slide }: { host: Plugi
           <div key={plugin.hash}>
             <ContextMenuSeparator />
             <ContextMenuLabel>{plugin.manifest.displayName}</ContextMenuLabel>
-            {buttons.map((b) => {
+            {buttons.filter((b) => !states[b.command]?.hidden).map((b) => {
               const command = findCommand(plugin.manifest, b.command);
               const state = states[b.command] ?? {};
               const Icon = pluginIcon(b.icon ?? command?.icon);

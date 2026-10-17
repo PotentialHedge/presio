@@ -647,7 +647,7 @@
          *  last; on audience devices it does nothing. */
         setStatus: function (id, status) { fire("ui.setStatus", { id: id, status: status || null }); },
         /** Update the buttons that run a command — { active, label,
-         *  disabled, menu }. Each call replaces the last. `menu` adds a
+         *  disabled, hidden, menu }, on this device. Each call replaces the last. `menu` adds a
          *  small menu beside it: a list of { id, label, checked?, disabled? },
          *  { heading } and { separator: true }; a pick runs the command with
          *  { menuItem: id }. */

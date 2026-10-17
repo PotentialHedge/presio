@@ -171,7 +171,8 @@ export function createApp({ supabase, io, socketState }: AppDeps): express.Expre
   const clientDist = path.join(__dirname, "../client/dist");
 
   // JSON schemas for the sidecar format — served at /schema/*.json
-  app.use("/schema", express.static(path.join(__dirname, "../../schema"), { index: false }));
+  // (A miss falls through to the SPA's catch-all, so don't let it.)
+  app.use("/schema", express.static(path.join(__dirname, "../schema"), { index: false, fallthrough: false }));
 
   // Local mode's blob store (server/local/blobStore.ts) writes PDFs here and
   // hands back relative /files/... URLs. In Supabase mode this directory

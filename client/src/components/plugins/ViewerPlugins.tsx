@@ -180,7 +180,7 @@ function ViewerToolbarGroup({ host, plugin }: { host: PluginHost; plugin: Loaded
   return (
     <>
       {manifest.contributes.buttons
-        .filter((b) => b.location === "viewer.toolbar")
+        .filter((b) => b.location === "viewer.toolbar" && !states[b.command]?.hidden)
         .map((b) => {
           const command = findCommand(manifest, b.command);
           const state = states[b.command] ?? {};

@@ -252,7 +252,7 @@ interface Presio {
     setStatus(id: string, status: PresioStatus | null): void;
     setInteractive(value: boolean | "pen" | { x: number; y: number; w: number; h: number }[]): void;
     /** The state of the buttons that run a command; a menu pick runs it with { menuItem }. */
-    setButton(command: string, state: { active?: boolean; label?: string; disabled?: boolean; menu?: PresioMenuEntry[] }): void;
+    setButton(command: string, state: { active?: boolean; label?: string; disabled?: boolean; hidden?: boolean; menu?: PresioMenuEntry[] }): void;
     /** Slide surface: the part of it on screen (fractions of it) and its zoom. */
     readonly view: PresioView;
     onViewChange(cb: (view: PresioView) => void): Unsubscribe;

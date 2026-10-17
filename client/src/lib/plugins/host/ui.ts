@@ -10,6 +10,8 @@ export interface ButtonState {
   active?: boolean;
   label?: string;
   disabled?: boolean;
+  /** Not drawn at all (a viewer's button while there's nothing to do). */
+  hidden?: boolean;
   /** A small menu beside the button (a mic to use, a mode): picking an item
    *  runs the command with { menuItem }. */
   menu?: ButtonMenuEntry[];
@@ -80,6 +82,7 @@ export class Ui {
           active: typeof s.active === "boolean" ? s.active : undefined,
           label: typeof s.label === "string" ? s.label.slice(0, 24) : undefined,
           disabled: typeof s.disabled === "boolean" ? s.disabled : undefined,
+          hidden: typeof s.hidden === "boolean" ? s.hidden : undefined,
           menu: sanitizeMenu(s.menu),
         };
         this.buttons.set(id, { ...this.buttons.get(id), [command]: next });

@@ -148,7 +148,9 @@ interface GitInfo {
 
 function git(cwd: string, ...args: string[]): string | null {
   try {
-    return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    // Never stop to ask for credentials (ls-remote on a repo not made yet).
+    const env = { ...process.env, GIT_TERMINAL_PROMPT: "0" };
+    return execFileSync("git", args, { cwd, env, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 15_000 }).trim();
   } catch {
     return null;
   }

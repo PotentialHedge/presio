@@ -45,9 +45,11 @@ except what the plugin should do (ask that if they haven't said). Pick a short s
    and the repo's name. It says how to fix each problem:
 
    ```sh
-   curl -fsSL BASE/plugins/check.mjs -o /tmp/presio-check.mjs
-   node /tmp/presio-check.mjs . --presio BASE
+   curl -fsSL BASE/plugins/check.mjs | node --input-type=module - . --presio BASE
    ```
+
+   (Or save it anywhere, `curl -fsSLO BASE/plugins/check.mjs`, and run
+   `node check.mjs . --presio BASE`; keep it out of the commit.)
 
 4. **Release it.** The git tag is the version: `v` + `version` from the
    manifest.
@@ -166,6 +168,8 @@ index.html
     `presio.ui.onVisibleChange`. The sheet fits the height of your page's
     `<body>` (so don't make it `height: 100%`), up to most of the screen, and
     scrolls past that. Use `presio.theme` to match the app's light or dark card.
+    A sheet sits above every `viewer` layer; close it
+    (`presio.ui.setVisible(false)`) when a layer of yours should be seen.
   - `viewer`: a full-screen layer on every viewer screen (projector and
     audience phones), hidden until the plugin calls `presio.ui.setVisible(true)`.
   - `slide`: a layer over the slide itself, sized to the page, on the
@@ -206,7 +210,10 @@ index.html
   palette (⌘K / Ctrl+K) lists every command a frame on the device has
   registered (under `category`, or the plugin's `displayName`, with its key),
   and other plugins can run them too:
-  `presio.commands.execute("alice/poll.open", args)`. Presio's own navigation
+  `presio.commands.execute("alice/poll.open", args)`. A command registered
+  without being declared still runs with `execute` (a panel asking its
+  `background` to do something), but isn't in the palette and can't have a
+  button or key. Presio's own navigation
   is there as well: `presio.nextSlide`, `presio.prevSlide`,
   `presio.firstSlide`, `presio.lastSlide` and `presio.goToSlide` with
   `{ slide }` (on a viewer they move that viewer, where it may move on its own).
@@ -219,14 +226,18 @@ index.html
   every audience device; the command runs in that device's `viewerSheet`,
   `viewer` or `slide` frame, so register it there — on a phone an icon-only
   pill when it has an icon) or `settings` (under **Actions** on the plugin's
-  page in Settings). `label` and `icon` default to the command's. `icon` is one of
+  page in Settings). `label` and `icon` default to the command's; `tooltip`
+  is the hover text. `icon` is one of
   `qr-code bar-chart message users timer bell star sparkles hand check eye
   megaphone pen download upload`. With `accept` (an `<input accept>` value,
   e.g. `".json,application/json"`) Presio asks the presenter for a file first
   and the command runs with `{ file }`. A plugin with presenter buttons needs a
-  `background` or `panel` surface to handle them. A button can carry a small
-  menu, set at runtime with `presio.ui.setButton(command, { menu })`; a pick
-  runs the command with `{ menuItem }`.
+  `background` or `panel` surface to handle them. At runtime,
+  `presio.ui.setButton(command, { active, label, disabled, hidden, menu })`
+  changes its buttons on the device it's called on: `hidden` takes a button
+  away while there's nothing for it to do (a viewer's poll button between
+  polls), and `menu` adds a small menu beside it; a pick runs the command
+  with `{ menuItem }`.
 - `contributes.keybindings` — default keys for commands on the presenter's
   controller: `{ "command", "keys" }`, up to 3 keys each `{ "key":
   KeyboardEvent.key, "meta"?: true }` (an empty list makes the command
@@ -234,12 +245,15 @@ index.html
   **Settings → Keyboard shortcuts**, where the presenter can rebind them
   (stored in the `keybindings` setting as `<plugin id>.<command>`). They never
   fire while the presenter types in a field, and Presio's own shortcuts win
-  where keys overlap (arrows, Space, PgUp/PgDn, `b`, `c`, `j` then digits) —
-  Settings marks such a key as taken. The built-ins use `k` and `r` (media)
+  where keys overlap (arrows, Space, PgUp/PgDn, `b`, `j` then digits) —
+  Settings marks such a key as taken. The built-ins use `c` (join code), `k` and `r` (media)
   and `p`, `h`, `l`, `e`, Esc, ⌘Z and ⌘Y (drawing).
   `presio.commands.shortcut(command)` gives the key the presenter has for one
   ("E", "⌘Z", or null), to show in a tooltip.
-- `contributes.panels` — dashboard cards for the `panel` surface.
+- `contributes.panels` — dashboard cards for the `panel` surface. The
+  presenter moves and resizes a card like any other, from small to most of
+  the screen: make the page fill the frame (`height: 100%`) and scroll
+  inside.
 - `contributes.status` — small text in the controller's header ("12 votes"):
   `{ "id", "location": "controller.header", "tooltip"? }`, up to 4. Hidden
   until the plugin sets it with `presio.ui.setStatus(id, { text, tooltip?,
@@ -297,7 +311,8 @@ Error whose `code` is `MethodNotFound`, `PermissionDenied`, `InvalidParams`,
 
 ```js
 presio.apiVersion       // 1
-presio.supports(cap)    // what this Presio can do, e.g. presio.supports("audience")
+presio.capabilities     // what this Presio can do: ["slide", "audience", …]
+presio.supports(cap)    // one of them, e.g. presio.supports("audience")
 presio.plugin           // { id, name, displayName, version, baseUrl }
 presio.surface          // "background" | "panel" | "viewerSheet" | "viewer" | "slide"
 presio.panel            // panel surface: which contributes.panels entry; else null
@@ -306,7 +321,7 @@ presio.theme            // "light" | "dark" (the app's theme)
 presio.session          // { id, local, joinUrl } — joinUrl is null for a local deck
 presio.slide.current    // 1-based slide on this device
 presio.slide.total
-presio.slide.onChange(slide => {})         // → unsubscribe()
+presio.slide.onChange(({ current, total }) => {})  // → unsubscribe()
 presio.onContextChange(presio => {})       // session/role/theme or shortcuts changed
 
 presio.messages.send(type, payload, { retain, volatile })  // message the plugin's other instances
@@ -330,7 +345,9 @@ presio.ui.setButton(command, { active, label, disabled, menu })  // update its b
                                            // menu: [{ id, label, checked?, disabled? } | { heading } | { separator: true }]
 presio.ui.setStatus(id, { text, tooltip, icon, command, args })  // a status item in the controller's header; null hides it
 
-presio.deck.attachments()   // → Promise<[{ filename, bytes: Uint8Array }]> ("deck" permission)
+presio.deck.attachments()   // → Promise<[{ filename, bytes: Uint8Array }]> ("deck" permission): the PDF's
+                            // document-level attachments (Typst pdf.attach, LaTeX embedfile, pdftk attach_files),
+                            // by file name; files attached to a page (LaTeX attachfile) aren't included
 presio.deck.bytes()         // → Promise<Uint8Array>, the PDF itself ("deck")
 presio.deck.pages()         // → Promise<[{ width, height }]>, each page's size in PDF points ("deck")
 presio.deck.save(bytes)     // presenter: → Promise; same pages, saved where the deck lives ("editDeck")
@@ -359,6 +376,7 @@ h.confirmed                 // the ordered entries only: what every device agree
 h.ready / h.whenReady()     // loaded (state is init() until then)
 h.commit(op)                // presenter: → id; JSON, at most 16 KB; shown here at once
 h.mine()                    // this device's ops, newest first: [{ id, op, seq }] (seq null while pending)
+h.device                    // this device's id, to compare with an entry's `by`
 h.onChange((state, { kind, entry }) => {})  // kind: "state" | "entry" | "pending"
 h.onError((id, message) => {})              // an op was refused (and dropped)
 presio.blobs.put(data)      // presenter: Blob | Uint8Array | ArrayBuffer, at most 5 MB → Promise<sha256>
@@ -414,6 +432,11 @@ Messaging:
 - From the **audience**, a message reaches the presenter's instances only
   (rate-limited), with `from: "audience"` and a per-connection `sender` id.
   The presenter aggregates and broadcasts results back.
+- A message reaches the plugin's *other* frames, on this device too (a
+  `background` and its `panel`), never the frame that sent it. Likewise
+  `presio.storage.onChange` fires in the plugin's other frames, not the one
+  that wrote. Between the presenter's own frames, commands (`execute`) are
+  the way to ask for something and get an answer.
 - Payloads are JSON, at most 16 KB; `type` is up to 64 of `A-Za-z0-9_.:-`.
 
 Audience input: `presio.audience` (the `"audience"` permission) is for
@@ -534,7 +557,7 @@ Notes on hosting:
 - If some viewers can't load a plugin, the presenter sees a warning in the
   controller's header and the reason under the plugin in Settings.
 
-Keyboard shortcuts: Presio's own (`←` `→` Space PgUp PgDn `b` `c` `j`) win,
+Keyboard shortcuts: Presio's own (`←` `→` Space PgUp PgDn `b` `j`) win,
 then plugins in the order they're listed. A clashing key is flagged in the
 plugin's Settings page and under Keyboard shortcuts, where the presenter can
 rebind it, so pick a key Presio doesn't use.
@@ -550,8 +573,10 @@ rebind it, so pick a key Presio doesn't use.
   surface beside the page (`"slideSurface": "area"`), a button with a
   microphone menu, settings, and a per-viewer switch.
 - [Poll](https://github.com/benedict-armstrong/presio-poll): questions from
-  PDF attachments or made up live, answered in each viewer's `viewerSheet`
-  through `presio.audience`, results on every screen.
+  PDF attachments or made up live in a dashboard panel, answered in each
+  viewer's `viewerSheet` through `presio.audience`, results on every screen
+  in a `viewer` layer. Read it for a plugin with several surfaces that talk
+  to each other.
 
 The built-in Join Code plugin is a complete example too:
 [manifest](BASE/plugins/join-code/presio-plugin.json),
