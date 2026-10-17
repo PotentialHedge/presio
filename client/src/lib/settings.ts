@@ -38,9 +38,10 @@ export interface CoreSettings {
   "share.lanAddress": string;
   "home.minimal": boolean;
   "layout.forceDesktop": boolean;
-  /** By source (shared/plugin/sources.ts): whether it's on, where it loads
-   *  from and the id it has. Built-ins appear only once toggled. */
-  plugins: Record<string, { enabled: boolean; url?: string; id?: string }>;
+  /** By source without its version (shared/plugin/sources.ts): whether it's
+   *  on, where it loads from, the id it has and the version it's on (a tag,
+   *  a branch or a commit). Built-ins appear only once toggled. */
+  plugins: Record<string, { enabled: boolean; url?: string; id?: string; ref?: string }>;
 }
 
 export type CoreSettingKey = keyof CoreSettings;
@@ -81,7 +82,8 @@ function sanitizePluginList(raw: unknown): CoreSettings["plugins"] | undefined {
     if (!isRecord(entry) || typeof entry.enabled !== "boolean" || key.length > 2048) continue;
     const url = typeof entry.url === "string" && /^(\/plugins\/|https?:\/\/)/.test(entry.url) ? entry.url : undefined;
     const id = typeof entry.id === "string" && PLUGIN_ID_RE.test(entry.id) ? entry.id : undefined;
-    out[key] = { enabled: entry.enabled, ...(url && { url }), ...(id && { id }) };
+    const ref = typeof entry.ref === "string" && /^[^\s/]{1,200}$/.test(entry.ref) ? entry.ref : undefined;
+    out[key] = { enabled: entry.enabled, ...(url && { url }), ...(id && { id }), ...(ref && { ref }) };
   }
   return out;
 }
@@ -119,7 +121,7 @@ export const CORE_SETTINGS: { [K in CoreSettingKey]: CoreSpec<CoreSettings[K]> }
     type: "object",
     default: {},
     sanitize: sanitizePluginList,
-    description: "Plugins by source (\"presio/timer\", \"github:owner/repo@v1.0.0\", a URL): { enabled, url, id }.",
+    description: "Plugins by source (\"presio/timer\", \"github:owner/repo\", a URL): { enabled, url, id, ref }, ref being the tag, branch or commit it's on.",
   },
 };
 
