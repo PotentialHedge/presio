@@ -49,6 +49,8 @@ export interface FrameHooks {
   onInteractive?: (value: Interactive) => void;
   /** The plugin's document is in place (after boot). */
   onReady?: () => void;
+  /** Viewer sheet: how tall the plugin's document is (CSS pixels). */
+  onContentSize?: (height: number) => void;
 }
 
 /** One mounted frame, as the host knows it. */
@@ -102,10 +104,18 @@ export interface HostCore {
   call<T>(conn: Conn, method: string, params: unknown, timeoutMs: number): Promise<T>;
 }
 
-/** The frame to send work to when several of a plugin's could take it: its
- *  background (always up while the deck is), else a panel, else the first. */
+// Which of a plugin's frames takes work first: the presenter's background
+// (always up while the deck is), then a panel; on a viewer, the sheet, then
+// the viewer layer, then the slide layer.
+const FRAME_PRIORITY: PluginSurface[] = ["background", "panel", "viewerSheet", "viewer", "slide"];
+
+/** The frame to send work to when several of a plugin's could take it. */
 export function primaryFrame(frames: Conn[]): Conn | undefined {
-  return frames.find((c) => c.surface === "background") ?? frames.find((c) => c.surface === "panel") ?? frames[0];
+  for (const surface of FRAME_PRIORITY) {
+    const conn = frames.find((c) => c.surface === surface);
+    if (conn) return conn;
+  }
+  return frames[0];
 }
 
 /** A plugin-given box (fractions): finite, with a positive size; else null. */

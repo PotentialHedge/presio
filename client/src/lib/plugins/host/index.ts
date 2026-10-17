@@ -24,7 +24,7 @@ import {
 import type { LoadedPlugin, PluginSurface } from "../manifest";
 import type { HistoryHub } from "../history";
 import { audienceMethods } from "./audience";
-import { Commands } from "./commands";
+import { Commands, type AppCommandHandler } from "./commands";
 import { Deck, type ExportMode, type PageSize } from "./deck";
 import { dispatch } from "./dispatch";
 import { History } from "./history";
@@ -44,17 +44,19 @@ import {
   type SlidePage,
   type SlideView,
 } from "./types";
-import { Ui, type ButtonState } from "./ui";
+import { Ui, type ButtonState, type StatusState } from "./ui";
 
 export * from "./types";
 export { retainKey, forgetDeckRetained, type Retain, type WireEvent } from "./messages";
-export type { ButtonState, ButtonMenuEntry } from "./ui";
+export type { ButtonState, ButtonMenuEntry, StatusState } from "./ui";
+export { APP_COMMAND_PREFIX, type AppCommandHandler } from "./commands";
 export type { LayerItem, PluginLayer } from "./layers";
 export type { DeckChange, ExportMode, PageSize } from "./deck";
 
 /** What this host implements (presio.supports()). */
 export const HOST_CAPABILITIES: Capability[] = [
   "slide", "context", "settings", "storage", "messages", "commands", "deck", "layers", "history", "blobs", "clock", "ui", "panels",
+  "status", "viewerSheet", "palette",
 ];
 
 /** A file the presenter picked for a button that asks for one. */
@@ -70,6 +72,9 @@ export interface FrameLink {
   setView(view: SlideView): void;
   setPage(page: SlidePage): void;
   setHovered(hovered: boolean): void;
+  /** Presio showed or hid the frame's container itself (the viewer dismissed
+   *  a sheet): the plugin hears it (presio.ui.onVisibleChange). */
+  setVisible(visible: boolean): void;
 }
 
 /** A call this host made to a frame, waiting for its answer. */
@@ -223,6 +228,7 @@ export class PluginHost implements HostCore {
   setRunning(pluginIds: readonly string[]) {
     this.running = pluginIds;
     this.layers.keepOnly(pluginIds);
+    this.ui.keepOnly(pluginIds);
   }
 
   /** A plugin's resolved settings changed (or arrived from the presenter). */
@@ -286,15 +292,44 @@ export class PluginHost implements HostCore {
     this.commands.run(pluginId, command, { menuItem });
   }
 
-  /** A plugin's keybinding was pressed. */
-  runCommand(pluginId: string, command: string) {
-    this.commands.run(pluginId, command, {});
+  /** Run a plugin's command from Presio's interface (a keybinding, the
+   *  palette, a thumbnail's menu — which passes { slide }). */
+  runCommand(pluginId: string, command: string, args: Record<string, unknown> = {}) {
+    this.commands.run(pluginId, command, args);
   }
 
-  /** Run a plugin's command and get its result (the command palette, tests). */
+  /** Run a plugin's command and get its result (tests). */
   executeCommand(pluginId: string, command: string, args?: unknown): Promise<unknown> {
     return this.commands.execute(pluginId, command, args);
   }
+
+  /** Presio's own commands, which plugins may run as "presio.<id>" (the
+   *  exposed ones). Looked up on each call. */
+  setAppCommands(lookup: (id: string) => AppCommandHandler | undefined) {
+    this.commands.setAppCommands(lookup);
+  }
+
+  /** Whether a frame on this device handles one of a plugin's commands: the
+   *  palette lists only those. */
+  isCommandRegistered(pluginId: string, command: string): boolean {
+    return this.commands.isRegistered(pluginId, command);
+  }
+
+  /** Changes whenever frames register or drop commands (for useSyncExternalStore). */
+  commandRegistrations = () => this.commands.registrations;
+
+  subscribeCommands = (listener: () => void) => this.commands.subscribe(listener);
+
+  // --- Status items ---
+
+  statusItems(pluginId: string): Record<string, StatusState> {
+    return this.ui.statusItems(pluginId);
+  }
+
+  /** Changes whenever any plugin's status items do (for useSyncExternalStore). */
+  statusRevision = () => this.ui.statusRevision;
+
+  subscribeStatus = (listener: () => void) => this.ui.subscribeStatus(listener);
 
   // --- Messages between devices ---
 
@@ -337,6 +372,7 @@ export class PluginHost implements HostCore {
       disconnect: () => {
         this.conns.delete(conn);
         port.close();
+        if (conn.commands.size) this.commands.changed();
         // Calls to it won't be answered now.
         for (const [id, call] of this.pending) {
           if (call.conn !== conn) continue;
@@ -360,6 +396,7 @@ export class PluginHost implements HostCore {
         hovered = next;
         this.emit(conn, "ui.hover", { hovered });
       },
+      setVisible: (visible) => this.emit(conn, "ui.visible", { visible }),
     };
   }
 
@@ -382,9 +419,14 @@ export class PluginHost implements HostCore {
         else call.reject(new HostError(data.error?.code ?? "Internal", data.error?.message ?? "The plugin failed"));
         return;
       }
-      case "event":
+      case "event": {
         if (data.method === "frame.ready") conn.onReady?.();
+        const height = (data.params as { height?: unknown } | undefined)?.height;
+        if (data.method === "ui.contentSize" && typeof height === "number" && Number.isFinite(height)) {
+          conn.onContentSize?.(Math.max(0, height));
+        }
         return;
+      }
     }
   }
 }

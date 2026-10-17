@@ -29,6 +29,21 @@ type PresioMenuEntry =
   | { heading: string }
   | { separator: true };
 
+/** A status item's content (presio.ui.setStatus). */
+interface PresioStatus {
+  text: string;
+  tooltip?: string;
+  icon?: PresioIcon;
+  /** One of the plugin's commands, run by a click on the item. */
+  command?: string;
+  args?: unknown;
+}
+
+/** Icons a contribution may name. */
+type PresioIcon =
+  | "qr-code" | "bar-chart" | "message" | "users" | "timer" | "bell" | "star" | "sparkles" | "hand" | "check" | "eye"
+  | "megaphone" | "pen" | "download" | "upload";
+
 /** A file the presenter picked for a button with "accept" (a command's args.file). */
 interface PresioFile {
   name: string;
@@ -94,9 +109,10 @@ interface PresioError extends Error {
 }
 
 /** What a command's handler gets: Presio's buttons pass { file } (a button
- *  with "accept") or { menuItem } (a pick from its menu); keybindings pass
- *  {}; presio.commands.execute passes the caller's args. */
-type PresioCommandArgs = { file?: PresioFile; menuItem?: string; [key: string]: unknown } | null;
+ *  with "accept"), { menuItem } (a pick from its menu) or { slide } (a
+ *  thumbnail's menu); keybindings and the palette pass {};
+ *  presio.commands.execute passes the caller's args. */
+type PresioCommandArgs = { file?: PresioFile; menuItem?: string; slide?: number; [key: string]: unknown } | null;
 
 type PresioSurface = "background" | "panel" | "viewerSheet" | "viewer" | "slide";
 
@@ -143,8 +159,10 @@ interface Presio {
     /** Handle one of this plugin's commands (contributes.commands) in this
      *  frame; what the handler returns is the command's result. */
     register(id: string, handler: (args: PresioCommandArgs) => unknown): Unsubscribe;
-    /** Run a command on this device — "<plugin id>.<command>", or a bare id
-     *  for this plugin's own — and get its result. */
+    /** Run a command on this device — "<plugin id>.<command>", a bare id for
+     *  this plugin's own, or one of Presio's ("presio.nextSlide",
+     *  "presio.prevSlide", "presio.firstSlide", "presio.lastSlide",
+     *  "presio.goToSlide" with { slide }) — and get its result. */
     execute<T = unknown>(command: string, args?: unknown): Promise<T>;
     /** The presenter's key for one of this plugin's commands ("E", "⌘Z"),
      *  or null when it has none; a change calls onContextChange. */
@@ -188,7 +206,16 @@ interface Presio {
     onChange(cb: (key: string) => void): Unsubscribe;
   };
   readonly ui: {
+    /** "viewer" surface: show or hide its layer. "viewerSheet": open or close
+     *  its sheet (the viewer can close it too; see onVisibleChange). */
     setVisible(visible: boolean): void;
+    /** Whether this frame's layer or sheet is showing. */
+    readonly visible: boolean;
+    /** It was shown or hidden, by the plugin or by the viewer closing the sheet. */
+    onVisibleChange(cb: (visible: boolean) => void): Unsubscribe;
+    /** A status item (contributes.status) in the controller's header; null or
+     *  an empty text hides it. A click runs `command` with `args`. */
+    setStatus(id: string, status: PresioStatus | null): void;
     setInteractive(value: boolean | "pen" | { x: number; y: number; w: number; h: number }[]): void;
     /** The state of the buttons that run a command; a menu pick runs it with { menuItem }. */
     setButton(command: string, state: { active?: boolean; label?: string; disabled?: boolean; menu?: PresioMenuEntry[] }): void;

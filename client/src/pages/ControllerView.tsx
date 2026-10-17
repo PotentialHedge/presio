@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { cn, getSessionAuth, setSessionAuth } from "@/lib/utils";
-import { Settings, TriangleAlert, Check, Option, Plus, Share2, ExternalLink, User, LayoutGrid, Puzzle, KeyRound, Keyboard, FileJson } from "lucide-react";
+import { Settings, TriangleAlert, Check, Option, Plus, Share2, ExternalLink, User, LayoutGrid, Puzzle, KeyRound, Keyboard, FileJson, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { DialogOverlay } from "@/components/ui/dialog-overlay";
@@ -67,7 +67,12 @@ import { lsGetString, lsSetString, viewerOpenedKey } from "@/lib/storage";
 import { type MosaicNode } from "react-mosaic-component";
 import type { Deck } from "@/lib/deck";
 import type { PluginHostState } from "@/lib/plugins/usePluginHost";
-import { PluginBackgrounds, PluginButtons, PluginPanel } from "@/components/plugins/PresenterPlugins";
+import { PluginBackgrounds, PluginButtons, PluginPanel, PluginStatusItems } from "@/components/plugins/PresenterPlugins";
+import { usePluginPaletteItems } from "@/components/plugins/pluginCommands";
+import { CommandPalette } from "@/components/CommandPalette";
+import { useControllerCommands, goToSlideItems } from "@/components/controller/controllerCommands";
+import { appPaletteItems, useAppCommands } from "@/lib/commands";
+import { useTheme } from "@/lib/useTheme";
 import { SettingsFileSection } from "@/components/SettingsFileSection";
 import { SettingsDialog } from "@/components/controller/SettingsDialog";
 import { AddPluginPage, PluginPage } from "@/components/plugins/PluginSettings";
@@ -158,6 +163,8 @@ export function ControllerView({
   const [loginOpen, setLoginOpen] = useState(false);
   // Mobile-only surfaces.
   const [menuOpen, setMenuOpen] = useState(false);
+  // The command palette (⌘K, or the header's search button).
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [passphraseDialogOpen, setPassphraseDialogOpen] = useState(false);
   // First-run tutorial for the controller. Shown before the viewer prompt.
   const [onboardingOpen, setOnboardingOpen] = useState(() => !hasCompletedControllerOnboarding());
@@ -322,6 +329,13 @@ export function ControllerView({
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      // ⌘K / Ctrl+K: the command palette, from anywhere (a field included).
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        cancelJump();
+        setPaletteOpen((open) => !open);
+        return;
+      }
       const target = e.target as HTMLElement | null;
       if (
         target &&
@@ -558,8 +572,57 @@ export function ControllerView({
   // off, or still loading); draw only what exists.
   const shownMosaic = restrictLayout(mosaic, Object.keys(cardContent));
 
+  // Everything the palette lists: Presio's commands, then the plugins'.
+  const { theme, setTheme } = useTheme();
+  const appCommands = useControllerCommands(
+    {
+      currentSlide,
+      totalSlides,
+      local,
+      blanked,
+      isMobile,
+      keymap,
+      theme,
+      canSharePassphrase,
+      cards: layoutKeys.map((key) => ({ key, label: cardLabel(key), shown: visible.has(key) })),
+      pluginPages: installedPlugins.map((plugin) => ({ id: pluginPageId(plugin.entry.key), label: pluginLabel(plugin) })),
+    },
+    {
+      goTo: onGoTo,
+      toggleBlank: onBlankToggle,
+      syncAll: onSyncAll,
+      share: () => setShareDialogOpen(true),
+      showPassphrase: () => {
+        setPassphraseDialogOpen(true);
+        void requestPassphrase();
+      },
+      openViewer,
+      switchToViewer: () => navigate(`/s/${id}?role=viewer`, { replace: true }),
+      replaceDeck: openReplacePicker,
+      openSettings: (page) => {
+        if (page) setSettingsCategory(page);
+        setSettingsOpen(true);
+      },
+      toggleCard,
+      setTheme,
+      end: () => setConfirmEnd(true),
+    }
+  );
+  useAppCommands(pluginHost, appCommands);
+  const pluginPaletteItems = usePluginPaletteItems(pluginHost, runningPlugins, keymap);
+
   const desktopActions = (
     <>
+      <button
+        type="button"
+        onClick={() => setPaletteOpen(true)}
+        title={`Commands (${isMac ? "⌘K" : "Ctrl+K"})`}
+        data-testid="open-command-palette"
+        className="inline-flex items-center justify-center gap-1.5 h-8 min-w-8 px-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+      >
+        <Search size={15} />
+        <kbd className="hidden xl:inline font-sans text-[11px] font-medium">{isMac ? "⌘K" : "Ctrl K"}</kbd>
+      </button>
       {viewerFailedKey && (
         <button
           type="button"
@@ -619,6 +682,7 @@ export function ControllerView({
       onEndClick={() => setConfirmEnd(true)}
       onSettings={() => setSettingsOpen(true)}
       onOpenViewer={isMobile ? undefined : openViewer}
+      onCommands={() => setPaletteOpen(true)}
     />
   );
 
@@ -648,6 +712,7 @@ export function ControllerView({
         onDeckWatchResume={onDeckWatchResume}
         remoteDeckUpdate={remoteDeckUpdate}
         onRemoteDeckApply={onRemoteDeckApply}
+        status={<PluginStatusItems host={plugins.host} plugins={plugins.plugins} compact={isMobile} />}
         actions={isMobile || narrow ? menuActions : desktopActions}
       />
 
@@ -912,6 +977,14 @@ export function ControllerView({
               ),
             },
           ]}
+        />
+      )}
+
+      {paletteOpen && (
+        <CommandPalette
+          items={[...appPaletteItems(appCommands), ...pluginPaletteItems]}
+          extraItems={(query) => goToSlideItems(query, totalSlides, onGoTo)}
+          onClose={() => setPaletteOpen(false)}
         />
       )}
 

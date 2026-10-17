@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { renderPage } from "@/lib/pdf";
 import type { Deck } from "@/lib/deck";
 import { SlideLayers } from "@/components/plugins/SlideLayers";
+import { PluginThumbnailMenuItems } from "@/components/plugins/PresenterPlugins";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuLabel, ContextMenuTrigger } from "@/components/ui/context-menu";
 import type { PluginHostState } from "@/lib/plugins/usePluginHost";
 
 export function ThumbnailsCard({
@@ -19,6 +21,11 @@ export function ThumbnailsCard({
   const containerRef = useRef<HTMLDivElement>(null);
   const thumbRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const [aspectRatio, setAspectRatio] = useState<number | null>(null);
+  // The thumbnail a context menu was opened on (right-click, long press).
+  const [menuSlide, setMenuSlide] = useState<number | null>(null);
+  // Only plugins add to the menu (thumbnail.context): without any, a
+  // right-click stays the browser's.
+  const hasMenu = !!plugins?.plugins.some((p) => p.manifest.contributes.buttons.some((b) => b.location === "thumbnail.context"));
 
   useEffect(() => {
     pdf.getPage(1).then((page) => {
@@ -92,7 +99,7 @@ export function ThumbnailsCard({
     el?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
   }, [currentSlide]);
 
-  return (
+  const strip = (
     <div
       ref={containerRef}
       className="flex gap-2 overflow-x-auto h-full items-start p-1"
@@ -101,6 +108,7 @@ export function ThumbnailsCard({
         <button
           key={num}
           type="button"
+          data-thumbnail={num}
           onClick={() => onGoTo(num)}
           className={`relative shrink-0 h-full rounded border overflow-hidden transition-all ${
             num === currentSlide
@@ -122,5 +130,32 @@ export function ThumbnailsCard({
         </button>
       ))}
     </div>
+  );
+  // Always wrapped, so plugins arriving later don't remount the strip (and
+  // drop its rendered thumbnails); the menu is off until one adds to it.
+  return (
+    <ContextMenu onOpenChange={(open) => { if (!open) setMenuSlide(null); }}>
+      <ContextMenuTrigger
+        asChild
+        disabled={!plugins || !hasMenu}
+        onContextMenu={(e) => {
+          const thumb = (e.target as HTMLElement).closest<HTMLElement>("[data-thumbnail]");
+          // Off a thumbnail (the strip's empty end) there's nothing to act on.
+          if (!thumb) return e.preventDefault();
+          setMenuSlide(Number(thumb.dataset.thumbnail));
+        }}
+      >
+        {strip}
+      </ContextMenuTrigger>
+      <ContextMenuContent className="min-w-48" data-testid="thumbnail-menu">
+        {menuSlide !== null && plugins && (
+          <>
+            <ContextMenuLabel>Slide {menuSlide}</ContextMenuLabel>
+            <ContextMenuItem onSelect={() => onGoTo(menuSlide)}>Go to slide</ContextMenuItem>
+            <PluginThumbnailMenuItems host={plugins.host} plugins={plugins.plugins} slide={menuSlide} />
+          </>
+        )}
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
