@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { cn, getSessionAuth, setSessionAuth } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { Settings, TriangleAlert, Check, Option, Plus, Share2, ExternalLink, User, Puzzle, KeyRound, Keyboard, FileJson, Search, Compass, SunMoon, Sun, Moon, Monitor } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
@@ -18,7 +18,6 @@ import { DownloadButton } from "@/components/DownloadButton";
 import { hasCompletedControllerOnboarding } from "@/lib/onboarding";
 import { useAuth } from "@/hooks/useAuth";
 import { authEnabled } from "@/lib/authMode";
-import { controllerHeaders } from "@/lib/sessionAuth";
 import { useClaim } from "@/hooks/useClaim";
 import { CurrentSlideCard } from "@/components/controller/CurrentSlideCard";
 import { NextSlideCard } from "@/components/controller/NextSlideCard";
@@ -35,38 +34,27 @@ import { ConfirmReplaceDialog } from "@/components/controller/ConfirmReplaceDial
 import { useIsLandscape, useIsMobile } from "@/hooks/useIsMobile";
 import { useSlideTapNav } from "@/hooks/useSlideTapNav";
 import { useTouchPresenting } from "@/hooks/useTouchPresenting";
+import { useSlideJump } from "@/hooks/useSlideJump";
+import { useControllerKeys } from "@/hooks/useControllerKeys";
+import { usePassphrase } from "@/hooks/usePassphrase";
+import { useControllerLayout } from "@/hooks/useControllerLayout";
 import {
   isDeckWatchSupported,
   PDF_PICKER_OPTIONS,
   type DeckWatchMode,
   type DeckWatchStatus,
 } from "@/lib/deckWatcher";
-import {
-  DEFAULT_KEYMAP,
-  isEditableTarget,
-  matchesBinding,
-  pluginBindings,
-} from "@/lib/keymap";
+import { DEFAULT_KEYMAP } from "@/lib/keymap";
 import { useSetting } from "@/lib/settings";
 import {
   CARD_KEYS,
   CARD_LABELS,
-  defaultLayout,
   LAYOUT_PRESETS,
   type LayoutForm,
-  loadLayout,
-  saveLayout,
-  savePreferred,
-  hasPreferredLayout,
-  loadPreferred,
-  addLeaf,
-  removeLeaf,
   restrictLayout,
   pluginPanelKey,
-  visibleKeys,
 } from "@/lib/controllerLayout";
 import { lsGetString, lsSetString, viewerOpenedKey } from "@/lib/storage";
-import { type MosaicNode } from "react-mosaic-component";
 import type { Deck } from "@/lib/deck";
 import type { PluginHostState } from "@/lib/plugins/usePluginHost";
 import { PluginBackgrounds, PluginButtons, PluginPanel, PluginStatusItems } from "@/components/plugins/PresenterPlugins";
@@ -81,11 +69,6 @@ import { AddPluginPage, DiscoverPluginsPage, PluginPage } from "@/components/plu
 import { pluginLabel, useInstalledPlugins } from "@/lib/plugins/installed";
 import { findCommand, type LoadedPlugin } from "@/lib/plugins/manifest";
 import { track } from "@/lib/analytics";
-
-// How long a pending "j<number>" jump waits for another digit before it
-// commits on its own. Long enough to type a second digit, short enough that the
-// presenter isn't left staring at a half-typed number.
-const JUMP_IDLE_MS = 1200;
 
 // --- Component ---
 
@@ -290,157 +273,29 @@ export function ControllerView({
     : landscape
       ? "mobileLandscape"
       : "mobile";
-  const [mosaic, setMosaic] = useState<MosaicNode<string> | null>(() => loadLayout(layoutForm));
-  // Crossing the breakpoint (rotating a tablet, resizing a window) swaps in
-  // that form's own tree. Adjusting during render rather than in an effect
-  // keeps the dashboard from painting one frame with the wrong layout.
-  const [renderedForm, setRenderedForm] = useState(layoutForm);
-  if (renderedForm !== layoutForm) {
-    setRenderedForm(layoutForm);
-    setMosaic(loadLayout(layoutForm));
-  }
-  const [hasPreferred, setHasPreferred] = useState(hasPreferredLayout);
-  // A card is shown iff it's a leaf in the tree; this drives the Settings checkboxes.
-  const visible = new Set(visibleKeys(mosaic));
+  const {
+    mosaic,
+    visible,
+    hasPreferred,
+    activePreset,
+    onMosaicChange,
+    applyPreset,
+    resetLayout,
+    savePreferredLayout,
+    restorePreferredLayout,
+    toggleCard,
+  } = useControllerLayout(layoutForm);
 
-  // "j52" style jumps: the jumpToSlide binding arms digit capture, digits
-  // accumulate, and Enter or a short pause commits. The pending digits live in
-  // state so the footer counter can show them — a mode that silently swallows
-  // keystrokes is worse than no mode at all.
-  const [pendingJump, setPendingJump] = useState<string | null>(null);
-  const jumpTimer = useRef<number | null>(null);
-
-  const cancelJump = useCallback(() => {
-    if (jumpTimer.current !== null) clearTimeout(jumpTimer.current);
-    jumpTimer.current = null;
-    setPendingJump(null);
-  }, []);
-
-  const commitJump = useCallback((digits: string) => {
-    cancelJump();
-    const n = parseInt(digits, 10);
-    if (Number.isFinite(n)) onGoTo(Math.min(Math.max(n, 1), totalSlides));
-  }, [cancelJump, onGoTo, totalSlides]);
-
-  // Arm (or extend) digit capture. The idle timeout means "j5" alone still
-  // jumps, and a stray prefix key never leaves the mode armed forever.
-  const armJump = useCallback((digits: string) => {
-    if (jumpTimer.current !== null) clearTimeout(jumpTimer.current);
-    setPendingJump(digits);
-    jumpTimer.current = window.setTimeout(() => {
-      jumpTimer.current = null;
-      if (digits) commitJump(digits);
-      else cancelJump();
-    }, JUMP_IDLE_MS);
-  }, [commitJump, cancelJump]);
-
-  // Never leave a pending jump's timer running past unmount.
-  useEffect(() => cancelJump, [cancelJump]);
+  const jump = useSlideJump(onGoTo, totalSlides);
+  const { pendingJump } = jump;
 
   const { host: pluginHost, plugins: runningPlugins } = plugins;
   // Plugins show the presenter's keys in their tooltips (presio.commands.shortcut).
   useEffect(() => pluginHost.setKeymap(keymap), [pluginHost, keymap]);
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      // ⌘K / Ctrl+K: the command palette, from anywhere (a field included).
-      if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        cancelJump();
-        setPaletteOpen((open) => !open);
-        return;
-      }
-      if (isEditableTarget(e.target)) return;
-      // While armed, every keystroke belongs to the jump: digits accumulate,
-      // Enter commits, and anything else cancels rather than firing its own
-      // shortcut halfway through a page number.
-      if (pendingJump !== null) {
-        // A bare modifier press isn't a decision either way.
-        if (["Shift", "Control", "Alt", "Meta"].includes(e.key)) return;
-        e.preventDefault();
-        if (/^[0-9]$/.test(e.key)) armJump(pendingJump + e.key);
-        else if (e.key === "Enter") commitJump(pendingJump);
-        else cancelJump();
-        return;
-      }
-      if (matchesBinding(e, keymap.jumpToSlide)) {
-        e.preventDefault();
-        armJump("");
-      } else if (matchesBinding(e, keymap.firstSlide)) {
-        e.preventDefault();
-        onGoTo(1);
-      } else if (matchesBinding(e, keymap.lastSlide)) {
-        e.preventDefault();
-        onGoTo(totalSlides);
-      } else if (matchesBinding(e, keymap.nextSlide)) {
-        e.preventDefault();
-        onGoTo(currentSlide + 1);
-      } else if (matchesBinding(e, keymap.prevSlide)) {
-        e.preventDefault();
-        onGoTo(currentSlide - 1);
-      } else if (matchesBinding(e, keymap.toggleBlank)) {
-        onBlankToggle();
-      } else if (!e.repeat) {
-        // Plugins' keybindings, after Presio's own: a key both claim is ours.
-        for (const plugin of runningPlugins) {
-          const { id: pluginId, manifest: { contributes } } = plugin;
-          const hit = contributes.keybindings.find((kb) => matchesBinding(e, pluginBindings(keymap, pluginId, kb)));
-          if (hit) {
-            e.preventDefault();
-            pluginHost.runCommand(pluginId, hit.command);
-            return;
-          }
-        }
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [currentSlide, totalSlides, onGoTo, onBlankToggle, local, keymap, pendingJump, armJump, commitJump, cancelJump, runningPlugins, pluginHost]);
+  const togglePalette = useCallback(() => setPaletteOpen((open) => !open), []);
+  useControllerKeys({ keymap, currentSlide, totalSlides, onGoTo, onBlankToggle, togglePalette, jump, runningPlugins, pluginHost });
 
-  const onMosaicChange = useCallback((node: MosaicNode<string> | null) => {
-    setMosaic(node);
-    saveLayout(layoutForm, node);
-  }, [layoutForm]);
-
-  // Applying a preset writes it to *this* screen's stored tree, so choosing
-  // the desktop grid on a phone doesn't change what a desktop starts with.
-  const applyPreset = useCallback((form: LayoutForm) => {
-    const layout = defaultLayout(form);
-    setMosaic(layout);
-    saveLayout(layoutForm, layout);
-  }, [layoutForm]);
-
-  const activePreset = LAYOUT_PRESETS.find(
-    (p) => JSON.stringify(mosaic) === JSON.stringify(defaultLayout(p.form))
-  )?.form;
-
-  const resetLayout = useCallback(() => {
-    const fresh = defaultLayout(layoutForm);
-    setMosaic(fresh);
-    saveLayout(layoutForm, fresh);
-  }, [layoutForm]);
-
-  const savePreferredLayout = useCallback(() => {
-    savePreferred(mosaic);
-    setHasPreferred(true);
-  }, [mosaic]);
-
-  const restorePreferredLayout = useCallback(() => {
-    const pref = loadPreferred();
-    if (!pref) return;
-    setMosaic(pref);
-    saveLayout(layoutForm, pref);
-  }, [layoutForm]);
-
-  const toggleCard = useCallback((key: string) => {
-    setMosaic((prev) => {
-      const next = visibleKeys(prev).includes(key)
-        ? removeLeaf(prev, key)
-        : addLeaf(prev, key);
-      saveLayout(layoutForm, next);
-      return next;
-    });
-  }, [layoutForm]);
 
   // Navigations this device performs itself (viewer popup) use the page's own
   // origin — it always works locally. The share dialog's QR/links honor the
@@ -455,39 +310,12 @@ export function ControllerView({
     controllerUrl,
     viewerUrl: shareViewerUrl,
   } = useJoinUrls(id);
-  // The shared-control passphrase is minted on demand, not at import: a deck
-  // that is never co-presented never needs one, and a deck that was never
-  // shared has no session row to hold it. Fetched (and cached) the first time
-  // the presenter asks to hand out control.
-  // Tagged with the id it was read for: sharing re-keys the deck and leaves
-  // this component mounted under the new id, where the previous deck's
-  // passphrase would be wrong. Anything but a match falls back to whatever the
-  // credential for the id on screen holds.
-  const [cached, setCached] = useState(() => ({ id, value: getSessionAuth(id).passphrase ?? "" }));
-  const passphrase = cached.id === id ? cached.value : (getSessionAuth(id).passphrase ?? "");
-  const [passphraseBusy, setPassphraseBusy] = useState(false);
-  const [passphraseError, setPassphraseError] = useState("");
-  const requestPassphrase = useCallback(async () => {
-    if (passphrase || passphraseBusy) return;
-    setPassphraseBusy(true);
-    setPassphraseError("");
-    try {
-      const stored = getSessionAuth(id);
-      const headers = await controllerHeaders(id);
-      const res = await fetch(`/api/sessions/${id}/passphrase`, { method: "POST", headers });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || "Couldn't create a passphrase");
-      }
-      const data = await res.json();
-      setSessionAuth(id, { ...stored, passphrase: data.passphrase });
-      setCached({ id, value: data.passphrase });
-    } catch (e: unknown) {
-      setPassphraseError(e instanceof Error ? e.message : "Couldn't create a passphrase");
-    } finally {
-      setPassphraseBusy(false);
-    }
-  }, [id, passphrase, passphraseBusy]);
+  const {
+    passphrase,
+    busy: passphraseBusy,
+    error: passphraseError,
+    request: requestPassphrase,
+  } = usePassphrase(id);
   // Only a shared deck has a co-presenter to hand control to (and a row to
   // hold the passphrase); a local one is same-device by definition.
   const canSharePassphrase = !local;
