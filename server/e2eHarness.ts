@@ -10,7 +10,7 @@ import { fileURLToPath } from "url";
 import { Server } from "socket.io";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createApp } from "./app.js";
-import { registerSocketHandlers, createSocketState } from "./socket.js";
+import { registerSocketHandlers, createSocketState } from "./socket/index.js";
 import { FakeSupabase } from "./test/fakeSupabase.js";
 import { PORT, SESSION_ID, CONTROLLER_TOKEN, TOTAL_SLIDES } from "../e2e/constants.js";
 

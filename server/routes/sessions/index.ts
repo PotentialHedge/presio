@@ -9,7 +9,7 @@
 import type express from "express";
 import type { Server } from "socket.io";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { SocketState } from "../../socket.js";
+import type { SocketState } from "../../socket/index.js";
 import { registerHandoffRoutes } from "./handoff.js";
 import { registerSyncRoutes } from "./sync.js";
 import { registerDeckRoutes } from "./deck.js";

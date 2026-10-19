@@ -9,7 +9,7 @@ import { createPresentHandoff, updatePresentDeck } from "../lib/presentHandoff.j
 import { buildCheckReport } from "./check.js";
 import { agentDoc } from "./agentDocs.js";
 import { resolveOptionalUserId } from "../auth.js";
-import type { SocketState } from "../socket.js";
+import type { SocketState } from "../socket/index.js";
 
 /** Live-broadcast deps, so an MCP deck replacement reaches viewers exactly as
  *  the REST one does. Without them `updatePresentDeck` silently skips the

@@ -4,7 +4,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Server } from "socket.io";
-import { forgetDeckRetained, type SocketState } from "../socket.js";
+import { forgetDeckRetained, type SocketState } from "../socket/index.js";
 
 /** The current slide, kept within a deck of `totalSlides`. */
 export function clampSlide(current: number | null | undefined, totalSlides: number): number {

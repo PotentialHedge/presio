@@ -6,7 +6,7 @@ import { supabase } from "./supabase.js";
 import { createApp } from "./app.js";
 import { getAllowedOrigins } from "./security.js";
 import { isLocalMode } from "./local/mode.js";
-import { registerSocketHandlers, createSocketState } from "./socket.js";
+import { registerSocketHandlers, createSocketState } from "./socket/index.js";
 import { endSessions } from "./lib/sessionLifecycle.js";
 
 const allowedOrigins = getAllowedOrigins();

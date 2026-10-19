@@ -20,7 +20,7 @@ import { registerLanAddressRoute } from "./routes/lanAddress.js";
 import { registerAgentDocRoutes } from "./routes/agentDocs.js";
 import { registerMcpRoutes } from "./routes/mcp.js";
 import { registerPluginRoutes } from "./routes/plugins.js";
-import type { SocketState } from "./socket.js";
+import type { SocketState } from "./socket/index.js";
 import { APP_VERSION } from "./version.js";
 
 export interface AppDeps {
@@ -101,7 +101,7 @@ export function createApp({ supabase, io, socketState }: AppDeps): express.Expre
   // Note this is not brute-force protection either way: the shared-control
   // passphrase is 8 characters over a 32-symbol alphabet (~2^40), and live
   // presenting (slide changes, laser, drawing) runs over Socket.IO rather than
-  // HTTP, so it never passed through the limiter at all — see socket.ts.
+  // HTTP, so it never passed through the limiter at all — see socket/guards.ts.
 
   // The MCP tools (present_pdf / check_pdf) take the PDF base64-encoded inside
   // the JSON-RPC body, so /mcp needs a body limit in the same league as the

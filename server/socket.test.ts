@@ -3,7 +3,7 @@ import http from "http";
 import { Server } from "socket.io";
 import { io as ioClient, type Socket } from "socket.io-client";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { registerSocketHandlers, createSocketState } from "./socket.js";
+import { registerSocketHandlers, createSocketState } from "./socket/index.js";
 import { FakeSupabase } from "./test/fakeSupabase.js";
 
 let server: http.Server;

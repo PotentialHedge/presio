@@ -1,6 +1,6 @@
 // presio.audience: each viewer's input, one slot per viewer under each key a
 // plugin opens. Shared by the two places that hold the slots: the server, for
-// a shared deck (server/socket.ts), and the presenter's page, which mirrors
+// a shared deck (server/audience.ts), and the presenter's page, which mirrors
 // them (and holds them itself for a local deck, whose audience is the viewer
 // window in the same browser). Both summarize the same way, so a plugin sees
 // the same counts either way.

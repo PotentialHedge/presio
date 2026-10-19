@@ -29,7 +29,7 @@ These are served live by the Express app (not static files):
 
 Sources: `server/agent/content/`, `server/routes/agentDocs.ts`, `server/routes/mcp.ts`, `server/lib/presentHandoff.ts`.
 
-Plugins: `client/public/plugin-frame.html` (frame + `window.presio` runtime), `client/src/lib/plugins/` (host), `client/plugins/` (built-in plugins in TS/React, bundled by `client/plugins/build.ts`), `client/public/plugins/` (plugin template), relay in `server/socket.ts`.
+Plugins: `client/public/plugin-frame.html` (frame + `window.presio` runtime), `client/src/lib/plugins/` (host), `client/plugins/` (built-in plugins in TS/React, bundled by `client/plugins/build.ts`), `client/public/plugins/` (plugin template), relay in `server/socket/plugins.ts`.
 
 ## Dev
 

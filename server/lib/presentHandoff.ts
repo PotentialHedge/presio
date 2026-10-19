@@ -3,7 +3,7 @@ import type { Server } from "socket.io";
 import { nanoid } from "nanoid";
 import { countDeckPages } from "./pdfDoc.js";
 import { safeEqual } from "../auth.js";
-import type { SocketState } from "../socket.js";
+import type { SocketState } from "../socket/index.js";
 import { announceDeck, clampSlide, replaceHostedPdf } from "./hostedDeck.js";
 import { deckTitle } from "./upload.js";
 import { generatePassphrase, insertSession, ownedExpiry } from "./sessionRows.js";

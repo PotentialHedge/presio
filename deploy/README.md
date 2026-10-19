@@ -318,7 +318,7 @@ allowance on each, so the effective ceiling is doubled. Recreate the rules on
 every zone — a domain without them is the soft way in to the same origin.
 
 Independent of this, `join_session` over Socket.IO is throttled per connection
-in `server/socket.ts`, because its reply reveals whether a 6-character join code
+in `server/socket/guards.ts`, because its reply reveals whether a 6-character join code
 exists. That throttle is part of the app and needs no configuration.
 
 ## Versions and upgrading

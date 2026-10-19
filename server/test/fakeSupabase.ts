@@ -1,5 +1,5 @@
 // A minimal in-memory stand-in for the Supabase client, implementing only the
-// query-builder surface that app.ts / socket.ts actually use. Cast to
+// query-builder surface that app.ts / socket/ actually use. Cast to
 // SupabaseClient at the call site (createApp/registerSocketHandlers) — it is
 // structurally compatible for the methods exercised, not the full type.
 
