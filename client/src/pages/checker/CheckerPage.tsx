@@ -16,6 +16,9 @@ import "@/lib/pdf"; // ensure worker is configured
 import { saveFile } from "@/lib/saveFile";
 import { track } from "@/lib/analytics";
 
+/** Thumbnails rendered at once. */
+const THUMB_CONCURRENCY = 4;
+
 type PageModalState = { page: number; tab: "notes" | "media" } | null;
 
 export default function CheckerPage() {
@@ -35,9 +38,17 @@ export default function CheckerPage() {
   const [deletedMedia, setDeletedMedia] = useState<Set<string>>(new Set());
   const pdfRef = useRef<PDFDocumentProxy | null>(null);
   const pdfBytesRef = useRef<Uint8Array | null>(null);
+  // Bumped per loaded (or cleared) file, so a previous file's late work
+  // (its report, its thumbnails) never lands in the new one's view.
+  const loadGen = useRef(0);
 
   useEffect(() => {
-    return () => { destroyPdf(pdfRef.current); };
+    return () => {
+      // Not a DOM ref: bumping it is the point, so any in-flight load stops.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      loadGen.current++;
+      destroyPdf(pdfRef.current);
+    };
   }, []);
 
   const loadFile = useCallback(async (file: File) => {
@@ -45,6 +56,7 @@ export default function CheckerPage() {
       setError("Please upload a PDF file.");
       return;
     }
+    const gen = ++loadGen.current;
     setError("");
     setLoading(true);
     setReport(null);
@@ -60,24 +72,36 @@ export default function CheckerPage() {
       // pdf.js transfers the ArrayBuffer to its worker (detaching it), so pass
       // a copy — the original stored in pdfBytesRef stays intact for download.
       const pdf = await loadPdfData(bytes.slice());
+      if (gen !== loadGen.current) {
+        destroyPdf(pdf);
+        return;
+      }
       pdfRef.current = pdf;
 
       const deck = await inspectAttachments(pdf);
+      if (gen !== loadGen.current) return;
       track("check", { slides: pdf.numPages });
       setReport(deck);
       setFilename(file.name);
 
-      for (let p = 1; p <= pdf.numPages; p++) {
-        renderPage(pdf, p, { targetWidth: 400 })
-          .then((canvas) => {
-            setThumbs((prev) => new Map(prev).set(p, canvas));
-          })
-          .catch(() => { /* ignore */ });
-      }
+      // A few pages at a time, in order, and only while this file is current.
+      let next = 1;
+      const renderNext = async (): Promise<void> => {
+        while (next <= pdf.numPages && gen === loadGen.current) {
+          const p = next++;
+          try {
+            const canvas = await renderPage(pdf, p, { targetWidth: 400 });
+            if (gen === loadGen.current) setThumbs((prev) => new Map(prev).set(p, canvas));
+          } catch {
+            // A page that won't render just keeps its placeholder.
+          }
+        }
+      };
+      for (let i = 0; i < THUMB_CONCURRENCY; i++) void renderNext();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to load PDF");
+      if (gen === loadGen.current) setError(e instanceof Error ? e.message : "Failed to load PDF");
     } finally {
-      setLoading(false);
+      if (gen === loadGen.current) setLoading(false);
     }
   }, []);
 
@@ -162,6 +186,7 @@ export default function CheckerPage() {
   }
 
   const reset = useCallback(() => {
+    loadGen.current++;
     destroyPdf(pdfRef.current);
     pdfRef.current = null;
     pdfBytesRef.current = null;
