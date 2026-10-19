@@ -8,6 +8,7 @@ import { openPdf, closePdf, readAttachments } from "../lib/pdfDoc.js";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { canonicalBaseUrl } from "../lib/baseUrl.js";
 import { MAX_PDF_BYTES } from "../validation.js";
+import { unusualAttachmentWarning } from "../../shared/attachments.js";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_PDF_BYTES } });
 
@@ -161,9 +162,12 @@ export async function buildCheckReport(buffer: Buffer, schemaBaseUrl: string): P
         });
       }
     } else {
+      // Not one of Presio's own sidecars: a plugin's file, fine when it's JSON,
+      // an image or a video.
+      const warning = unusualAttachmentWarning(filename);
       orphans.push({
-        filename, kind: "unknown", validity: "warning",
-        issues: [{ level: "warning", message: "Unrecognized attachment — not a Presio sidecar" }],
+        filename, kind: "unknown", validity: warning ? "warning" : "valid",
+        issues: warning ? [{ level: "warning", message: warning }] : [],
       });
     }
   }

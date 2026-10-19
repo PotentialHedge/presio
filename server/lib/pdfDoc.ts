@@ -42,10 +42,14 @@ export async function closePdf(doc: PDFDocumentProxy | null | undefined): Promis
 export interface PdfAttachment {
   filename: string;
   content: Uint8Array;
+  /** For a file attached to a page (a FileAttachment annotation) rather than
+   *  to the document: its 1-based page. */
+  page?: number;
 }
 
 /**
- * Read a deck's attachments, bytes included.
+ * Read a deck's attachments, bytes included: the document's own, then each
+ * page's in page order.
  *
  * In v6 an entry's `content` is only populated when it happens to be loaded
  * already; otherwise the bytes are fetched on demand. Entries whose content
@@ -53,13 +57,20 @@ export interface PdfAttachment {
  * never mistake a failed read for an empty file.
  */
 export async function readAttachments(doc: PDFDocumentProxy): Promise<PdfAttachment[]> {
-  const raw = await doc.getAttachments();
-  if (!raw) return [];
-
   const out: PdfAttachment[] = [];
-  for (const [id, entry] of raw) {
+  const raw = await doc.getAttachments();
+  for (const [id, entry] of raw ?? []) {
     const content = entry.content ?? (await doc.getAttachmentContent(id));
     if (content) out.push({ filename: entry.filename ?? id, content });
+  }
+
+  for (let n = 1; n <= doc.numPages; n++) {
+    const annotations = await (await doc.getPage(n)).getAnnotations();
+    for (const ann of annotations) {
+      if (ann.subtype !== "FileAttachment" || !ann.fileId) continue;
+      const content = await doc.getAttachmentContent(ann.fileId);
+      if (content) out.push({ filename: ann.file?.filename ?? ann.fileId, content, page: n });
+    }
   }
   return out;
 }

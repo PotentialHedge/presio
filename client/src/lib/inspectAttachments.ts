@@ -6,6 +6,7 @@
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { readAttachments } from "./pdf";
 import { notesToMarkdown } from "./typstNotes";
+import { unusualAttachmentWarning } from "@shared/attachments";
 
 export type Validity = "valid" | "warning" | "invalid";
 
@@ -299,13 +300,11 @@ export async function inspectAttachments(pdf: PDFDocumentProxy): Promise<DeckRep
         orphans.push(a);
       }
     } else {
-      orphans.push({
-        filename,
-        kind: "unknown",
-        validity: "warning",
-        issues: [{ level: "warning", message: "Unrecognized attachment — not a Presio sidecar" }],
-        content,
-      });
+      // Not one of Presio's own sidecars: a plugin's file, fine when it's JSON,
+      // an image or a video.
+      const warning = unusualAttachmentWarning(filename);
+      const issues: AttachmentIssue[] = warning ? [{ level: "warning", message: warning }] : [];
+      orphans.push({ filename, kind: "unknown", validity: validity(issues), issues, content });
     }
   }
 

@@ -540,7 +540,8 @@
         shortcut: function (id) { return (ctx.shortcuts && ctx.shortcuts[id]) || null; },
       },
       deck: {
-        /** [{ filename, bytes: Uint8Array }] — needs the "deck" permission. */
+        /** [{ filename, bytes: Uint8Array, page?, rect? }]: the document's attachments,
+         *  then each page's (page 1-based, rect in page fractions) — needs the "deck" permission. */
         attachments: function () { return call("deck.attachments"); },
         /** The PDF itself, as a Uint8Array — needs the "deck" permission. */
         bytes: function () { return call("deck.bytes"); },

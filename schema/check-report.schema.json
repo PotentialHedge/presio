@@ -26,7 +26,7 @@
     },
     "orphans": {
       "type": "array",
-      "description": "Attachments not associated with any page (unreferenced binaries, unknown filenames).",
+      "description": "Attachments outside the notes and media sidecars: unreferenced media binaries, and other files (for plugins), whether attached to the document or to a page. Ones that aren't JSON, an image or a video get a warning.",
       "items": { "$ref": "#/$defs/attachmentResult" }
     }
   },

@@ -198,7 +198,12 @@ interface Presio {
     shortcut(id: string): string | null;
   };
   readonly deck: {
-    attachments(): Promise<{ filename: string; bytes: Uint8Array }[]>;
+    /** Every file the PDF carries, of any type: the document's own, then those
+     *  attached to a page, which say which `page` (1-based) and where on it
+     *  (`rect`: fractions of the page, top-left origin). */
+    attachments(): Promise<
+      { filename: string; bytes: Uint8Array; page?: number; rect?: { x: number; y: number; w: number; h: number } }[]
+    >;
     bytes(): Promise<Uint8Array>;
     /** Each page's size in PDF points, in page order. */
     pages(): Promise<{ width: number; height: number }[]>;

@@ -200,7 +200,9 @@ index.html
   `presio.ui.view` and `setInteractive` areas are fractions of the surface
   either way.
 - `activation` — `"always"`, or `"attachment:<glob>"` to run only for decks
-  whose PDF embeds a matching attachment (e.g. `"attachment:poll-*.json"`).
+  whose PDF embeds a matching attachment, on the document or on a page (e.g.
+  `"attachment:poll-*.json"`, `"attachment:*.py"`). Any type of file works;
+  the deck checker flags ones that aren't JSON, an image or a video.
 - `permissions` — `"deck"` to read the PDF (its bytes and embedded
   attachments); `"editDeck"` to save an edited PDF over it from the presenter's
   device; `"history"` to keep an edit history for the deck (`presio.history`)
@@ -355,9 +357,11 @@ presio.ui.setButton(command, { active, label, disabled, menu })  // update its b
                                            // menu: [{ id, label, checked?, disabled? } | { heading } | { separator: true }]
 presio.ui.setStatus(id, { text, tooltip, icon, command, args })  // a status item in the controller's header; null hides it
 
-presio.deck.attachments()   // → Promise<[{ filename, bytes: Uint8Array }]> ("deck" permission): the PDF's
-                            // document-level attachments (Typst pdf.attach, LaTeX embedfile, pdftk attach_files),
-                            // by file name; files attached to a page (LaTeX attachfile) aren't included
+presio.deck.attachments()   // → Promise<[{ filename, bytes: Uint8Array, page?, rect? }]> ("deck" permission):
+                            // every file the PDF carries, of any type — the document's own (Typst pdf.attach,
+                            // LaTeX embedfile, pdftk attach_files), then those attached to a page (LaTeX
+                            // attachfile), which give their 1-based `page` and `rect` ({ x, y, w, h }:
+                            // fractions of the page, top-left origin)
 presio.deck.bytes()         // → Promise<Uint8Array>, the PDF itself ("deck")
 presio.deck.pages()         // → Promise<[{ width, height }]>, each page's size in PDF points ("deck")
 presio.deck.save(bytes)     // presenter: → Promise; same pages, saved where the deck lives ("editDeck")

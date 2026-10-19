@@ -40,7 +40,9 @@ export class Deck {
         try {
           // Copies, so a plugin can't mutate the bytes the app itself renders from.
           const list = await this.attachments();
-          return list.map(({ filename, content }) => ({ filename, bytes: content.slice() }));
+          return list.map(({ filename, content, page, rect }) =>
+            page === undefined ? { filename, bytes: content.slice() } : { filename, bytes: content.slice(), page, rect }
+          );
         } catch {
           throw new HostError("Internal", "Couldn't read the deck's attachments");
         }

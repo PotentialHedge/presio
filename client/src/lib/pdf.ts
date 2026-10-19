@@ -40,10 +40,23 @@ export function destroyPdf(doc: PDFDocumentProxy | null | undefined): void {
 export interface PdfAttachment {
   filename: string;
   content: Uint8Array;
+  /** For a file attached to a page (a FileAttachment annotation, as LaTeX's
+   *  attachfile makes) rather than to the document: its 1-based page. */
+  page?: number;
+  /** Where that annotation sits on its page: fractions of the page, top-left origin. */
+  rect?: { x: number; y: number; w: number; h: number };
+}
+
+/** A page's file attachment annotations, as pdf.js reports them. */
+async function fileAnnotations(pdf: PDFDocumentProxy, pageNum: number) {
+  const page = await pdf.getPage(pageNum);
+  const annotations = await page.getAnnotations();
+  return { page, annotations: annotations.filter((a) => a.subtype === "FileAttachment" && a.fileId) };
 }
 
 /**
- * Whether the deck carries any sidecar attachments at all.
+ * Whether the deck carries any sidecar attachments at all, on the document
+ * or on a page.
  *
  * Separate from readAttachments() because the answer is just a count: pulling
  * every attachment's bytes to find out would fetch the whole sidecar payload
@@ -51,11 +64,16 @@ export interface PdfAttachment {
  */
 export async function hasAttachments(pdf: PDFDocumentProxy): Promise<boolean> {
   const raw = await pdf.getAttachments();
-  return !!raw && raw.size > 0;
+  if (raw && raw.size > 0) return true;
+  for (let n = 1; n <= pdf.numPages; n++) {
+    if ((await fileAnnotations(pdf, n)).annotations.length) return true;
+  }
+  return false;
 }
 
 /**
- * Read a deck's attachments, bytes included.
+ * Read a deck's attachments, bytes included: the document's own, then each
+ * page's in page order.
  *
  * v6 returns a Map rather than a plain object, and an entry's `content` is
  * only populated when the bytes happen to be loaded already. The old
@@ -64,13 +82,33 @@ export async function hasAttachments(pdf: PDFDocumentProxy): Promise<boolean> {
  * used hid the change from the compiler.
  */
 export async function readAttachments(pdf: PDFDocumentProxy): Promise<PdfAttachment[]> {
-  const raw = await pdf.getAttachments();
-  if (!raw) return [];
-
   const out: PdfAttachment[] = [];
-  for (const [id, entry] of raw) {
+  const raw = await pdf.getAttachments();
+  for (const [id, entry] of raw ?? []) {
     const content = entry.content ?? (await pdf.getAttachmentContent(id));
     if (content) out.push({ filename: entry.filename ?? id, content });
+  }
+
+  for (let n = 1; n <= pdf.numPages; n++) {
+    const { page, annotations } = await fileAnnotations(pdf, n);
+    if (!annotations.length) continue;
+    const viewport = page.getViewport({ scale: 1 });
+    for (const ann of annotations) {
+      const content = await pdf.getAttachmentContent(ann.fileId);
+      if (!content) continue;
+      // The rect is in PDF user space (bottom-left origin); the viewport flips
+      // it to the top-left origin plugins' layers use.
+      const [rx1, ry1, rx2, ry2] = ann.rect as [number, number, number, number];
+      const [x1, y1] = viewport.convertToViewportPoint(rx1, ry1);
+      const [x2, y2] = viewport.convertToViewportPoint(rx2, ry2);
+      const rect = {
+        x: Math.min(x1, x2) / viewport.width,
+        y: Math.min(y1, y2) / viewport.height,
+        w: Math.abs(x2 - x1) / viewport.width,
+        h: Math.abs(y2 - y1) / viewport.height,
+      };
+      out.push({ filename: ann.file?.filename ?? ann.fileId, content, page: n, rect });
+    }
   }
   return out;
 }
