@@ -8,6 +8,7 @@ import { useElementRef } from "@/hooks/useElementRef";
 import { lsGetString, lsSetString, lsRemove, deckWatchKey, slideKey } from "@/lib/storage";
 import { socket } from "@/lib/socket";
 import { useLatestRef } from "@/hooks/useLatestRef";
+import { DeckLoadTimer } from "@/lib/deckLoadMetrics";
 import { startClockSync } from "@/lib/clock";
 import { supabase } from "@/lib/supabaseClient";
 import { authEnabled } from "@/lib/authMode";
@@ -47,6 +48,12 @@ export default function Presentation() {
     setRole(next);
     setSettledRole(next);
   }, []);
+  const settledRoleRef = useLatestRef(settledRole);
+
+  // Times the current load (see deckLoadMetrics), paired with the document it
+  // loaded so the render and extras effects only mark stages for that one —
+  // not for a deck swapped in later.
+  const loadTimerRef = useRef<{ timer: DeckLoadTimer; pdf: PDFDocumentProxy | null } | null>(null);
 
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [pdfUrl, setPdfUrl] = useState("");
@@ -67,6 +74,7 @@ export default function Presentation() {
     if (!pdf) return;
     let cancelled = false;
     loadDeckExtras(pdf).then((loaded) => {
+      if (loadTimerRef.current?.pdf === pdf) loadTimerRef.current.timer.mark("extras");
       if (!cancelled) setExtras({ pdf, extras: loaded });
     });
     return () => { cancelled = true; };
@@ -303,6 +311,9 @@ export default function Presentation() {
     // Either way this ends in pdf.js: fetch it and start its worker alongside
     // the record/session lookup rather than after it.
     preloadPdf();
+    const timer = new DeckLoadTimer();
+    if (settledRoleRef.current) timer.settle(settledRoleRef.current);
+    loadTimerRef.current = { timer, pdf: null };
     (async () => {
       try {
         // If the PDF is in this browser's IndexedDB, it's a local session —
@@ -320,6 +331,9 @@ export default function Presentation() {
           localUrlRef.current = localUrl;
           const doc = await loadPdf(localUrl);
           if (cancelled) return;
+          timer.mark("open");
+          timer.describe("local", doc.numPages, rec.blob.size);
+          loadTimerRef.current = { timer, pdf: doc };
           setPdfUrl(localUrl);
           setPdf(doc);
           setFilename(rec.filename);
@@ -355,6 +369,10 @@ export default function Presentation() {
           replacedAt ? freshPdfUrl(session.pdfUrl, replacedAt) : session.pdfUrl
         );
         if (cancelled) return;
+        timer.mark("open");
+        // The full length, even while a range-loaded deck is still streaming in.
+        void doc.getDownloadInfo().then(({ length }) => timer.describe("server", doc.numPages, length), () => {});
+        loadTimerRef.current = { timer, pdf: doc };
         // Store the canonical URL: later reloads append their own version.
         setPdfUrl(session.pdfUrl);
         setPdf(doc);
@@ -375,7 +393,7 @@ export default function Presentation() {
     // replacedAt belongs here: replacing the same deck again from Home routes
     // back to this already-mounted page with a new timestamp, and that has to
     // reload the document rather than leave the previous one on screen.
-  }, [id, replacedAt]);
+  }, [id, replacedAt, settledRoleRef]);
 
   // The loaded document decides the page count: URL-backed decks re-fetch
   // their PDF on every load, so a republished file can change the page count
@@ -585,6 +603,7 @@ export default function Presentation() {
   const trackedRoleRef = useRef("");
   useEffect(() => {
     if (!settledRole) return;
+    loadTimerRef.current?.timer.settle(settledRole);
     if (trackedRoleRef.current === settledRole) return;
     trackedRoleRef.current = settledRole;
     track("session-role", { role: settledRole, mode: local ? "local" : "server" });
@@ -618,6 +637,7 @@ export default function Presentation() {
       canvas.style.height = "100%";
       canvas.style.objectFit = "contain";
       container.appendChild(canvas);
+      if (loadTimerRef.current?.pdf === pdf) loadTimerRef.current.timer.mark("paint");
     });
     return () => { stale = true; };
     // The container comes and goes with the view (and card) that owns it:
