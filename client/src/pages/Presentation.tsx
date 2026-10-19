@@ -1,8 +1,8 @@
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useParams, useSearchParams, useNavigate, useLocation, Link } from "react-router-dom";
 import type { PDFDocumentProxy } from "pdfjs-dist";
-import { loadPdf, loadPdfData, freshPdfUrl, loadLatestPdf, renderPage, clearCache, openPdf, destroyPdf } from "@/lib/pdf";
-import { loadDeck, type Deck } from "@/lib/deck";
+import { loadPdf, loadPdfData, freshPdfUrl, loadLatestPdf, renderPage, clearCache, openPdf, destroyPdf, preloadPdf } from "@/lib/pdf";
+import { makeDeck, loadDeckExtras, type DeckExtras } from "@/lib/deck";
 import { useRenderTargetWidth } from "@/hooks/useRenderTargetWidth";
 import { useElementRef } from "@/hooks/useElementRef";
 import { lsGetString, lsSetString, lsRemove, deckWatchKey, slideKey } from "@/lib/storage";
@@ -58,17 +58,23 @@ export default function Presentation() {
   const [error, setError] = useState("");
   const [blanked, setBlanked] = useState(false);
 
-  // Everything extracted from the loaded PDF (links, attachments…),
-  // re-derived whenever the document is swapped (e.g. after a notes edit).
-  const [deck, setDeck] = useState<Deck | null>(null);
+  // Everything extracted from the loaded PDF, re-derived whenever the
+  // document is swapped (e.g. after a notes edit). The deck exists as soon as
+  // the PDF opens; links and attachments join it once the pages' annotations
+  // are read, which the first slide doesn't wait for.
+  const [extras, setExtras] = useState<{ pdf: PDFDocumentProxy; extras: DeckExtras } | null>(null);
   useEffect(() => {
     if (!pdf) return;
     let cancelled = false;
-    loadDeck(pdf, pdfUrl, filename).then((loaded) => {
-      if (!cancelled) setDeck(loaded);
+    loadDeckExtras(pdf).then((loaded) => {
+      if (!cancelled) setExtras({ pdf, extras: loaded });
     });
     return () => { cancelled = true; };
-  }, [pdf, pdfUrl, filename]);
+  }, [pdf]);
+  const deck = useMemo(
+    () => (pdf ? makeDeck(pdf, pdfUrl, filename, extras?.pdf === pdf ? extras.extras : undefined) : null),
+    [pdf, pdfUrl, filename, extras]
+  );
 
   // The current slide's container, which a dashboard layout change replaces:
   // rendering follows the element, not just the ref.
@@ -294,6 +300,9 @@ export default function Presentation() {
   useEffect(() => {
     let cancelled = false;
     let localUrl = "";
+    // Either way this ends in pdf.js: fetch it and start its worker alongside
+    // the record/session lookup rather than after it.
+    preloadPdf();
     (async () => {
       try {
         // If the PDF is in this browser's IndexedDB, it's a local session —

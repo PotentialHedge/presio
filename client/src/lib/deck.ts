@@ -21,24 +21,30 @@ export interface Deck {
   linksBySlide: Map<number, PdfLink[]>;
 }
 
-/** Extract everything the app needs from a freshly loaded PDF. Never rejects —
- *  links and attachments are best-effort extras. */
-export async function loadDeck(
+/** The parts of a Deck read from page annotations, which a long document
+ *  takes a moment to scan. */
+export type DeckExtras = Pick<Deck, "hasAttachments" | "linksBySlide">;
+
+/** What a deck shows until its extras are read: no links, no attachments. */
+export const NO_EXTRAS: DeckExtras = { hasAttachments: false, linksBySlide: new Map() };
+
+/** A deck for a freshly loaded PDF. Synchronous, so the first slide never
+ *  waits on the annotation scan — the extras follow from loadDeckExtras. */
+export function makeDeck(
   pdf: PDFDocumentProxy,
   url: string,
-  filename: string
-): Promise<Deck> {
-  const totalSlides = pdf.numPages;
+  filename: string,
+  extras: DeckExtras = NO_EXTRAS
+): Deck {
+  return { pdf, url, filename, totalSlides: pdf.numPages, ...extras };
+}
+
+/** Read a deck's links and whether it carries attachments. Never rejects —
+ *  both are best-effort extras. */
+export async function loadDeckExtras(pdf: PDFDocumentProxy): Promise<DeckExtras> {
   const [attachments, linksBySlide] = await Promise.all([
     hasAttachments(pdf).catch(() => false),
     loadLinks(pdf).catch(() => new Map<number, PdfLink[]>()),
   ]);
-  return {
-    pdf,
-    url,
-    filename,
-    totalSlides,
-    hasAttachments: attachments,
-    linksBySlide,
-  };
+  return { hasAttachments: attachments, linksBySlide };
 }

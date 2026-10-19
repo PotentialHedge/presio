@@ -1,4 +1,4 @@
-import type { getDocument, PDFDocumentProxy } from "pdfjs-dist";
+import type { getDocument, PDFDocumentProxy, PDFPageProxy, PDFWorker } from "pdfjs-dist";
 import pdfWorker from "./pdfWorker.ts?worker&url";
 
 // pdf.js itself is loaded on first use, not at import: this module sits under
@@ -13,7 +13,27 @@ function loadPdfjs() {
   return pdfjs;
 }
 
-type DocumentSource = Parameters<typeof getDocument>[0];
+/**
+ * One worker for every document, started as soon as a page knows it will open
+ * one (see preloadPdf). Spinning a worker up means fetching and parsing pdf.js's
+ * largest script, which otherwise only began once the deck's bytes were in
+ * hand — and again for every deck swapped in later. A worker handed to
+ * getDocument outlives the documents' loading tasks, so destroyPdf still frees
+ * a document without taking the worker down with it.
+ */
+let sharedWorker: PDFWorker | null = null;
+async function loadWorker(): Promise<PDFWorker> {
+  const lib = await loadPdfjs();
+  if (!sharedWorker || sharedWorker.destroyed) sharedWorker = new lib.PDFWorker();
+  return sharedWorker;
+}
+
+/** Start loading pdf.js and its worker ahead of the first openPdf(). */
+export function preloadPdf(): void {
+  void loadWorker().catch(() => { /* openPdf surfaces the failure */ });
+}
+
+type DocumentSource = Exclude<Parameters<typeof getDocument>[0], string | URL | ArrayBuffer | ArrayBufferView>;
 
 /**
  * The loading task that owns each open document.
@@ -31,8 +51,8 @@ const loadingTasks = new WeakMap<PDFDocumentProxy, ReturnType<typeof getDocument
 
 /** Open a PDF and remember the task that owns it. */
 export async function openPdf(source: DocumentSource): Promise<PDFDocumentProxy> {
-  const { getDocument } = await loadPdfjs();
-  const task = getDocument(source);
+  const [{ getDocument }, worker] = await Promise.all([loadPdfjs(), loadWorker()]);
+  const task = getDocument({ ...source, worker });
   const doc = await task.promise;
   loadingTasks.set(doc, task);
   return doc;
@@ -58,11 +78,76 @@ export interface PdfAttachment {
   rect?: { x: number; y: number; w: number; h: number };
 }
 
-/** A page's file attachment annotations, as pdf.js reports them. */
-async function fileAnnotations(pdf: PDFDocumentProxy, pageNum: number) {
-  const page = await pdf.getPage(pageNum);
-  const annotations = await page.getAnnotations();
-  return { page, annotations: annotations.filter((a) => a.subtype === "FileAttachment" && a.fileId) };
+/**
+ * Resolves once a page of this document has been painted (see renderPage).
+ *
+ * Reading every page's annotations queues one request per page on the same
+ * worker that renders, and on a long deck that queue sat in front of the
+ * first slide. Background scans wait on this instead — or on a short timeout,
+ * for a document nobody renders.
+ */
+const firstPaints = new WeakMap<PDFDocumentProxy, { done: Promise<void>; resolve: () => void }>();
+function firstPaint(pdf: PDFDocumentProxy) {
+  let entry = firstPaints.get(pdf);
+  if (!entry) {
+    let resolve!: () => void;
+    const done = new Promise<void>((r) => { resolve = r; });
+    entry = { done, resolve };
+    firstPaints.set(pdf, entry);
+  }
+  return entry;
+}
+const FIRST_PAINT_WAIT_MS = 1500;
+
+/** How many pages a scan has in flight at once: enough to hide the worker
+ *  round trip, few enough that a slide change doesn't queue behind the rest. */
+const SCAN_CONCURRENCY = 4;
+
+export interface PageAnnotations {
+  page: PDFPageProxy;
+  // pdf.js types annotation data loosely.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  annotations: any[];
+}
+
+/**
+ * Every page's annotations, in page order, read once per document.
+ *
+ * Links, attachment detection and plugins' attachments all need this, and
+ * each used to walk the whole document on its own.
+ */
+const annotationScans = new WeakMap<PDFDocumentProxy, Promise<PageAnnotations[]>>();
+export function pageAnnotations(pdf: PDFDocumentProxy): Promise<PageAnnotations[]> {
+  let scan = annotationScans.get(pdf);
+  if (!scan) {
+    scan = (async () => {
+      await Promise.race([
+        firstPaint(pdf).done,
+        new Promise((r) => setTimeout(r, FIRST_PAINT_WAIT_MS)),
+      ]);
+      const out: PageAnnotations[] = new Array(pdf.numPages);
+      let next = 1;
+      const work = async () => {
+        while (next <= pdf.numPages) {
+          const n = next++;
+          const page = await pdf.getPage(n);
+          out[n - 1] = { page, annotations: await page.getAnnotations() };
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(SCAN_CONCURRENCY, pdf.numPages) }, work));
+      return out;
+    })();
+    annotationScans.set(pdf, scan);
+  }
+  return scan;
+}
+
+/** Each page's file attachment annotations (LaTeX's attachfile makes these). */
+async function fileAnnotations(pdf: PDFDocumentProxy) {
+  return (await pageAnnotations(pdf)).map(({ page, annotations }) => ({
+    page,
+    annotations: annotations.filter((a) => a.subtype === "FileAttachment" && a.fileId),
+  }));
 }
 
 /**
@@ -76,10 +161,20 @@ async function fileAnnotations(pdf: PDFDocumentProxy, pageNum: number) {
 export async function hasAttachments(pdf: PDFDocumentProxy): Promise<boolean> {
   const raw = await pdf.getAttachments();
   if (raw && raw.size > 0) return true;
-  for (let n = 1; n <= pdf.numPages; n++) {
-    if ((await fileAnnotations(pdf, n)).annotations.length) return true;
+  return (await fileAnnotations(pdf)).some((p) => p.annotations.length > 0);
+}
+
+/**
+ * Every attachment's filename, document's then pages', without their bytes —
+ * all that deciding which plugins a deck activates needs.
+ */
+export async function attachmentNames(pdf: PDFDocumentProxy): Promise<string[]> {
+  const raw = await pdf.getAttachments();
+  const names = [...(raw ?? [])].map(([id, entry]) => entry.filename ?? id);
+  for (const { annotations } of await fileAnnotations(pdf)) {
+    for (const ann of annotations) names.push(ann.file?.filename ?? ann.fileId);
   }
-  return false;
+  return names;
 }
 
 /**
@@ -100,8 +195,8 @@ export async function readAttachments(pdf: PDFDocumentProxy): Promise<PdfAttachm
     if (content) out.push({ filename: entry.filename ?? id, content });
   }
 
-  for (let n = 1; n <= pdf.numPages; n++) {
-    const { page, annotations } = await fileAnnotations(pdf, n);
+  for (const [i, { page, annotations }] of (await fileAnnotations(pdf)).entries()) {
+    const n = i + 1;
     if (!annotations.length) continue;
     const viewport = page.getViewport({ scale: 1 });
     for (const ann of annotations) {
@@ -147,12 +242,22 @@ function copyCanvas(source: HTMLCanvasElement): HTMLCanvasElement {
   return out;
 }
 
+/** iOS/iPadOS, where every browser is WebKit. iPadOS reports as a Mac but has touch points. */
+const isIOS =
+  typeof navigator !== "undefined" &&
+  (/iPhone|iPad|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1));
+
 export async function loadPdf(url: string): Promise<PDFDocumentProxy> {
-  // Fetch the whole file in one request rather than letting pdf.js stream it
-  // with HTTP range requests. Mobile Safari/iOS mishandles cross-origin 206
-  // Partial Content responses, so range-loaded PDFs that work on desktop fail
-  // on iOS. Presentations are small, so a single GET is cheap and robust.
-  return openPdf({ url, disableRange: true, disableStream: true });
+  // Elsewhere, let pdf.js range-load: it reads the cross-reference table and
+  // just the objects the first slide needs, so a large deck paints long before
+  // the whole file has arrived (the rest keeps streaming in behind it). A
+  // server that doesn't advertise byte ranges simply gets one full GET.
+  //
+  // On iOS fetch the whole file in one request instead: WebKit there
+  // mishandles cross-origin 206 Partial Content responses, so range-loaded
+  // PDFs that work on desktop fail on iOS.
+  return openPdf(isIOS ? { url, disableRange: true, disableStream: true } : { url });
 }
 
 export async function loadPdfData(data: Uint8Array): Promise<PDFDocumentProxy> {
@@ -251,6 +356,7 @@ export async function renderPage(
     canvas,
     viewport,
   }).promise;
+  firstPaint(pdf).resolve();
 
   pageCache.set(key, canvas);
   return copyCanvas(canvas);

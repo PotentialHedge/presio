@@ -7,6 +7,7 @@
 // page, top-left origin — so an overlay can place them over the rendered canvas.
 
 import type { PDFDocumentProxy } from "pdfjs-dist";
+import { pageAnnotations } from "./pdf";
 
 /** A link annotation on a page. Exactly one of `url` / `slide` is set. */
 export interface PdfLink {
@@ -88,18 +89,23 @@ export async function resolveDestSlide(
   }
 }
 
-let linkCache: Map<number, PdfLink[]> | null = null;
-let linkCachePdf: PDFDocumentProxy | null = null;
+const linkCache = new WeakMap<PDFDocumentProxy, Promise<Map<number, PdfLink[]>>>();
 
 /** Every usable link annotation in the document, keyed by 1-based slide. */
-export async function loadLinks(pdf: PDFDocumentProxy): Promise<Map<number, PdfLink[]>> {
-  if (linkCachePdf === pdf && linkCache) return linkCache;
+export function loadLinks(pdf: PDFDocumentProxy): Promise<Map<number, PdfLink[]>> {
+  let links = linkCache.get(pdf);
+  if (!links) {
+    links = readLinks(pdf);
+    linkCache.set(pdf, links);
+  }
+  return links;
+}
 
+async function readLinks(pdf: PDFDocumentProxy): Promise<Map<number, PdfLink[]>> {
   const map = new Map<number, PdfLink[]>();
-  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-    const page = await pdf.getPage(pageNum);
+  for (const [index, { page, annotations }] of (await pageAnnotations(pdf)).entries()) {
+    const pageNum = index + 1;
     const viewport = page.getViewport({ scale: 1 });
-    const annotations = await page.getAnnotations();
     const links: PdfLink[] = [];
 
     for (const [i, ann] of annotations.entries()) {
@@ -132,8 +138,5 @@ export async function loadLinks(pdf: PDFDocumentProxy): Promise<Map<number, PdfL
 
     if (links.length) map.set(pageNum, links);
   }
-
-  linkCache = map;
-  linkCachePdf = pdf;
   return map;
 }

@@ -10,7 +10,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { socket } from "@/lib/socket";
-import { readAttachments, type PdfAttachment } from "@/lib/pdf";
+import { readAttachments, attachmentNames, type PdfAttachment } from "@/lib/pdf";
 import { useJoinUrl } from "@/lib/joinUrl";
 import { PluginHost, retainKey, audienceViewerId, type AudienceLink, type PageSize, type PluginContext, type WireEvent } from "./host";
 import type { LoadedPlugin, PluginManifest } from "./manifest";
@@ -101,6 +101,17 @@ function useBytesReader(pdf: PDFDocumentProxy | null) {
   return useMemo(() => async () => (pdf ? pdf.getData() : null), [pdf]);
 }
 
+/** The deck's attachment filenames, without reading their bytes. */
+function useAttachmentNamesReader(pdf: PDFDocumentProxy | null) {
+  return useMemo(() => {
+    let cached: Promise<string[]> | null = null;
+    return () => {
+      if (!pdf) return Promise.resolve([]);
+      return (cached ??= attachmentNames(pdf).catch(() => []));
+    };
+  }, [pdf]);
+}
+
 /** Each page's size in PDF points, read once per document. */
 function usePagesReader(pdf: PDFDocumentProxy | null) {
   return useMemo(() => {
@@ -121,7 +132,7 @@ function usePagesReader(pdf: PDFDocumentProxy | null) {
 
 /** Enabled plugins from this browser's registry (installed, or loaded for
  *  this tab) that the deck activates, with what they depend on. */
-function useLocallyActivePlugins(enabled: boolean, readAll: () => Promise<PdfAttachment[]>) {
+function useLocallyActivePlugins(enabled: boolean, readNames: () => Promise<string[]>) {
   const entries = usePluginEntries();
   const enabledEntries = entries.filter((e) => e.enabled);
   const entriesKey = enabledEntries.map((e) => `${e.key}\n${e.url}`).join("\n\n");
@@ -134,7 +145,7 @@ function useLocallyActivePlugins(enabled: boolean, readAll: () => Promise<PdfAtt
     if (!enabled) return;
     let cancelled = false;
     (async () => {
-      const names = (await readAll()).map((a) => a.filename);
+      const names = await readNames();
       const { plugins: loaded, errors: failed } = await loadEntries(entriesRef.current, names);
       if (cancelled) return;
       // Keep the objects of plugins that didn't change: a new one for the
@@ -147,7 +158,7 @@ function useLocallyActivePlugins(enabled: boolean, readAll: () => Promise<PdfAtt
       setErrors(failed);
     })();
     return () => { cancelled = true; };
-  }, [enabled, entriesKey, readAll]);
+  }, [enabled, entriesKey, readNames]);
 
   return { plugins: enabled ? plugins : [], errors };
 }
@@ -346,13 +357,14 @@ export function usePluginHost({
   const readAll = useAttachmentReader(pdf);
   const readBytes = useBytesReader(pdf);
   const readPages = usePagesReader(pdf);
+  const readNames = useAttachmentNamesReader(pdf);
   useEffect(() => host.setDeckSource(readAll, readBytes, readPages), [host, readAll, readBytes, readPages]);
 
   // Server viewers get their plugin list from the session; everyone else
   // (the presenter, and a local deck's viewer window) from this browser.
   const fromSession = local === false && !isPresenter;
   useSessionPluginRelay(id, local, isPresenter);
-  const localActive = useLocallyActivePlugins(local !== null && !fromSession, readAll);
+  const localActive = useLocallyActivePlugins(local !== null && !fromSession, readNames);
   const [sessionPlugins, setSessionPlugins] = useState<LoadedPlugin[]>([]);
   const plugins = fromSession ? sessionPlugins : localActive.plugins;
   const pluginsRef = useRef(plugins);
