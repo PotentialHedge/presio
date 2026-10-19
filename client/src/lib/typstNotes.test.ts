@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { typstAstToMarkdown } from "./typstNotes";
+import { typstAstToMarkdown } from "@shared/typstNotes";
 
 // Helpers mirroring the Typst content AST shapes the `presio` package emits.
 const text = (t: string) => ({ func: "text", text: t });

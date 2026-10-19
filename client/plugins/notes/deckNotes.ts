@@ -6,7 +6,7 @@
 // validates and edits the same files.
 
 import { PDFArray, PDFDict, PDFDocument, PDFHexString, PDFName, PDFString } from "pdf-lib";
-import { notesToMarkdown } from "../../src/lib/typstNotes";
+import { notesToMarkdown } from "../../../shared/typstNotes.ts";
 import { setSlideNotes } from "../../src/lib/notesAttach";
 
 /** Markdown per slide; no entry = no notes. */
