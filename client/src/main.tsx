@@ -27,6 +27,23 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   })
 }
 
+// A tab left open across a deploy still asks for the old build's lazy chunks
+// (by hash), which no longer exist — Safari reports that as "Importing a module
+// script failed". Reload once to pick up the current build. The timestamp guard
+// stops a reload loop if the chunk is genuinely broken rather than stale.
+window.addEventListener('vite:preloadError', (event) => {
+  const KEY = 'presio:chunk-reload'
+  try {
+    const last = Number(sessionStorage.getItem(KEY) ?? 0)
+    if (Date.now() - last < 30_000) return
+    sessionStorage.setItem(KEY, String(Date.now()))
+  } catch {
+    return
+  }
+  event.preventDefault()
+  window.location.reload()
+})
+
 // Installed app (added to the home screen) only: opt into the full-bleed
 // viewport so safe-area insets become available and the UI can span the
 // screen edge to edge. Browser tabs keep the plain meta, so nothing shifts

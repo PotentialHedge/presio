@@ -1,0 +1,35 @@
+{
+  "$schema": "https://presio.ch/schema/plugin-manifest.schema.json",
+  "presio": 1,
+  "name": "join-code",
+  "displayName": "Join Code",
+  "version": "1.2.0",
+  "author": "Presio",
+  "description": "Put a QR code and the session's join code up on every viewer screen from a button in the controller's bottom bar, or the C key.",
+  "main": "index.html",
+  "surfaces": ["background", "viewer"],
+  "activation": ["always"],
+  "permissions": [],
+  "contributes": {
+    "commands": [{ "id": "toggle", "title": "Show join code", "icon": "qr-code" }],
+    "buttons": [
+      {
+        "command": "toggle",
+        "location": "controller.toolbar",
+        "label": "Join code",
+        "tooltip": "Show the join code on every viewer screen"
+      }
+    ],
+    "keybindings": [{ "command": "toggle", "keys": [{ "key": "c" }] }],
+    "settings": {
+      "heading": {
+        "type": "string",
+        "default": "Join this presentation",
+        "maxLength": 80,
+        "description": "Text above the code."
+      },
+      "showQr": { "type": "boolean", "default": true, "description": "Show a QR code for the join link." },
+      "showUrl": { "type": "boolean", "default": true, "description": "Show the join link under the code." }
+    }
+  }
+}

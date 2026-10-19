@@ -217,6 +217,13 @@ export function createApp({ supabase, io, socketState }: AppDeps): express.Expre
     })
   );
 
+  // A missing build asset is a stale client asking for an old hash. index.html
+  // with a 200 would make the browser fail it as a module parse error instead
+  // of a plain 404.
+  app.use("/assets", (_req, res) => {
+    res.status(404).type("text/plain").send("Not found");
+  });
+
   // Pages with a markdown mirror advertise it via rel="alternate".
   const MD_MIRRORS: Record<string, string> = {
     "/": "/index.md",
