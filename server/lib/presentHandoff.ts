@@ -1,10 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Server } from "socket.io";
 import { nanoid } from "nanoid";
-import { openPdf, closePdf } from "./pdfDoc.js";
-import { isValidTotalSlides, MAX_TOTAL_SLIDES } from "../validation.js";
+import { countDeckPages } from "./pdfDoc.js";
 import { safeEqual } from "../auth.js";
-import { forgetDeckRetained, type SocketState } from "../socket.js";
+import type { SocketState } from "../socket.js";
+import { announceDeck, clampSlide, replaceHostedPdf } from "./hostedDeck.js";
+import { deckTitle } from "./upload.js";
 import { generatePassphrase, insertSession, ownedExpiry } from "./sessionRows.js";
 
 export const PRESENT_NEXT =
@@ -19,19 +20,11 @@ export async function createPresentHandoff(
   supabase: SupabaseClient,
   opts: { buffer: Buffer; originalName: string; userId: string | null; baseUrl: string }
 ): Promise<PresentResult> {
-  let totalSlides: number;
-  try {
-    const doc = await openPdf({ data: new Uint8Array(opts.buffer) });
-    totalSlides = doc.numPages;
-    void closePdf(doc);
-  } catch {
-    return { ok: false, status: 422, error: "Could not parse PDF" };
-  }
-  if (!isValidTotalSlides(totalSlides)) {
-    return { ok: false, status: 400, error: `PDF exceeds the ${MAX_TOTAL_SLIDES}-page limit` };
-  }
+  const pages = await countDeckPages(opts.buffer);
+  if (!pages.ok) return pages;
+  const { totalSlides } = pages;
 
-  const filename = opts.originalName.replace(/\.pdf$/i, "") || "presentation";
+  const filename = deckTitle(opts.originalName) || "presentation";
   const controllerToken = nanoid(24);
   const passphrase = generatePassphrase();
   const pdfPath = `handoff/${nanoid(32)}.pdf`;
@@ -131,24 +124,16 @@ export async function updatePresentDeck(
     return { ok: false, status: 403, error: "Not authorized" };
   }
 
-  let totalSlides: number;
-  try {
-    const doc = await openPdf({ data: new Uint8Array(opts.buffer) });
-    totalSlides = doc.numPages;
-    void closePdf(doc);
-  } catch {
-    return { ok: false, status: 422, error: "Could not parse PDF" };
-  }
-  if (!isValidTotalSlides(totalSlides)) {
-    return { ok: false, status: 400, error: `PDF exceeds the ${MAX_TOTAL_SLIDES}-page limit` };
-  }
+  const pages = await countDeckPages(opts.buffer);
+  if (!pages.ok) return pages;
+  const { totalSlides } = pages;
 
   // An empty name means "keep the current title" rather than resetting it.
-  const rawName = (opts.originalName ?? "").trim().replace(/\.pdf$/i, "");
+  const rawName = deckTitle(opts.originalName ?? "");
   const filename = rawName || row.filename || "presentation";
   // Keep the presenter near where they were; drawings keyed by slide number
   // beyond the new count become stale just as with the notes replace path.
-  const clampedSlide = Math.min(Math.max(row.current_slide ?? 1, 1), totalSlides);
+  const clampedSlide = clampSlide(row.current_slide, totalSlides);
 
   if (row.local) {
     // Handoff may already be complete (the browser cleared the server copy),
@@ -175,27 +160,11 @@ export async function updatePresentDeck(
   if (!row.pdf_path) {
     return { ok: false, status: 400, error: "This presentation's PDF is not hosted on the server" };
   }
-  const { error: uploadError } = await supabase.storage
-    .from("presentations")
-    .upload(row.pdf_path, opts.buffer, { contentType: "application/pdf", upsert: true });
-  if (uploadError) {
-    return { ok: false, status: 500, error: "Failed to save PDF" };
-  }
-  const { error: updateError } = await supabase
-    .from("sessions")
-    .update({
-      total_slides: totalSlides,
-      current_slide: clampedSlide,
-      ...(rawName ? { filename } : {}),
-    })
-    .eq("id", row.id);
-  if (updateError) {
-    return { ok: false, status: 500, error: "Failed to update presentation" };
-  }
+  const replaced = await replaceHostedPdf(supabase, row, { buffer: opts.buffer, totalSlides, filename: rawName ? filename : undefined });
+  if (!replaced.ok) return replaced;
 
   // Everyone in the room reloads the new bytes live, as with any other replacement.
-  if (opts.socketState) forgetDeckRetained(opts.socketState, String(row.id));
-  opts.io?.to(row.id).emit("deck_updated", { filename, totalSlides });
+  announceDeck(opts, row.id, { filename, totalSlides });
 
   return {
     ok: true,

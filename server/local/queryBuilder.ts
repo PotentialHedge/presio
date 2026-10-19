@@ -35,7 +35,7 @@ function fromSqlRow<T extends Record<string, unknown>>(row: T): T {
 }
 
 // Postgres unique-violation SQLSTATE. The session-code insert helpers retry on
-// this specific code (routes/sessions.ts, lib/presentHandoff.ts), so a SQLite
+// this specific code (routes/sessions/, lib/presentHandoff.ts), so a SQLite
 // constraint failure has to surface as the same code or a code collision turns
 // into a 500 instead of a retry with a fresh code.
 const UNIQUE_VIOLATION = "23505";

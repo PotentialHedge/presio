@@ -1,5 +1,5 @@
 // Shared helpers for creating `sessions` rows. Both entry points that mint a
-// session — the reserve routes in routes/sessions.ts and the agent handoff in
+// session — the reserve routes in routes/sessions/ and the agent handoff in
 // lib/presentHandoff.ts — need the same code/passphrase alphabets, the same
 // owned-session TTL, and the same collision-retrying insert. They used to carry
 // verbatim copies of all four with a "keep in sync" comment; this is that

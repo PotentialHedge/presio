@@ -3,11 +3,10 @@
 // Returns JSON; no auth required. Useful for CI pipelines, LLM tooling, etc.
 
 import type express from "express";
-import multer from "multer";
 import { openPdf, closePdf, readAttachments } from "../lib/pdfDoc.js";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { canonicalBaseUrl } from "../lib/baseUrl.js";
-import { MAX_PDF_BYTES } from "../validation.js";
+import { isPdfUpload, uploadField } from "../lib/upload.js";
 import { unusualAttachmentWarning } from "../../shared/attachments.js";
 import {
   binaryIssues,
@@ -20,8 +19,6 @@ import {
   type AttachmentIssue,
   type Validity,
 } from "../../shared/sidecar.js";
-
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_PDF_BYTES } });
 
 // ── Validation types ──────────────────────────────────────────────────────────
 
@@ -151,13 +148,13 @@ export function registerCheckRoute(app: express.Express) {
    * Example:
    *   curl -s -F file=@deck.pdf https://presio.ch/api/check | jq .
    */
-  app.post("/api/check", upload.single("file"), async (req, res) => {
+  app.post("/api/check", uploadField("file"), async (req, res) => {
     const file = req.file;
     if (!file) {
       res.status(400).json({ error: 'Missing "file" field (multipart/form-data)' });
       return;
     }
-    if (file.mimetype !== "application/pdf" && !file.originalname.endsWith(".pdf")) {
+    if (!isPdfUpload(file, { byName: true })) {
       res.status(400).json({ error: "File must be a PDF" });
       return;
     }

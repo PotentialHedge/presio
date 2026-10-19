@@ -8,6 +8,7 @@
 // and the `as Record<...>` casts they used hid it from the compiler.
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import type { PDFDocumentProxy } from "pdfjs-dist";
+import { isValidTotalSlides, MAX_TOTAL_SLIDES } from "../validation.js";
 
 type DocumentSource = Parameters<typeof getDocument>[0];
 
@@ -73,4 +74,25 @@ export async function readAttachments(doc: PDFDocumentProxy): Promise<PdfAttachm
     }
   }
   return out;
+}
+
+/**
+ * An uploaded deck's page count, checked against MAX_TOTAL_SLIDES: the count,
+ * or why the upload is refused.
+ */
+export async function countDeckPages(
+  buffer: Buffer,
+): Promise<{ ok: true; totalSlides: number } | { ok: false; status: number; error: string }> {
+  let totalSlides: number;
+  try {
+    const doc = await openPdf({ data: new Uint8Array(buffer) });
+    totalSlides = doc.numPages;
+    void closePdf(doc);
+  } catch {
+    return { ok: false, status: 422, error: "The file could not be read as a PDF" };
+  }
+  if (!isValidTotalSlides(totalSlides)) {
+    return { ok: false, status: 400, error: `PDF exceeds the ${MAX_TOTAL_SLIDES}-page limit` };
+  }
+  return { ok: true, totalSlides };
 }

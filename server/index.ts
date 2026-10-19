@@ -6,7 +6,8 @@ import { supabase } from "./supabase.js";
 import { createApp } from "./app.js";
 import { getAllowedOrigins } from "./security.js";
 import { isLocalMode } from "./local/mode.js";
-import { registerSocketHandlers, createSocketState, clearSessionState } from "./socket.js";
+import { registerSocketHandlers, createSocketState } from "./socket.js";
+import { endSessions } from "./lib/sessionLifecycle.js";
 
 const allowedOrigins = getAllowedOrigins();
 // See app.ts's corsOrigin: development and local/LAN use have no fixed origin
@@ -35,27 +36,7 @@ async function cleanupExpired() {
     .lt("expires_at", new Date().toISOString());
 
   if (!expired?.length) return;
-
-  const paths = expired.map((s) => s.pdf_path).filter(Boolean);
-  if (paths.length) await supabase.storage.from("presentations").remove(paths);
-
-  // Mark as expired rather than deleting — the row is retained as a record.
-  const ids = expired.map((s) => s.id);
-  await supabase.from("sessions").update({ status: "expired" }).in("id", ids);
-
-  // Tell any connected windows and drop them, mirroring the explicit-end
-  // route. Without this a presentation that ages out mid-use just goes dead:
-  // the controller's events are silently discarded once its registration is
-  // cleared, with no feedback to anyone.
-  for (const id of ids) {
-    const sockets = await io.in(id).fetchSockets();
-    for (const s of sockets) {
-      s.emit("session_ended");
-      s.disconnect(true);
-    }
-    clearSessionState(socketState, id);
-  }
-
+  await endSessions({ supabase, io, socketState }, expired);
   console.log(`Expired ${expired.length} session(s)`);
 }
 

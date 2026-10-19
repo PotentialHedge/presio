@@ -11,7 +11,7 @@ import { getAllowedOrigins, buildCspDirectives, PLUGIN_FRAME_CSP } from "./secur
 import { canonicalBaseUrl, originPair } from "./lib/baseUrl.js";
 import { localBlobsDir } from "./local/paths.js";
 import { isLocalMode } from "./local/mode.js";
-import { registerSessionRoutes } from "./routes/sessions.js";
+import { registerSessionRoutes } from "./routes/sessions/index.js";
 import { registerHistoryRoutes } from "./routes/history.js";
 import type { HistoryBucket } from "./history.js";
 import { registerNewsletterRoutes } from "./routes/newsletter.js";
