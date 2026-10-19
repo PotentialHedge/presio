@@ -351,6 +351,10 @@ export function usePluginHost({
   };
   const [host] = useState(() => new PluginHost(ctx));
   useEffect(() => {
+    host.attach();
+    return () => host.dispose();
+  }, [host]);
+  useEffect(() => {
     host.updateContext(ctx);
   });
 

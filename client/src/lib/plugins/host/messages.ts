@@ -65,14 +65,15 @@ export class Messages {
       if (this.persistTimer) clearTimeout(this.persistTimer);
       this.persistTimer = null;
     }
-    // Changes not yet saved when the page goes: save them now. Only this
-    // host's own changes — a host that never changed anything (React may
-    // build one it then discards) mustn't overwrite what another saved.
-    if (typeof window !== "undefined") {
-      window.addEventListener("pagehide", () => {
-        if (this.persistTimer) this.persistRetained();
-      });
-    }
+  }
+
+  /**
+   * Changes not yet saved when the page goes: save them now. Only this
+   * host's own changes — a host that never changed anything (React may
+   * build one it then discards) mustn't overwrite what another saved.
+   */
+  flush() {
+    if (this.persistTimer) this.persistRetained();
   }
 
   readonly methods: MethodTable = {

@@ -135,6 +135,25 @@ export class PluginHost implements HostCore {
     };
   }
 
+  private onPageHide = () => this.flush();
+
+  /** Saves on pagehide while mounted; dispose() undoes it. */
+  attach() {
+    window.addEventListener("pagehide", this.onPageHide);
+  }
+
+  /** Unmounted: stop listening for the page going, and save what's pending. */
+  dispose() {
+    window.removeEventListener("pagehide", this.onPageHide);
+    this.flush();
+  }
+
+  private flush() {
+    this.messages.flush();
+    this.audience.flush();
+    this.history.flush();
+  }
+
   /** Plugins' edit histories (presio.history), and the way to other devices'. */
   get history(): HistoryHub {
     return this.historyModule.hub;

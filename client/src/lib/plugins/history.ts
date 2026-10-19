@@ -171,11 +171,11 @@ export class HistoryHub {
 
   constructor(opts: HistoryHubOptions) {
     this.opts = opts;
-    if (typeof window !== "undefined") {
-      window.addEventListener("pagehide", () => {
-        for (const plugin of [...this.saveTimers.keys()]) this.save(plugin);
-      });
-    }
+  }
+
+  /** Saves what's still waiting on its timer (the page is going). */
+  flush() {
+    for (const plugin of [...this.saveTimers.keys()]) this.save(plugin);
   }
 
   /** The deck's id changed (it was shared); its saved histories moved with it. */

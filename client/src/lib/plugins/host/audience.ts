@@ -88,11 +88,11 @@ export class Audience {
 
   constructor(core: HostCore) {
     this.core = core;
-    if (typeof window !== "undefined") {
-      window.addEventListener("pagehide", () => {
-        if (this.persistTimer) this.persist();
-      });
-    }
+  }
+
+  /** Saves what's still waiting on its timer (the page is going). */
+  flush() {
+    if (this.persistTimer) this.persist();
   }
 
   private get presenter() {
