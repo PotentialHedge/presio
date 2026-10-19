@@ -290,8 +290,9 @@ export function useJoinUrls(id: string) {
     ...rest,
     origin,
     // Audiences join on the viewer origin when the deployment has one
-    // (lib/origins.ts); control always stays on the app origin.
-    viewerUrl: `${viewerOrigin ?? origin}/s/${id}?role=viewer`,
+    // (lib/origins.ts); control always stays on the app origin. Viewer is the
+    // default role, so the audience's link doesn't spell it out.
+    viewerUrl: `${viewerOrigin ?? origin}/s/${id}`,
     controllerUrl: `${origin}/s/${id}?role=controller`,
   };
 }
@@ -301,5 +302,5 @@ export function useJoinUrls(id: string) {
 export function useJoinUrl(id: string, role: "viewer" | "controller") {
   const { origin, shareable } = useLanOrigin();
   const base = role === "viewer" ? (viewerOrigin ?? origin) : origin;
-  return { url: `${base}/s/${id}?role=${role}`, shareable };
+  return { url: role === "viewer" ? `${base}/s/${id}` : `${base}/s/${id}?role=${role}`, shareable };
 }
