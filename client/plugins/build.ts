@@ -1,8 +1,7 @@
 // Built-in plugins written in TypeScript (+ React). Each client/plugins/<name>/
 // holds a presio-plugin.json and a main.tsx or main.ts; this builds it as ES
 // modules served at /plugins/<name>/ beside its manifest — built on request by
-// the dev server, emitted into dist by `vite build`. Plain plugins that need no
-// build still live in public/plugins/.
+// the dev server, emitted into dist by `vite build`.
 //
 // The build is split, not one file: index.html only loads the entry script,
 // and whatever the entry imports dynamically — a surface's own code, pdf-lib

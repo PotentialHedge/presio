@@ -602,9 +602,10 @@ rebind it, so pick a key Presio doesn't use.
   in a `viewer` layer. Read it for a plugin with several surfaces that talk
   to each other.
 
-The built-in Join Code plugin is a complete example too:
-[manifest](BASE/plugins/join-code/presio-plugin.json),
-[index.html](BASE/plugins/join-code/index.html). The built-in Timer
+The built-in Join Code plugin
+([manifest](BASE/plugins/join-code/presio-plugin.json)) is a small complete
+example: a background surface owning a command and a retained message, and a
+viewer surface drawing a QR code from `presio.session.joinUrl`. The built-in Timer
 ([manifest](BASE/plugins/timer/presio-plugin.json)) shows a panel and a
 background sharing `presio.storage`, and Speaker Notes
 ([manifest](BASE/plugins/notes/presio-plugin.json)) reads notes out of the PDF

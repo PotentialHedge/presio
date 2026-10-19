@@ -121,7 +121,10 @@ test("the join code can be thrown up on the viewer", async ({ browser, request }
 
   // The projector shows the code itself, so the room can type it in.
   await expect(layer).toBeVisible();
-  await expect(viewer.frameLocator('[data-testid="plugin-frame-presio/join-code-viewer"]').getByText(sessionId, { exact: true })).toBeVisible();
+  const frame = viewer.frameLocator('[data-testid="plugin-frame-presio/join-code-viewer"]');
+  await expect(frame.getByText(sessionId, { exact: true })).toBeVisible();
+  // And a QR code phones in the room can scan.
+  await expect(frame.locator(".qr svg")).toBeVisible();
 
   await controller.keyboard.press("c");
   await expect(layer).toBeHidden();
