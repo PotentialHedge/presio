@@ -4,6 +4,7 @@
 
 import { lsGet, lsSet, pluginStateKey } from "@/lib/storage";
 import { MESSAGE_TYPE_RE } from "@shared/plugin/protocol";
+import { jsonBytes } from "@shared/limits";
 import { HostError, type HostCore, type MethodTable } from "./types";
 
 /** What one plugin may keep in presio.storage for one session, as JSON. */
@@ -30,7 +31,7 @@ export class Storage {
         const next = { ...this.read(pluginId) };
         if (p.value === undefined) delete next[p.key];
         else next[p.key] = p.value;
-        if (JSON.stringify(next).length > STORAGE_LIMIT) {
+        if (jsonBytes(next) > STORAGE_LIMIT) {
           throw new HostError("InvalidParams", `presio.storage holds at most ${STORAGE_LIMIT / 1024} KB per plugin`);
         }
         const storeKey = pluginStateKey(this.core.ctx.session.id);

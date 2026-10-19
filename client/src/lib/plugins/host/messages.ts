@@ -5,7 +5,8 @@
 // and across a reload of the presenter's page.
 
 import { lsGet, lsRemove, lsSet, pluginRetainedKey } from "@/lib/storage";
-import { MESSAGE_TYPE_RE, VIEWER_ADDRESS_RE } from "@shared/plugin/protocol";
+import { MAX_MESSAGE_BYTES, MESSAGE_TYPE_RE, VIEWER_ADDRESS_RE } from "@shared/plugin/protocol";
+import { jsonBytes, MAX_RETAINED_BYTES_PER_PLUGIN, MAX_RETAINED_PER_PLUGIN } from "@shared/limits";
 import { HostError, type Conn, type HostCore, type MethodTable, type PluginRole } from "./types";
 
 export type Retain = boolean | "deck";
@@ -26,14 +27,6 @@ export interface WireEvent {
   to?: string;
 }
 
-/**
- * What one plugin may keep retained: this many message types, this many bytes
- * of payload (as JSON) — the server's caps (server/validation.ts). A drawing
- * keeps its strokes this way, a slide's worth per message; 2 MB is several
- * hundred thousand compactly encoded points.
- */
-const MAX_RETAINED_PER_PLUGIN = 1024;
-const MAX_RETAINED_BYTES_PER_PLUGIN = 2 * 1024 * 1024;
 /** How long retained changes wait before the presenter's copy is saved. */
 const PERSIST_DELAY_MS = 300;
 
@@ -81,6 +74,11 @@ export class Messages {
       handler: (conn, p) => {
         if (typeof p.type !== "string" || !MESSAGE_TYPE_RE.test(p.type)) {
           throw new HostError("InvalidParams", "A message type is 1–64 letters, digits or _ . : -");
+        }
+        // The server drops a bigger one silently, while this page's frames
+        // would still have seen it: refuse it here instead.
+        if (jsonBytes(p.payload ?? null) > MAX_MESSAGE_BYTES) {
+          throw new HostError("InvalidParams", `A message is at most ${MAX_MESSAGE_BYTES / 1024} KB of JSON`);
         }
         const role = this.core.ctx.role;
         if (p.to !== undefined) {
@@ -170,12 +168,8 @@ export class Messages {
       this.schedulePersist();
       return false;
     }
-    let size: number;
-    try {
-      size = JSON.stringify(event.payload).length;
-    } catch {
-      return false;
-    }
+    const size = jsonBytes(event.payload);
+    if (size === Infinity) return false;
     let count = 0;
     let bytes = 0;
     for (const [k, e] of this.retained) {

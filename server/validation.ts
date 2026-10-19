@@ -1,5 +1,6 @@
 import { PLUGIN_ID_RE } from "../shared/plugin/sources.js";
 import { MAX_MESSAGE_BYTES, MESSAGE_TYPE_RE, VIEWER_ADDRESS_RE } from "../shared/plugin/protocol.js";
+import { jsonBytes, MAX_PDF_BYTES, MAX_RETAINED_BYTES_PER_PLUGIN, MAX_RETAINED_PER_PLUGIN } from "../shared/limits.js";
 
 // Pure validation/sanitization helpers, factored out of the request/socket
 // handlers so they can be unit-tested without a server or Supabase.
@@ -37,9 +38,9 @@ export function isValidEmail(value: unknown): value is string {
 // presentation comes close.
 export const MAX_TOTAL_SLIDES = 3000;
 
-// Largest PDF the server accepts on an upload. The client mirrors this in
-// client/src/lib/limits.ts to disable Sync before an upload that would fail.
-export const MAX_PDF_BYTES = 50 * 1024 * 1024;
+// Largest PDF the server accepts on an upload (shared/limits.ts: the client
+// checks it too, to disable Sync before an upload that would fail).
+export { MAX_PDF_BYTES };
 
 export function isValidTotalSlides(value: unknown): value is number {
   return Number.isInteger(value) && (value as number) >= 1 && (value as number) <= MAX_TOTAL_SLIDES;
@@ -71,11 +72,10 @@ const MAX_PLUGIN_PAYLOAD_BYTES = MAX_MESSAGE_BYTES;
 export const MAX_PLUGINS_PER_SESSION = 8;
 // Retained messages are a plugin's state for late joiners, one message per
 // piece of it — a drawing keeps each slide's strokes in a few. So a plugin may
-// keep many, and the byte budget is what bounds memory: 2 MB per plugin (a
-// few hundred thousand compactly encoded points), 16 MB for a session with
-// every plugin slot full.
-export const MAX_RETAINED_PER_PLUGIN = 1024;
-export const MAX_RETAINED_BYTES_PER_PLUGIN = 2 * 1024 * 1024;
+// keep many, and the byte budget is what bounds memory: 2 MB per plugin, 16 MB
+// for a session with every plugin slot full (shared/limits.ts, which the
+// client enforces too).
+export { MAX_RETAINED_PER_PLUGIN, MAX_RETAINED_BYTES_PER_PLUGIN };
 
 /** true: kept for the session; "deck": kept until the deck is replaced. */
 export type Retain = boolean | "deck";
@@ -111,15 +111,8 @@ export interface PublishedPlugin {
   hash: string;
 }
 
-// Size of a value once serialized, or Infinity when it can't be (cycles are
-// impossible off the wire, but BigInt-like oddities aren't worth reasoning about).
-export function jsonSize(value: unknown): number {
-  try {
-    return Buffer.byteLength(JSON.stringify(value) ?? "", "utf8");
-  } catch {
-    return Infinity;
-  }
-}
+// Size of a value once serialized (shared/limits.ts).
+export const jsonSize = jsonBytes;
 
 /** An untrusted payload's fields ({} when it isn't an object): socket
  *  handlers read what they need and check each value. */

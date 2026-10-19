@@ -21,6 +21,7 @@ import { resolvePluginSettings, useSettingsDocument } from "@/lib/settings";
 import { getSessionAuth } from "@/lib/utils";
 import { blobSha, type HistoryEntry, type HistoryLink, type SyncReply } from "./history";
 import type { AudienceJoin, AudienceKeyState, AudienceSummary } from "@shared/plugin/audience";
+import { jsonBytes } from "@shared/limits";
 
 /** A plugin viewers run: its id, where to load it, and what it must hash to. */
 interface PublishedPlugin {
@@ -206,7 +207,7 @@ function seedParts(keys: Record<string, AudienceKeyState>): Record<string, Audie
   for (const [key, { open, slots }] of Object.entries(keys)) {
     part[key] = { open, slots: {} };
     for (const [viewer, value] of Object.entries(slots)) {
-      const size = JSON.stringify(value).length + viewer.length;
+      const size = jsonBytes(value) + viewer.length;
       if (bytes + size > AUDIENCE_SEED_PART_BYTES && bytes > 0) {
         parts.push(part);
         part = { [key]: { open, slots: {} } };
