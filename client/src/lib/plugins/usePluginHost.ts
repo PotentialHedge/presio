@@ -22,6 +22,7 @@ import { getSessionAuth } from "@/lib/utils";
 import { blobSha, type HistoryEntry, type HistoryLink, type SyncReply } from "./history";
 import type { AudienceJoin, AudienceKeyState, AudienceSummary } from "@shared/plugin/audience";
 import { jsonBytes } from "@shared/limits";
+import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 
 /** A plugin viewers run: its id, where to load it, and what it must hash to. */
 interface PublishedPlugin {
@@ -73,17 +74,6 @@ function loadFailureReason(e: unknown, url: string): string {
 /** Plugins that run on audience devices, which the presenter publishes. */
 function runsOnViewers(manifest: Pick<PluginManifest, "surfaces">): boolean {
   return manifest.surfaces.some((s) => s === "viewer" || s === "viewerSheet" || s === "slide");
-}
-
-function useTheme(): "light" | "dark" {
-  const read = () => (document.documentElement.classList.contains("dark") ? "dark" : "light");
-  const [theme, setTheme] = useState<"light" | "dark">(read);
-  useEffect(() => {
-    const observer = new MutationObserver(() => setTheme(read()));
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
-    return () => observer.disconnect();
-  }, []);
-  return theme;
 }
 
 /** The deck's attachments, read once per document. */
@@ -342,7 +332,7 @@ export function usePluginHost({
   currentSlide: number;
   totalSlides: number;
 }): PluginHostState {
-  const theme = useTheme();
+  const theme = useResolvedTheme();
   const join = useJoinUrl(id, "viewer");
   const ctx: PluginContext = {
     role: isPresenter ? "presenter" : "audience",

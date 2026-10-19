@@ -7,7 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useDeckDownload } from "@/lib/useDeckDownload";
+import { useDeckDownload } from "@/hooks/useDeckDownload";
 import type { Deck } from "@/lib/deck";
 import type { PluginHost } from "@/lib/plugins/host";
 

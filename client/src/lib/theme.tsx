@@ -1,6 +1,6 @@
 import { useEffect } from "react";
-import { ThemeContext, type Theme } from "./useTheme";
-import { useSetting } from "./settings";
+import { ThemeContext, type Theme } from "@/hooks/useTheme";
+import { useSetting } from "@/lib/settings";
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useSetting("theme");

@@ -31,7 +31,7 @@ import {
 } from "lucide-react";
 import { formatBinding, type Keymap, type KeymapAction } from "@/lib/keymap";
 import { slideArg, slideFromQuery, type AppCommand, type PaletteItem } from "@/lib/commands";
-import type { Theme } from "@/lib/useTheme";
+import type { Theme } from "@/hooks/useTheme";
 
 export interface ControllerCommandState {
   currentSlide: number;

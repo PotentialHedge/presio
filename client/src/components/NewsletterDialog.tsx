@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { DialogOverlay } from "@/components/ui/dialog-overlay";
-import { useAuth } from "@/lib/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 import { lsSetString, STORAGE_KEYS } from "@/lib/storage";
 
 export function NewsletterDialog({ onClose }: { onClose: () => void }) {

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { DialogOverlay } from "@/components/ui/dialog-overlay";
-import { useAuth } from "@/lib/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 import { GitHubIcon } from "@/components/GitHubIcon";
 
 export function LoginDialog({ onClose }: { onClose: () => void }) {

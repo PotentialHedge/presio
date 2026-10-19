@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
 import { authEnabled } from "@/lib/authMode";
-import { AuthContext, type AuthContextValue } from "@/lib/useAuth";
+import { AuthContext, type AuthContextValue } from "@/hooks/useAuth";
 import { track } from "@/lib/analytics";
 
 // Dev-only: set VITE_DEV_USER (e.g. "dev@example.com") to start signed in as a

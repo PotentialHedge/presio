@@ -3,7 +3,7 @@ import { idbGet, idbDelete } from "@/lib/localStore";
 import { isLocalDeckId } from "@/lib/localId";
 import { supabase } from "@/lib/supabaseClient";
 import { authEnabled } from "@/lib/authMode";
-import { useAuth } from "@/lib/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 import { getSessionAuth, setSessionAuth } from "@/lib/utils";
 import { lsRemove, sessionKey, rekeySessionStorage } from "@/lib/storage";
 import { rekeyHistories } from "@/lib/plugins/historyDb";
