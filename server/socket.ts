@@ -209,6 +209,12 @@ export function registerSocketHandlers(
     pluginRetained.set(sessionId, retained);
   };
 
+  // Slide numbers are validated against each socket's page count, so a
+  // change has to reach every socket in the room, not just the sender's.
+  const setRoomTotalSlides = async (sessionId: string, totalSlides: number) => {
+    for (const s of await io.in(sessionId).fetchSockets()) s.data.totalSlides = totalSlides;
+  };
+
   // Wrap an event handler so it only runs for the session's registered
   // controller, passing the resolved sessionId through. Mutating events
   // (slide/blank/sync) all share this guard.
@@ -328,7 +334,7 @@ export function registerSocketHandlers(
     socket.on("total_slides_change", controllerOnly(socket, async (sessionId, raw: unknown) => {
       const { totalSlides } = asRecord(raw);
       if (!isValidTotalSlides(totalSlides)) return;
-      await setRoomTotalSlides(io, sessionId, totalSlides);
+      await setRoomTotalSlides(sessionId, totalSlides);
       io.to(sessionId).emit("total_slides_update", { totalSlides });
       const { error } = await supabase.from("sessions").update({ total_slides: totalSlides }).eq("id", sessionId);
       if (error) console.warn(`Couldn't store session ${sessionId}'s page count:`, error.message);
