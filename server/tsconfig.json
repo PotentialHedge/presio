@@ -11,5 +11,8 @@
     // breaks by importing ../e2e/constants.ts.
     "skipLibCheck": true
   },
-  "include": ["*.ts"]
+  // Every module, not just the entry points: a file nothing imports yet
+  // (a new route, a helper) is still checked.
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules"]
 }
