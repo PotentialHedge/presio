@@ -1,7 +1,17 @@
-import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy } from "pdfjs-dist";
+import type { getDocument, PDFDocumentProxy } from "pdfjs-dist";
 import pdfWorker from "./pdfWorker.ts?worker&url";
 
-GlobalWorkerOptions.workerSrc = pdfWorker;
+// pdf.js itself is loaded on first use, not at import: this module sits under
+// the home page, which would otherwise parse the whole library before it can
+// paint, though most visits there never open a deck.
+let pdfjs: Promise<typeof import("pdfjs-dist")> | null = null;
+function loadPdfjs() {
+  pdfjs ??= import("pdfjs-dist").then((lib) => {
+    lib.GlobalWorkerOptions.workerSrc = pdfWorker;
+    return lib;
+  });
+  return pdfjs;
+}
 
 type DocumentSource = Parameters<typeof getDocument>[0];
 
@@ -21,6 +31,7 @@ const loadingTasks = new WeakMap<PDFDocumentProxy, ReturnType<typeof getDocument
 
 /** Open a PDF and remember the task that owns it. */
 export async function openPdf(source: DocumentSource): Promise<PDFDocumentProxy> {
+  const { getDocument } = await loadPdfjs();
   const task = getDocument(source);
   const doc = await task.promise;
   loadingTasks.set(doc, task);

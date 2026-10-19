@@ -191,6 +191,7 @@ export function createApp({ supabase, io, socketState }: AppDeps): express.Expre
   // would hash differently on every load and viewers would reject the
   // presenter's copy as "changed since".
   const pluginDir = path.join(clientDist, "plugins") + path.sep;
+  const assetsDir = path.join(clientDist, "assets") + path.sep;
   app.use(
     express.static(clientDist, {
       index: false,
@@ -198,6 +199,13 @@ export function createApp({ supabase, io, socketState }: AppDeps): express.Expre
         // The plugin API's types (/sdk/v1/presio.d.ts), which mime lookup
         // would call MPEG video.
         if (filePath.endsWith(".d.ts")) res.setHeader("Content-Type", "text/plain; charset=utf-8");
+        // Vite's build output: every file under assets/ is named by content
+        // hash, so a deploy never changes one in place. Left at express's
+        // max-age=0, Cloudflare caps it at its 4h browser TTL instead.
+        if (filePath.startsWith(assetsDir)) {
+          res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+          return;
+        }
         if (!filePath.startsWith(pluginDir)) return;
         res.setHeader(
           "Cache-Control",

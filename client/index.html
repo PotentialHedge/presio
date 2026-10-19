@@ -44,11 +44,12 @@
        (see comment below); it's not meant to be seen by JS-capable browsers,
        so hide it by default to avoid a flash of unstyled copy before React
        mounts. Crawlers still read the markup regardless of display; real
-       no-JS clients get it back via the <noscript> override below. */
-    #root main { display: none; }
+       no-JS clients get it back via the <noscript> override below. Direct
+       child only: the app renders a <main> of its own inside #root. */
+    #root > main { display: none; }
   </style>
   <noscript>
-    <style>#root main { display: block; }</style>
+    <style>#root > main { display: block; }</style>
   </noscript>
   <script defer src="https://analytics.presio.ch/script.js" data-website-id="3b9c85c6-1dae-4a30-9508-200f274cb857"></script>
   <!-- Session recording (recorder.js) is not loaded here: lib/analytics.ts

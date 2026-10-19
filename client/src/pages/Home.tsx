@@ -26,7 +26,6 @@ import { TYPST_PACKAGE_VERSION } from "@/lib/packageVersions";
 import { loadExternalPdfMeta, createExternalSession } from "@/lib/externalSession";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/lib/useAuth";
-import "@/lib/pdf"; // ensure pdf.js worker is configured
 
 const REPO_URL = "https://github.com/benedict-armstrong/presio";
 const TYPST_PACKAGE_URL = "https://github.com/benedict-armstrong/presio-typst-package";
@@ -296,7 +295,9 @@ function DemoReel() {
         <video
           {...shared}
           ref={controllerRef}
-          className="block w-full"
+          width={1280}
+          height={800}
+          className="block h-auto w-full"
           poster={`/demo-controller-${theme}-poster.jpg`}
           src={`/demo-controller-${theme}.mp4`}
           onLoadedMetadata={(e) => resume(e.currentTarget)}
@@ -317,7 +318,9 @@ function DemoReel() {
           <video
             {...shared}
             ref={viewerRef}
-            className="block w-full"
+            width={1280}
+            height={720}
+            className="block h-auto w-full"
             poster={`/demo-viewer-${theme}-poster.jpg`}
             src={`/demo-viewer-${theme}.mp4`}
             onLoadedMetadata={(e) => resume(e.currentTarget)}
@@ -1101,6 +1104,7 @@ export default function Home() {
         </div>
       </nav>
 
+      <main>
       {/* ---------------------------------------------------------------- hero */}
       <section
         className={
@@ -1184,7 +1188,7 @@ export default function Home() {
                       <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
                     </svg>
                     <p className="text-sm text-muted-foreground">Drop a PDF here or click to browse</p>
-                    <p className="mt-1 text-xs text-muted-foreground/70">stays in this browser by default</p>
+                    <p className="mt-1 text-xs text-muted-foreground">stays in this browser by default</p>
                   </>
                 )}
                 <input
@@ -1253,6 +1257,7 @@ export default function Home() {
                     type="text"
                     inputMode="text"
                     maxLength={1}
+                    aria-label={`Session code, character ${i + 1} of ${CODE_LENGTH}`}
                     value={chars[i]}
                     className="h-12 w-10 rounded-md border border-input bg-background text-center font-mono text-lg font-bold uppercase tracking-widest transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--home2-accent)]"
                     onChange={(e) => {
@@ -1546,6 +1551,7 @@ Hello world.
 
       </>
       )}
+      </main>
 
       <footer className="px-6 py-8">
         <ScrollReveal className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 text-xs text-muted-foreground sm:flex-row">
