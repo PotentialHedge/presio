@@ -268,5 +268,20 @@ export function createApp({ supabase, io, socketState }: AppDeps): express.Expre
   // initialized (no DSN), and must come after all routes.
   Sentry.setupExpressErrorHandler(app);
 
+  // Anything a route throws (Express 5 forwards async rejections here) ends as
+  // JSON, never Express's default HTML page: every caller of these paths is a
+  // client that parses the body. Routes answer the errors they expect
+  // themselves; this is for the ones they don't.
+  app.use((err: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error(`${req.method} ${req.path} failed:`, err);
+    // Too late for a status: let Express close the connection.
+    if (res.headersSent) return next(err);
+    if (req.path === "/mcp") {
+      res.status(500).json({ jsonrpc: "2.0", error: { code: -32603, message: "Internal server error" }, id: null });
+      return;
+    }
+    res.status(500).json({ error: "Internal server error" });
+  });
+
   return app;
 }
