@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useParams, useSearchParams, useNavigate, useLocation, Link } from "react-router-dom";
 import type { PDFDocumentProxy } from "pdfjs-dist";
-import { loadPdf, loadPdfData, freshPdfUrl, loadLatestPdf, renderPage, clearCache, openPdf, destroyPdf, preloadPdf } from "@/lib/pdf";
+import { loadPdf, loadPdfData, freshPdfUrl, loadLatestPdf, renderPage, clearCache, destroyPdf, preloadPdf } from "@/lib/pdf";
 import { makeDeck, loadDeckExtras, type DeckExtras } from "@/lib/deck";
 import { useRenderTargetSize } from "@/hooks/useRenderTargetSize";
 import { useElementRef } from "@/hooks/useElementRef";
@@ -10,11 +10,11 @@ import { socket } from "@/lib/socket";
 import { useLatestRef } from "@/hooks/useLatestRef";
 import { DeckLoadTimer } from "@/lib/deckLoadMetrics";
 import { startClockSync } from "@/lib/clock";
-import { supabase } from "@/lib/supabaseClient";
-import { authEnabled } from "@/lib/authMode";
 import { getSessionAuth, endSession } from "@/lib/utils";
 import { idbGet, idbPut, idbDelete } from "@/lib/localStore";
 import { isLocalDeckId } from "@/lib/localId";
+import { controllerHeaders } from "@/lib/sessionAuth";
+import { readPdfFile } from "@/lib/deckImport";
 import {
   DeckWatcher,
   isDeckWatchSupported,
@@ -23,7 +23,7 @@ import {
   type DeckWatchStatus,
 } from "@/lib/deckWatcher";
 import { ConfirmDeckReloadDialog } from "@/components/controller/ConfirmDeckReloadDialog";
-import { track, sha256Hex, startRecording } from "@/lib/analytics";
+import { track, startRecording } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { usePluginHost } from "@/lib/plugins/usePluginHost";
@@ -708,20 +708,7 @@ export default function Presentation() {
   // wrong for one that matters: a signed-in presenter who took control by
   // passphrase isn't the owner, so their token doesn't authorize the write and
   // the controller token that would was never sent.
-  const pdfWriteAuth = useCallback(async (): Promise<Record<string, string>> => {
-    const headers: Record<string, string> = {};
-    const { controllerToken } = getSessionAuth(id!);
-    if (controllerToken) headers["x-controller-token"] = controllerToken;
-    if (authEnabled) {
-      const { data } = await supabase.auth.getSession();
-      const accessToken = data.session?.access_token;
-      if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
-    }
-    if (!Object.keys(headers).length) {
-      throw new Error("This browser isn't the controller for this presentation");
-    }
-    return headers;
-  }, [id]);
+  const pdfWriteAuth = useCallback(() => controllerHeaders(id!), [id]);
 
   // Remote republish watching for URL-backed decks. A deck loaded from an
   // external link re-fetches its PDF on every load, so a republish at the
@@ -966,19 +953,7 @@ export default function Presentation() {
   const replacePdf = useCallback(
     async (file: File, handle?: FileSystemFileHandle) => {
       if (local === null) return;
-      const buf = await file.arrayBuffer();
-      // Snapshot before pdf.js transfers the buffer away (see Home.upload).
-      const blob = new Blob([buf], { type: "application/pdf" });
-      let sha256: string | undefined;
-      try {
-        sha256 = await sha256Hex(buf);
-      } catch {
-        // No crypto.subtle (plain-http origins): track without a fingerprint.
-      }
-      const doc = await openPdf({ data: new Uint8Array(buf) });
-      const totalSlides = doc.numPages;
-      destroyPdf(doc);
-      const filename = file.name.replace(/\.pdf$/i, "");
+      const { blob, sha256, filename, totalSlides } = await readPdfFile(file);
 
       if (local) {
         const rec = await idbGet(id!);

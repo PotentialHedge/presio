@@ -28,6 +28,7 @@ import { matchReupload } from "@/lib/reupload";
 import { loadExternalPdfMeta, createExternalSession } from "@/lib/externalSession";
 import type { RecentDeck } from "@/lib/recentDecks";
 import { supabase } from "@/lib/supabaseClient";
+import { controllerHeaders } from "@/lib/sessionAuth";
 import { useAuth } from "@/hooks/useAuth";
 import { useRecentDecks } from "@/hooks/useRecentDecks";
 
@@ -194,18 +195,10 @@ export default function Home() {
         // A logged-in owner token is attached too when present (the server
         // accepts either).
         const stored = getSessionAuth(target.id);
-        const controllerToken = stored.controllerToken ?? target.controllerToken;
-        if (!controllerToken) {
-          throw new Error("This browser isn't the controller for this presentation");
+        if (!stored.controllerToken && target.controllerToken) {
+          setSessionAuth(target.id, { ...stored, controllerToken: target.controllerToken });
         }
-        if (!stored.controllerToken) {
-          setSessionAuth(target.id, { ...stored, controllerToken });
-        }
-        const headers: Record<string, string> = { "x-controller-token": controllerToken };
-        const { data: sessionData } = await supabase.auth.getSession();
-        if (sessionData.session) {
-          headers.Authorization = `Bearer ${sessionData.session.access_token}`;
-        }
+        const headers = await controllerHeaders(target.id);
         const form = new FormData();
         form.append("pdf", blob, `${filename}.pdf`);
         form.append("filename", filename);

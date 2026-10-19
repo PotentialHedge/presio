@@ -6,8 +6,7 @@ import { setSlideNotes } from "@/lib/notesAttach";
 import { removeAttachments } from "@/lib/removeAttachments";
 import { inspectAttachments, type DeckReport } from "@/lib/inspectAttachments";
 import { attachmentMime } from "@shared/attachments";
-import { idbPut } from "@/lib/localStore";
-import { newLocalDeckId } from "@/lib/localId";
+import { createLocalDeck } from "@/lib/deckImport";
 import { PresioLogo } from "@/components/PresioLogo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ValidityBadge, ValidityDot } from "./ValidityBadge";
@@ -214,13 +213,13 @@ export default function CheckerPage() {
         bytes = await removeAttachments(bytes, [...deletedMedia]);
       }
 
-      const name = filename.replace(/\.pdf$/i, "");
-      // Same as the home screen's import: the deck is stored under an id minted
-      // here and never leaves the browser, so this works with no connection.
-      // Its join code is created only if the presenter later shares it.
-      const id = newLocalDeckId();
-
-      await idbPut({ id, filename: name, totalSlides: report.pageCount, blob: new Blob([bytes.slice()], { type: "application/pdf" }), createdAt: Date.now() });
+      // Same as the home screen's import: the deck never leaves the browser,
+      // so this works with no connection.
+      const id = await createLocalDeck({
+        filename: filename.replace(/\.pdf$/i, ""),
+        totalSlides: report.pageCount,
+        blob: new Blob([bytes.slice()], { type: "application/pdf" }),
+      });
       navigate(`/s/${id}/share`);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to open presentation");

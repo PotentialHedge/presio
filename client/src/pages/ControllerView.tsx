@@ -18,7 +18,7 @@ import { DownloadButton } from "@/components/DownloadButton";
 import { hasCompletedControllerOnboarding } from "@/lib/onboarding";
 import { useAuth } from "@/hooks/useAuth";
 import { authEnabled } from "@/lib/authMode";
-import { supabase } from "@/lib/supabaseClient";
+import { controllerHeaders } from "@/lib/sessionAuth";
 import { useClaim } from "@/hooks/useClaim";
 import { CurrentSlideCard } from "@/components/controller/CurrentSlideCard";
 import { NextSlideCard } from "@/components/controller/NextSlideCard";
@@ -473,12 +473,7 @@ export function ControllerView({
     setPassphraseError("");
     try {
       const stored = getSessionAuth(id);
-      const headers: Record<string, string> = {};
-      if (stored.controllerToken) headers["x-controller-token"] = stored.controllerToken;
-      if (authEnabled) {
-        const { data } = await supabase.auth.getSession();
-        if (data.session) headers.Authorization = `Bearer ${data.session.access_token}`;
-      }
+      const headers = await controllerHeaders(id);
       const res = await fetch(`/api/sessions/${id}/passphrase`, { method: "POST", headers });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
