@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useParams, useSearchParams, useNavigate, useLocation, Link } from "react-router-dom";
 import type { PDFDocumentProxy } from "pdfjs-dist";
-import { loadPdf, loadPdfData, freshPdfUrl, loadLatestPdf, renderPage, clearCache, destroyPdf, preloadPdf } from "@/lib/pdf";
+import { loadPdf, loadPdfData, freshPdfUrl, loadLatestPdf, renderPageInto, clearCache, destroyPdf, preloadPdf } from "@/lib/pdf";
 import { makeDeck, loadDeckExtras, type DeckExtras } from "@/lib/deck";
 import { useRenderTargetSize } from "@/hooks/useRenderTargetSize";
 import { useElementRef } from "@/hooks/useElementRef";
@@ -15,6 +15,7 @@ import { idbGet, idbPut, idbDelete } from "@/lib/localStore";
 import { isLocalDeckId } from "@/lib/localId";
 import { controllerHeaders } from "@/lib/sessionAuth";
 import { readPdfFile } from "@/lib/deckImport";
+import { watchRemoteDeck } from "@/lib/remoteDeckPoller";
 import {
   DeckWatcher,
   isDeckWatchSupported,
@@ -625,21 +626,13 @@ export default function Presentation() {
   useEffect(() => {
     if (!pdf || !currentCanvasEl || !view.width) return;
     const container = currentCanvasEl;
-    // renderPage resolves out of order (cached pages are near-instant, fresh
-    // ones aren't), so a rapid slide change could leave a stale page on screen
-    // — with plugins' layers already showing the new slide over it. Drop any
-    // render that finishes after the effect has moved on.
-    let stale = false;
-    renderPage(pdf, displaySlide, { targetWidth: view.width, targetHeight: view.height }).then((canvas) => {
-      if (stale) return;
-      container.innerHTML = "";
-      canvas.style.width = "100%";
-      canvas.style.height = "100%";
-      canvas.style.objectFit = "contain";
-      container.appendChild(canvas);
-      if (loadTimerRef.current?.pdf === pdf) loadTimerRef.current.timer.mark("paint");
+    // A rapid slide change could otherwise leave a stale page on screen —
+    // with plugins' layers already showing the new slide over it.
+    return renderPageInto(container, pdf, displaySlide, { targetWidth: view.width, targetHeight: view.height }, {
+      onPainted: () => {
+        if (loadTimerRef.current?.pdf === pdf) loadTimerRef.current.timer.mark("paint");
+      },
     });
-    return () => { stale = true; };
     // The container comes and goes with the view (and card) that owns it:
     // render into whichever one is mounted now.
   }, [pdf, displaySlide, currentCanvasEl, view.width, view.height]);
@@ -710,148 +703,26 @@ export default function Presentation() {
   // the controller token that would was never sent.
   const pdfWriteAuth = useCallback(() => controllerHeaders(id!), [id]);
 
-  // Remote republish watching for URL-backed decks. A deck loaded from an
-  // external link re-fetches its PDF on every load, so a republish at the
-  // same URL is only invisible to a session that is already running. The
-  // controller polls the server's cheap metadata endpoint (one poller per
-  // session — viewers never poll) and, when the remote file provably changed,
-  // offers the new deck through the header pill. Same house rule as the file
-  // watcher: nothing swaps until the presenter clicks, and nothing surfaces
-  // when the host is unreachable or doesn't support the check.
+  // Remote republish watching for URL-backed decks (lib/remoteDeckPoller.ts):
+  // the controller of a deck loaded from someone else's URL offers a
+  // republished version through the header pill.
   useEffect(() => {
     if (local !== false || role !== "controller") return;
     const base = pdfUrlRef.current;
     if (!base || base.startsWith("blob:")) return;
-
-    const BASE_MS = 30_000;
-    const MAX_MS = 4 * 60_000;
-    interface Sig {
-      etag: string;
-      lastModified: string;
-      contentLength: string;
-    }
-    const same = (a: Sig, b: Sig) =>
-      a.etag === b.etag && a.lastModified === b.lastModified && a.contentLength === b.contentLength;
-    const hasValidators = (s: Sig) => !!(s.etag || s.lastModified || s.contentLength);
-
-    let stopped = false;
-    let busy = false; // a poll's probes + parse can outlast one interval; never overlap
-    let backedOff = false; // parked at the slow cadence by an unreachable host
-    let delay = BASE_MS;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    let baseline: Sig | null = null;
-    let candidate: Sig | null = null;
-
-    const stop = () => {
-      stopped = true;
-      if (timer !== null) {
-        clearTimeout(timer);
-        timer = null;
-      }
-    };
-    const schedule = () => {
-      if (stopped) return;
-      timer = setTimeout(() => { void poll(); }, delay);
-    };
-
-    const poll = async () => {
-      if (stopped || busy) return;
-      // Frozen background tabs can't present anyway; skip the round without
-      // spending a request on the remote host.
-      if (document.hidden) {
-        schedule();
-        return;
-      }
-      busy = true;
-      try {
-        let headers: Record<string, string>;
-        try {
-          headers = await pdfWriteAuth();
-        } catch {
-          stop(); // no credential to poll with — degrade silently
-          return;
-        }
-        let sig: Sig;
-        try {
-          const res = await fetch(`/api/sessions/${id}/remote-version`, { headers });
-          if (res.status === 403 || res.status === 404) {
-            stop(); // session gone, or not URL-backed: nothing to watch
-            return;
-          }
-          if (!res.ok) {
-            // Remote host unreachable (the server answers 502): back off to
-            // the slowest cadence and keep trying, still silently.
-            delay = MAX_MS;
-            backedOff = true;
-            schedule();
-            return;
-          }
-          sig = await res.json();
-          if (backedOff) {
-            // The host answered again. Without this the session stays parked at
-            // the four-minute cadence for good, since only a confirmed change
-            // resets it — and it can't see one while the host is down.
-            backedOff = false;
-            delay = BASE_MS;
-          }
-        } catch {
-          stop(); // network failure — today's behaviour, without errors
-          return;
-        }
-        if (!hasValidators(sig)) {
-          stop(); // host sends no validators — there is nothing to compare
-          return;
-        }
-        if (!baseline) {
-          baseline = sig; // first observation is the reference, never a change
-          schedule();
-          return;
-        }
-        if (same(sig, baseline)) {
-          candidate = null;
-          delay = Math.min(delay * 2, MAX_MS); // polite backoff while unchanged
-          schedule();
-          return;
-        }
-        // Different from the baseline. Hosts behind some CDNs mint a fresh
-        // ETag per request, so require the new signature to hold steady
-        // across two consecutive polls before trusting it.
-        if (!candidate || !same(sig, candidate)) {
-          candidate = sig;
-          schedule();
-          return;
-        }
-        // Confirmed change: read the new document's page count before
-        // offering it, so applying clamps correctly. A parse failure means
-        // the publish is probably mid-flight — keep watching silently and
-        // re-detect on the next poll.
-        candidate = null;
-        try {
-          // Always external here: the server only answers remote-version for a
-          // deck backed by someone else's URL.
-          const doc = await loadLatestPdf(base, { external: true, version: Date.now() });
-          if (stopped) {
-            destroyPdf(doc);
-            return;
-          }
-          // Keep it: if the presenter applies this update, applyDeckUpdate
-          // adopts the document instead of downloading the same bytes again.
-          destroyPdf(prefetchedDeckRef.current);
-          prefetchedDeckRef.current = doc;
-          baseline = sig;
-          delay = BASE_MS; // stay fast for a while after a real change
-          setRemoteUpdate({ totalSlides: doc.numPages });
-          setReloadPrompt("remote");
-        } catch {
-          // candidate stays null: the next poll re-confirms and retries.
-        }
-        schedule();
-      } finally {
-        busy = false;
-      }
-    };
-
-    schedule();
+    const stop = watchRemoteDeck({
+      sessionId: id!,
+      pdfUrl: base,
+      headers: pdfWriteAuth,
+      onUpdate: (doc) => {
+        // Keep it: if the presenter applies this update, applyDeckUpdate
+        // adopts the document instead of downloading the same bytes again.
+        destroyPdf(prefetchedDeckRef.current);
+        prefetchedDeckRef.current = doc;
+        setRemoteUpdate({ totalSlides: doc.numPages });
+        setReloadPrompt("remote");
+      },
+    });
     return () => {
       stop();
       destroyPdf(prefetchedDeckRef.current);

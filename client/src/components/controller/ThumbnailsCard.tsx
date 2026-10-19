@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { renderPage } from "@/lib/pdf";
+import { renderPageInto } from "@/lib/pdf";
 import type { Deck } from "@/lib/deck";
 import { SlideLayers } from "@/components/plugins/SlideLayers";
 import { PluginThumbnailMenuItems } from "@/components/plugins/PresenterPlugins";
@@ -78,13 +78,7 @@ export function ThumbnailsCard({
           // deck half the size of a wide one and upscales on HiDPI either way.
           const el = entry.target as HTMLDivElement;
           const targetWidth = Math.round(tileWidth * (window.devicePixelRatio || 1));
-          renderPage(pdf, pageNum, { targetWidth }).then((canvas) => {
-            if (el.childElementCount > 0) return;
-            canvas.style.width = "100%";
-            canvas.style.height = "100%";
-            canvas.style.objectFit = "contain";
-            el.appendChild(canvas);
-          });
+          renderPageInto(el, pdf, pageNum, { targetWidth }, { ifEmpty: true });
           observer.unobserve(entry.target);
         });
       },

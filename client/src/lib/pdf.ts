@@ -397,3 +397,39 @@ export function clearCache() {
   pageCachePixels = 0;
   pageCachePdf = null;
 }
+
+/**
+ * Renders a page and shows it in `container`, fitted the way object-fit:
+ * contain shows it. Renders resolve out of order (cache hits are near-instant,
+ * fresh ones aren't), so call the returned function when the result is no
+ * longer wanted — a late one is then dropped instead of covering a newer page.
+ * With `ifEmpty`, a container that already shows something is left alone.
+ * A page that fails to render leaves the container as it was.
+ */
+export function renderPageInto(
+  container: HTMLElement,
+  pdf: PDFDocumentProxy,
+  pageNum: number,
+  opts: RenderOptions,
+  { ifEmpty = false, onPainted }: { ifEmpty?: boolean; onPainted?: () => void } = {},
+): () => void {
+  let stale = false;
+  renderPage(pdf, pageNum, opts)
+    .then((canvas) => {
+      if (stale || (ifEmpty && container.childElementCount > 0)) return;
+      container.innerHTML = "";
+      canvas.style.width = "100%";
+      canvas.style.height = "100%";
+      canvas.style.objectFit = "contain";
+      container.appendChild(canvas);
+      onPainted?.();
+    })
+    .catch((err) => {
+      // A destroyed document (the deck was just swapped) rejects every render
+      // still in flight; nothing to show for those.
+      if (!stale) console.warn(`Couldn't render page ${pageNum}:`, err);
+    });
+  return () => {
+    stale = true;
+  };
+}
