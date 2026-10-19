@@ -227,6 +227,25 @@ export async function readAttachments(pdf: PDFDocumentProxy): Promise<PdfAttachm
 // whose scale collided with the main view turned the thumbnail black.
 const pageCache = new Map<string, HTMLCanvasElement>();
 
+// Bound on the cached canvases' total area. Slides render at their exact
+// display size, so a drag-resize or a move between monitors leaves a trail of
+// full-screen canvases (a 4K slide is ~8 Mpx, 32 MB) that would otherwise
+// never be freed. Least recently used goes first; Map order is the recency.
+const PAGE_CACHE_MAX_PIXELS = 96_000_000;
+let pageCachePixels = 0;
+
+function cachePut(key: string, canvas: HTMLCanvasElement) {
+  pageCache.set(key, canvas);
+  pageCachePixels += canvas.width * canvas.height;
+  for (const [oldest, old] of pageCache) {
+    if (pageCachePixels <= PAGE_CACHE_MAX_PIXELS || oldest === key) break;
+    pageCache.delete(oldest);
+    pageCachePixels -= old.width * old.height;
+    // Release the backing store now rather than whenever GC gets to it.
+    old.width = old.height = 0;
+  }
+}
+
 // Which document pageCache currently holds renders for. Saving an edited deck
 // (a plugin's presio.deck.save) swaps in a new PDFDocumentProxy;
 // without this the next render of the same page+scale returned the *previous*
@@ -312,6 +331,10 @@ export interface RenderOptions {
   // the canvas matches the display resolution and stays crisp. Takes
   // precedence over `scale`.
   targetWidth?: number;
+  // With targetWidth: the height of the box the page is shown in, device
+  // pixels. The page is fitted inside both, the way object-fit: contain shows
+  // it, so a letterboxed slide's canvas is drawn 1:1 instead of shrunk.
+  targetHeight?: number;
 }
 
 export async function renderPage(
@@ -324,32 +347,39 @@ export async function renderPage(
   // A different document invalidates every cached canvas.
   if (pageCachePdf !== pdf) {
     pageCache.clear();
+    pageCachePixels = 0;
     pageCachePdf = pdf;
   }
 
   const page = await pdf.getPage(pageNum);
-  const baseWidth = page.getViewport({ scale: 1 }).width;
+  const base = page.getViewport({ scale: 1 });
 
   let scale: number;
   if (options.targetWidth) {
-    scale = Math.min(options.targetWidth, MAX_CANVAS_WIDTH) / baseWidth;
+    // Exactly the displayed size, not rounded up to a coarser step: any
+    // overshoot gets resampled down on screen, and that resampling is what
+    // blurs text. Resize churn is held off by the callers' own thresholds.
+    const width = Math.min(options.targetWidth, MAX_CANVAS_WIDTH);
+    scale = width / base.width;
+    if (options.targetHeight) scale = Math.min(scale, options.targetHeight / base.height);
   } else {
     scale = options.scale ?? 2;
   }
-  // Quantise so small layout/DPR jitters reuse the cached canvas instead of
-  // re-rendering on every resize. Round *up*: rounding to the nearest step can
-  // land below the requested width, which then gets upscaled on display —
-  // exactly the softness targetWidth exists to avoid.
-  scale = Math.max(0.25, Math.ceil(scale * 4) / 4);
+  scale = Math.max(0.25, scale);
 
   const key = `${pageNum}-${scale}`;
   const cached = pageCache.get(key);
-  if (cached) return copyCanvas(cached);
+  if (cached) {
+    // Most recently used again.
+    pageCache.delete(key);
+    pageCache.set(key, cached);
+    return copyCanvas(cached);
+  }
 
   const viewport = page.getViewport({ scale });
   const canvas = document.createElement("canvas");
-  canvas.width = viewport.width;
-  canvas.height = viewport.height;
+  canvas.width = Math.round(viewport.width);
+  canvas.height = Math.round(viewport.height);
 
   await page.render({
     canvasContext: canvas.getContext("2d")!,
@@ -358,11 +388,12 @@ export async function renderPage(
   }).promise;
   firstPaint(pdf).resolve();
 
-  pageCache.set(key, canvas);
+  cachePut(key, canvas);
   return copyCanvas(canvas);
 }
 
 export function clearCache() {
   pageCache.clear();
+  pageCachePixels = 0;
   pageCachePdf = null;
 }

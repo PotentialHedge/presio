@@ -3,7 +3,7 @@ import { useParams, useSearchParams, useNavigate, useLocation, Link } from "reac
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { loadPdf, loadPdfData, freshPdfUrl, loadLatestPdf, renderPage, clearCache, openPdf, destroyPdf, preloadPdf } from "@/lib/pdf";
 import { makeDeck, loadDeckExtras, type DeckExtras } from "@/lib/deck";
-import { useRenderTargetWidth } from "@/hooks/useRenderTargetWidth";
+import { useRenderTargetSize } from "@/hooks/useRenderTargetSize";
 import { useElementRef } from "@/hooks/useElementRef";
 import { lsGetString, lsSetString, lsRemove, deckWatchKey, slideKey } from "@/lib/storage";
 import { socket } from "@/lib/socket";
@@ -601,17 +601,17 @@ export default function Presentation() {
   // changes that size or scale — entering fullscreen, dragging the viewer onto
   // a projector, browser zoom, a move to a differently scaled monitor — has to
   // re-render, or the slide stays an upscaled canvas from the old size.
-  const viewWidth = useRenderTargetWidth(currentCanvasEl, !!deck);
+  const view = useRenderTargetSize(currentCanvasEl, !!deck);
 
   useEffect(() => {
-    if (!pdf || !currentCanvasEl || !viewWidth) return;
+    if (!pdf || !currentCanvasEl || !view.width) return;
     const container = currentCanvasEl;
     // renderPage resolves out of order (cached pages are near-instant, fresh
     // ones aren't), so a rapid slide change could leave a stale page on screen
     // — with plugins' layers already showing the new slide over it. Drop any
     // render that finishes after the effect has moved on.
     let stale = false;
-    renderPage(pdf, displaySlide, { targetWidth: viewWidth }).then((canvas) => {
+    renderPage(pdf, displaySlide, { targetWidth: view.width, targetHeight: view.height }).then((canvas) => {
       if (stale) return;
       container.innerHTML = "";
       canvas.style.width = "100%";
@@ -622,7 +622,7 @@ export default function Presentation() {
     return () => { stale = true; };
     // The container comes and goes with the view (and card) that owns it:
     // render into whichever one is mounted now.
-  }, [pdf, displaySlide, currentCanvasEl, viewWidth]);
+  }, [pdf, displaySlide, currentCanvasEl, view.width, view.height]);
 
   // Mirror a local state change outward: always to other same-browser windows
   // (BroadcastChannel) and, for synced sessions, to the server (socket). The

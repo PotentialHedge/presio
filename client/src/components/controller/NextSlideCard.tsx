@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useElementRef } from "@/hooks/useElementRef";
 import { renderPage } from "@/lib/pdf";
-import { useRenderTargetWidth } from "@/hooks/useRenderTargetWidth";
+import { useRenderTargetSize } from "@/hooks/useRenderTargetSize";
 import type { Deck } from "@/lib/deck";
 import { SlideLayers } from "@/components/plugins/SlideLayers";
 import type { PluginHostState } from "@/lib/plugins/usePluginHost";
@@ -21,7 +21,7 @@ export function NextSlideCard({
   // Tracks the resolution this canvas should be rendered at — container size
   // and device pixel ratio both, so browser zoom and a move to a differently
   // scaled monitor re-render rather than upscale.
-  const width = useRenderTargetWidth(container);
+  const { width, height } = useRenderTargetSize(container);
 
   useEffect(() => {
     if (!containerRef.current || !width) return;
@@ -32,8 +32,7 @@ export function NextSlideCard({
       let stale = false;
       // Same rule as the current slide: render at the container's real pixel
       // size so the preview isn't an upscaled fixed-size canvas on HiDPI.
-      const targetWidth = width;
-      renderPage(pdf, currentSlide + 1, { targetWidth }).then((canvas) => {
+      renderPage(pdf, currentSlide + 1, { targetWidth: width, targetHeight: height }).then((canvas) => {
         if (stale) return;
         el.innerHTML = "";
         canvas.style.width = "100%";
@@ -47,7 +46,7 @@ export function NextSlideCard({
         '<div class="flex items-center justify-center h-full text-muted-foreground text-sm">End of presentation</div>';
     }
     // containerRef is stable; `container` re-runs this for a new element.
-  }, [pdf, currentSlide, totalSlides, width, container, containerRef]);
+  }, [pdf, currentSlide, totalSlides, width, height, container, containerRef]);
 
   return (
     <div className="h-full relative rounded overflow-hidden bg-white">
