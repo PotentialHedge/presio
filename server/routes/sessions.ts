@@ -238,8 +238,16 @@ export function registerSessionRoutes(app: express.Express, { supabase, io, sock
       }
       const buf = Buffer.from(await blob.arrayBuffer());
       res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(data.filename)}.pdf"`);
-      res.setHeader("X-Filename", data.filename);
+      // Header values must be Latin-1, so a CJK or emoji name would make Node
+      // throw. Send it percent-encoded (Start.tsx decodes X-Filename), with an
+      // ASCII fallback plus the RFC 6266 filename* form for downloads.
+      const encoded = encodeURIComponent(data.filename).replace(
+        /['()*]/g,
+        (c) => "%" + c.charCodeAt(0).toString(16).toUpperCase(),
+      );
+      const ascii = data.filename.replace(/[^\x20-\x7e]|["\\]/g, "_");
+      res.setHeader("Content-Disposition", `attachment; filename="${ascii}.pdf"; filename*=UTF-8''${encoded}.pdf`);
+      res.setHeader("X-Filename", encoded);
       res.setHeader("X-Total-Slides", String(data.total_slides));
       res.send(buf);
     } catch (err) {

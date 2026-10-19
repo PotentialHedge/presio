@@ -25,6 +25,14 @@ function pullHandoff(id: string, token: string): Promise<void> {
   return pending;
 }
 
+function safeDecode(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 async function pull(id: string, token: string): Promise<void> {
   const res = await fetch(`/api/sessions/${id}/handoff?t=${encodeURIComponent(token)}`);
   // Already handed off. If it was to this browser (a reopened link), just open it.
@@ -33,7 +41,8 @@ async function pull(id: string, token: string): Promise<void> {
     const body = await res.json().catch(() => ({}));
     throw new Error(typeof body.error === "string" ? body.error : "Failed to download presentation");
   }
-  const filename = res.headers.get("X-Filename") || "presentation";
+  // Percent-encoded by the server: header values can't carry non-Latin-1.
+  const filename = safeDecode(res.headers.get("X-Filename") || "") || "presentation";
   const totalSlides = parseInt(res.headers.get("X-Total-Slides") || "0", 10);
   const blob = await res.blob();
   if (!totalSlides) throw new Error("Invalid presentation metadata");
