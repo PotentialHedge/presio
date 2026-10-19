@@ -21,6 +21,7 @@ import { goToSlideItems } from "@/components/controller/controllerCommands";
 import { appPaletteItems, slideArg, useAppCommands, type AppCommand } from "@/lib/commands";
 import { runsOnViewer, useViewerPluginSwitches } from "@/lib/plugins/viewerSwitches";
 import { track } from "@/lib/analytics";
+import { isEditableTarget } from "@/lib/keymap";
 
 export function ViewerView({
   id,
@@ -144,6 +145,8 @@ export function ViewerView({
         setPaletteOpen((open) => !open);
         return;
       }
+      // The passphrase field lives on this page too.
+      if (isEditableTarget(e.target)) return;
       if (e.key === "f" || e.key === "F") {
         toggleFullscreen();
       } else if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") {

@@ -47,6 +47,17 @@ export const DEFAULT_KEYMAP: Keymap = {
   jumpToSlide: [{ key: "j" }],
 };
 
+/** True while the key goes to a text field, where shortcuts must stay out of the way. */
+export function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return (
+    target.tagName === "INPUT" ||
+    target.tagName === "TEXTAREA" ||
+    target.tagName === "SELECT" ||
+    target.isContentEditable
+  );
+}
+
 export function matchesBinding(e: KeyboardEvent, bindings: KeyBinding[]): boolean {
   return bindings.some((b) => {
     const keyMatch = e.key.toLowerCase() === b.key.toLowerCase();

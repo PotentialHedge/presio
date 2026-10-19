@@ -43,6 +43,7 @@ import {
 } from "@/lib/deckWatcher";
 import {
   DEFAULT_KEYMAP,
+  isEditableTarget,
   matchesBinding,
   pluginBindings,
 } from "@/lib/keymap";
@@ -349,15 +350,7 @@ export function ControllerView({
         setPaletteOpen((open) => !open);
         return;
       }
-      const target = e.target as HTMLElement | null;
-      if (
-        target &&
-        (target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.isContentEditable)
-      ) {
-        return;
-      }
+      if (isEditableTarget(e.target)) return;
       // While armed, every keystroke belongs to the jump: digits accumulate,
       // Enter commits, and anything else cancels rather than firing its own
       // shortcut halfway through a page number.
