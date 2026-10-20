@@ -5,7 +5,7 @@
 # infrastructure detail and nothing outside the compose network needs it.
 set -eu
 
-apk add --no-cache openssl >/dev/null 2>&1
+apk add --no-cache openssl busybox-extras >/dev/null 2>&1
 
 mkdir -p /www/cgi-bin
 # busybox httpd runs anything under cgi-bin/ as CGI. The wrapper emits the
