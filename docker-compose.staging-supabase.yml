@@ -55,7 +55,7 @@ services:
           "node -e \"fetch('http://localhost:3000/api/platform/profile').then((r) => {if (r.status !== 200) throw new Error(r.status)})\""
         ]
       timeout: 10s
-      interval: 5s
+      interval: 30s
       retries: 3
       start_period: 20s
     environment:
@@ -95,7 +95,7 @@ services:
       web:
     healthcheck:
       test: ["CMD", "kong", "health"]
-      interval: 5s
+      interval: 30s
       timeout: 5s
       retries: 5
     depends_on:
@@ -147,7 +147,7 @@ services:
           "http://localhost:9999/health"
         ]
       timeout: 5s
-      interval: 5s
+      interval: 30s
       retries: 3
     depends_on:
       staging-db:
@@ -204,7 +204,7 @@ services:
         condition: service_healthy
     healthcheck:
       test: [ "CMD", "postgrest", "--ready" ]
-      interval: 5s
+      interval: 30s
       timeout: 5s
       retries: 3
     environment:
@@ -251,7 +251,7 @@ services:
           "http://staging-storage:5000/status"
         ]
       timeout: 5s
-      interval: 5s
+      interval: 30s
       retries: 3
       start_period: 10s
     environment:
@@ -289,7 +289,7 @@ services:
     healthcheck:
       test: [ "CMD", "imgproxy", "health" ]
       timeout: 5s
-      interval: 5s
+      interval: 30s
       retries: 3
     environment:
       IMGPROXY_BIND: ":5001"
@@ -317,6 +317,15 @@ services:
       PG_META_DB_USER: postgres
       PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD}
       CRYPTO_KEY: ${PG_META_CRYPTO_KEY}
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://localhost:8080/health').then((r) => {if (r.status !== 200) throw new Error(r.status)})\"",
+        ]
+      timeout: 5s
+      interval: 30s
+      retries: 3
 
   staging-db:
     container_name: staging-supabase-db
@@ -334,7 +343,7 @@ services:
       - staging-db-config:/etc/postgresql-custom
     healthcheck:
       test: [ "CMD", "pg_isready", "-U", "postgres", "-h", "localhost" ]
-      interval: 5s
+      interval: 30s
       timeout: 5s
       retries: 10
     environment:
@@ -366,7 +375,7 @@ services:
     command: server --console-address ":9001" /data
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
-      interval: 2s
+      interval: 30s
       timeout: 10s
       retries: 5
     volumes:
