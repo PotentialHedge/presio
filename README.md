@@ -1,36 +1,35 @@
 # Presio
 
-Present PDFs from your browser. Try it at **[presio.ch](https://presio.ch)** or
-**[presio.xyz](https://presio.xyz)**.
+Present PDFs from your browser: a no-install alternative to
+[Pympress](https://github.com/Cimbali/pympress). Try it at
+**[presio.ch](https://presio.ch)** or **[presio.xyz](https://presio.xyz)**
+(use presio.ch if your institution blocks `.xyz`).
 
-A modern no-install alternative to [Pympress](https://github.com/Cimbali/pympress) with more features!
+**[Plugins](https://github.com/topics/presio-plugin)**
 
-Upload a PDF presentation, get a short link, and control the slideshow from one browser window while viewers watch in another. Presio is a hosted service; this repository is its source code.
-
-> If `.xyz` domains are blocked by your institution you can use **[presio.ch](https://presio.ch)**
-
+Open a PDF, drive the slides from one browser window and show them in another.
+This repository is the source of the hosted service.
 
 ![Demo](https://github.com/benedict-armstrong/presio/releases/download/demo/presio.gif)
 
-![Demo](example/diagram.png)
+![How it works](example/diagram.png)
 
 ## Features
 
-- **Local by default** — your PDF stays in the browser and is never uploaded. Works offline; local presentations are kept for up to 7 days.
-- **Controller + viewer** — drive slides from the controller window while a viewer window mirrors it, kept perfectly in sync.
-- **Present across devices** — log in and sync online to get a 6-character session code. Viewers enter it on the home page and follow along live over WebSockets.
-- **Shared control** — hand out a controller passphrase to let someone else drive.
-- **Speaker notes** — written next to your current and next slide, rendered as markdown.
-- **Embedded media** — local videos and GIFs, direct video URLs, and YouTube/Vimeo. Playback, autoplay, and seeking all stay in sync with viewers.
-- **Presentation timer** — track how long you've been talking.
-- **Customizable controller** — rearrange the layout and remap keyboard shortcuts.
-- **Recent presentations** — pick up where you left off from the home page.
-- **Download** — anyone can grab the PDF from the presentation view.
-- **Agent APIs** — MCP server and REST API for AI agents; see [Use it from an AI agent](#use-it-from-an-ai-agent).
+- **Local by default**: your PDF stays in the browser and works offline. Local presentations are kept for 7 days.
+- **Controller + viewer**: the viewer window mirrors the controller, in sync.
+- **Present across devices**: log in and sync to get a 6-character code. Viewers enter it on the home page and follow along live.
+- **Shared control**: give someone a passphrase to drive.
+- **Speaker notes**: shown next to the current and next slide, rendered as markdown.
+- **Embedded media**: videos, GIFs and YouTube/Vimeo, with playback synced to viewers.
+- **Timer**, a **customizable layout** and **remappable shortcuts**.
+- **Plugins**: add features such as polls or captions; see [Plugins](#plugins).
+- **Agent APIs**: an MCP server and a REST API; see [Use it from an AI agent](#use-it-from-an-ai-agent).
 
 ## Adding videos and speaker notes
 
-Presio is agnostic to the typesetting engine used — any PDF works, and notes can also be embedded by hand from plain Typst or LaTeX (see [Embedding notes by hand](#embedding-notes-by-hand)). Official packages are available for the two most common ones:
+Any PDF works. For notes and media, use the official packages, or embed them
+by hand (see [Embedding notes by hand](#embedding-notes-by-hand)):
 
 - **Typst** — [presio-typst-package](https://github.com/benedict-armstrong/presio-typst-package)
 - **LaTeX** — [presio-latex-package](https://github.com/benedict-armstrong/presio-latex-package)
@@ -73,15 +72,14 @@ Hello world.
 \end{document}
 ```
 
-For LaTeX, copy `presio.sty` from the package repository next to your `.tex` file — that's the whole install.
+To install, copy `presio.sty` from the package repository next to your `.tex` file.
 
 ### Embedding notes by hand
 
-Prefer not to use the packages? Presio reads speaker notes from JSON files
-attached to the PDF (Typst) or from `note:` link annotations (LaTeX), and
-renders them as markdown in the controller's notes panel.
+Presio reads speaker notes from JSON files attached to the PDF (Typst) or from
+`note:` link annotations (LaTeX).
 
-Typst — define a helper and call it on each slide:
+Typst: define a helper and call it on each slide:
 
 ```typst
 #let speaker-notes(notes) = context {
@@ -102,7 +100,7 @@ Typst — define a helper and call it on each slide:
 #speaker-notes("Remember to mention the demo.")
 ```
 
-LaTeX — use `hyperref` to create an invisible `note:` link:
+LaTeX: use `hyperref` to create an invisible `note:` link:
 
 ```latex
 \usepackage{hyperref}
@@ -115,18 +113,37 @@ LaTeX — use `hyperref` to create an invisible `note:` link:
 \speakernote{Remember to mention the demo.}
 ```
 
-Validate what you produced at [presio.ch/check](https://presio.ch/check) — it
-shows per-page thumbnails and reports whether the notes and media sidecars are
-valid.
+Check the result at [presio.ch/check](https://presio.ch/check), which reports
+whether the notes and media on each page are valid.
+
+## Plugins
+
+Plugins add features such as live polls or closed captions. Browse them under
+the [`presio-plugin`](https://github.com/topics/presio-plugin) topic on GitHub
+and add one from Settings → Discover plugins.
+
+To build your own, paste this prompt into Claude Code, Codex or Cursor:
+
+```text
+Read https://presio.ch/plugins.md and build me a Presio plugin. Ask me what it should do first.
+```
+
+## Use it from an AI agent
+
+Agents can present and check PDFs over MCP or REST. Start at
+[presio.ch/llms.txt](https://presio.ch/llms.txt). To add the MCP server to
+Claude Code:
+
+```bash
+claude mcp add --transport http presio https://presio.ch/mcp
+```
 
 ## Self-hosting
 
-Want to run Presio yourself instead of using the hosted service? For a full
-deployment (accounts, cross-device sync, your own domain) see
+For a full deployment (accounts, cross-device sync, your own domain) see
 [`deploy/README.md`](deploy/README.md).
 
-For a single offline container with no accounts and no Supabase — just present
-PDFs on your own machine or LAN — nothing needs building:
+For a single offline container with no accounts or Supabase:
 
 ```bash
 docker run -d -p 3001:3001 -e PRESIO_MODE=local -e LOCAL_DATA_DIR=/data \
@@ -134,8 +151,7 @@ docker run -d -p 3001:3001 -e PRESIO_MODE=local -e LOCAL_DATA_DIR=/data \
   ghcr.io/benedict-armstrong/presio-local:1
 ```
 
-The `:1` tag tracks the current major release line — fixes and features, no
-breaking changes. See [Versions and upgrading](deploy/README.md#versions-and-upgrading).
-
-See ["Running fully local / offline"](deploy/README.md#running-fully-local--offline)
-for what this mode does and doesn't include.
+`:1` tracks the current major version, so it gets no breaking changes (see
+[Versions and upgrading](deploy/README.md#versions-and-upgrading)). See
+[Running fully local / offline](deploy/README.md#running-fully-local--offline)
+for what this mode includes.
