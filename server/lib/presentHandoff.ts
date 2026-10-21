@@ -6,13 +6,14 @@ import { safeEqual } from "../auth.js";
 import type { SocketState } from "../socket/index.js";
 import { announceDeck, clampSlide, replaceHostedPdf } from "./hostedDeck.js";
 import { deckTitle } from "./upload.js";
+import type { PdfGenerator } from "../../shared/pdfGenerator.js";
 import { generatePassphrase, insertSession, ownedExpiry } from "./sessionRows.js";
 
 export const PRESENT_NEXT =
   "Open url in a browser to start a local presentation (skips share). The PDF is copied into the browser and removed from the server. Unclaimed links expire after 24h (7 days when authenticated).";
 
 export type PresentResult =
-  | { ok: true; id: string; url: string; filename: string; totalSlides: number; next: string; controllerToken: string }
+  | { ok: true; id: string; url: string; filename: string; totalSlides: number; next: string; controllerToken: string; generator: PdfGenerator }
   | { ok: false; status: number; error: string };
 
 /** Stage a PDF for local handoff; returns an open URL the browser claims into IndexedDB. */
@@ -22,7 +23,7 @@ export async function createPresentHandoff(
 ): Promise<PresentResult> {
   const pages = await countDeckPages(opts.buffer);
   if (!pages.ok) return pages;
-  const { totalSlides } = pages;
+  const { totalSlides, generator } = pages;
 
   const filename = deckTitle(opts.originalName) || "presentation";
   const controllerToken = nanoid(24);
@@ -59,6 +60,7 @@ export async function createPresentHandoff(
     totalSlides,
     next: PRESENT_NEXT,
     controllerToken,
+    generator,
   };
 }
 
@@ -75,7 +77,7 @@ export const PRESENT_SYNCED_UPDATED_NEXT =
   "Deck replaced in place — same link, same presentation. Anyone viewing it reloads the new slides automatically.";
 
 export type PresentUpdateResult =
-  | { ok: true; id: string; url: string; filename: string; totalSlides: number; next: string }
+  | { ok: true; id: string; url: string; filename: string; totalSlides: number; next: string; generator: PdfGenerator }
   | { ok: false; status: number; error: string };
 
 /**
@@ -126,7 +128,7 @@ export async function updatePresentDeck(
 
   const pages = await countDeckPages(opts.buffer);
   if (!pages.ok) return pages;
-  const { totalSlides } = pages;
+  const { totalSlides, generator } = pages;
 
   // An empty name means "keep the current title" rather than resetting it.
   const rawName = deckTitle(opts.originalName ?? "");
@@ -154,7 +156,7 @@ export async function updatePresentDeck(
       return { ok: false, status: 500, error: "Failed to update presentation" };
     }
     const url = `${opts.baseUrl}/start/${row.id}?t=${row.controller_token}`;
-    return { ok: true, id: row.id, url, filename, totalSlides, next: PRESENT_UPDATED_NEXT };
+    return { ok: true, id: row.id, url, filename, totalSlides, next: PRESENT_UPDATED_NEXT, generator };
   }
 
   if (!row.pdf_path) {
@@ -173,5 +175,6 @@ export async function updatePresentDeck(
     filename,
     totalSlides,
     next: PRESENT_SYNCED_UPDATED_NEXT,
+    generator,
   };
 }

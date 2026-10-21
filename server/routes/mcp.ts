@@ -6,6 +6,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import * as z from "zod/v4";
 import { baseUrl, canonicalBaseUrl } from "../lib/baseUrl.js";
 import { createPresentHandoff, updatePresentDeck } from "../lib/presentHandoff.js";
+import { trackServer } from "../lib/analytics.js";
 import { buildCheckReport } from "./check.js";
 import { agentDoc } from "./agentDocs.js";
 import { resolveOptionalUserId } from "../auth.js";
@@ -76,6 +77,7 @@ function createPresioMcp(supabase: SupabaseClient, origin: string, req: express.
         if (!result.ok) {
           return { content: [{ type: "text" as const, text: result.error }], isError: true };
         }
+        trackServer(req, "api-present", { via: "mcp", updated: true, slides: result.totalSlides, size: buffer.length, ...result.generator });
         // Same whitelist as the create branch below — `ok` is internal.
         const updatedPayload = {
           id: result.id,
@@ -97,6 +99,7 @@ function createPresioMcp(supabase: SupabaseClient, origin: string, req: express.
       if (!result.ok) {
         return { content: [{ type: "text" as const, text: result.error }], isError: true };
       }
+      trackServer(req, "api-present", { via: "mcp", updated: false, slides: result.totalSlides, size: buffer.length, ...result.generator });
       const payload = {
         id: result.id,
         url: result.url,

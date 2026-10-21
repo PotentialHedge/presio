@@ -274,7 +274,13 @@ export default function Home() {
       // Counted only once the deck is durably stored; the analytics sink
       // timestamps each event, so two uploads of the same filename can be
       // compared by hash to spot recompiled vs. re-uploaded decks.
-      track("upload", { filename: p.filename, sha256: p.sha256, size: p.file.size, slides: p.totalSlides });
+      track("upload", {
+        filename: p.filename,
+        sha256: p.sha256,
+        size: p.file.size,
+        slides: p.totalSlides,
+        ...p.generator,
+      });
       navigate(`/s/${id}/share`);
     },
     [navigate, hotReload]
@@ -288,7 +294,7 @@ export default function Home() {
       try {
         const pdf = await readPdfFile(file);
         setProgress(100);
-        const { blob, sha256, filename, totalSlides } = pdf;
+        const { blob, sha256, filename, totalSlides, generator } = pdf;
 
         // Fork on a re-upload before anything is created: the recents list is
         // already in memory, so the comparison costs no network round-trip and
@@ -312,6 +318,7 @@ export default function Home() {
             sha256,
             filename,
             totalSlides,
+            generator,
             compared: match.compared,
             handle,
           });

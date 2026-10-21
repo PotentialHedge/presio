@@ -14,6 +14,7 @@ import { PageDetailModal } from "./PageDetailModal";
 import "@/lib/pdf"; // ensure worker is configured
 import { saveFile } from "@/lib/saveFile";
 import { track } from "@/lib/analytics";
+import { pdfGenerator } from "@/lib/pdfGenerator";
 
 /** Thumbnails rendered at once. */
 const THUMB_CONCURRENCY = 4;
@@ -77,9 +78,9 @@ export default function CheckerPage() {
       }
       pdfRef.current = pdf;
 
-      const deck = await inspectAttachments(pdf);
+      const [deck, generator] = await Promise.all([inspectAttachments(pdf), pdfGenerator(pdf)]);
       if (gen !== loadGen.current) return;
-      track("check", { slides: pdf.numPages });
+      track("check", { slides: pdf.numPages, ...generator });
       setReport(deck);
       setFilename(file.name);
 

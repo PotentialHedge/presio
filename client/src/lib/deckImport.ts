@@ -5,6 +5,7 @@ import { openPdf, destroyPdf } from "@/lib/pdf";
 import { sha256Hex } from "@/lib/analytics";
 import { idbPut, type LocalPresentation } from "@/lib/localStore";
 import { newLocalDeckId } from "@/lib/localId";
+import { pdfGenerator, type PdfGenerator } from "@/lib/pdfGenerator";
 
 export interface ImportedPdf {
   /** An in-memory copy of the bytes (see readPdfFile). */
@@ -14,10 +15,12 @@ export interface ImportedPdf {
   /** The file's name without ".pdf". */
   filename: string;
   totalSlides: number;
+  /** The tool that made the PDF, for analytics only — never stored. */
+  generator: PdfGenerator;
 }
 
 /**
- * Reads a PDF file once: its bytes, fingerprint and page count.
+ * Reads a PDF file once: its bytes, fingerprint, page count and generator.
  *
  * The blob is an in-memory copy rather than the File itself. A File from the
  * picker is only a reference to the file on disk, and IndexedDB persists that
@@ -40,8 +43,9 @@ export async function readPdfFile(file: File): Promise<ImportedPdf> {
   }
   const doc = await openPdf({ data: new Uint8Array(buf) });
   const totalSlides = doc.numPages;
+  const generator = await pdfGenerator(doc);
   destroyPdf(doc);
-  return { blob, sha256, filename: file.name.replace(/\.pdf$/i, ""), totalSlides };
+  return { blob, sha256, filename: file.name.replace(/\.pdf$/i, ""), totalSlides, generator };
 }
 
 /** Why storing a deck in this browser failed, in words a presenter can act on. */
@@ -54,7 +58,7 @@ export const STORE_FAILED =
  * server-side, if and when the presenter shares the deck.
  */
 export async function createLocalDeck(
-  pdf: ImportedPdf,
+  pdf: Omit<ImportedPdf, "generator">,
   extra: Partial<Pick<LocalPresentation, "handle">> = {},
 ): Promise<string> {
   const id = newLocalDeckId();

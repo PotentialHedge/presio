@@ -6,6 +6,7 @@ import type express from "express";
 import { resolveOptionalUserId } from "../../auth.js";
 import { baseUrl } from "../../lib/baseUrl.js";
 import { createPresentHandoff, handoffTokenFrom, updatePresentDeck } from "../../lib/presentHandoff.js";
+import { trackServer } from "../../lib/analytics.js";
 import { loadControlledSession } from "../../lib/sessionAccess.js";
 import { isPdfUpload, singleField, uploadField } from "../../lib/upload.js";
 import type { RouteDeps } from "./index.js";
@@ -82,6 +83,7 @@ export function registerHandoffRoutes(app: express.Express, { supabase, io, sock
         res.status(result.status).json({ error: result.error });
         return;
       }
+      trackServer(req, "api-present", { via: "rest", updated: true, slides: result.totalSlides, size: file.size, ...result.generator });
       res.json({
         id: result.id,
         url: result.url,
@@ -104,6 +106,7 @@ export function registerHandoffRoutes(app: express.Express, { supabase, io, sock
       res.status(result.status).json({ error: result.error });
       return;
     }
+    trackServer(req, "api-present", { via: "rest", updated: false, slides: result.totalSlides, size: file.size, ...result.generator });
     res.json({
       id: result.id,
       url: result.url,

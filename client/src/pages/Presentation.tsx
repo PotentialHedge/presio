@@ -672,7 +672,7 @@ export default function Presentation() {
   const replacePdf = useCallback(
     async (file: File, handle?: FileSystemFileHandle) => {
       if (local === null) return;
-      const { blob, sha256, filename, totalSlides } = await readPdfFile(file);
+      const { blob, sha256, filename, totalSlides, generator } = await readPdfFile(file);
 
       if (local) {
         const rec = await idbGet(id!);
@@ -723,6 +723,7 @@ export default function Presentation() {
         size: file.size,
         slides: totalSlides,
         mode: local ? "local" : "server",
+        ...generator,
       });
       // A replace writes IndexedDB, never the file on disk, so the watcher's
       // reference point is still valid. What can change is *which* file is

@@ -9,6 +9,7 @@
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { isValidTotalSlides, MAX_TOTAL_SLIDES } from "../validation.js";
+import { generatorFromInfo, type PdfGenerator } from "../../shared/pdfGenerator.js";
 
 type DocumentSource = Parameters<typeof getDocument>[0];
 
@@ -82,11 +83,14 @@ export async function readAttachments(doc: PDFDocumentProxy): Promise<PdfAttachm
  */
 export async function countDeckPages(
   buffer: Buffer,
-): Promise<{ ok: true; totalSlides: number } | { ok: false; status: number; error: string }> {
+): Promise<{ ok: true; totalSlides: number; generator: PdfGenerator } | { ok: false; status: number; error: string }> {
   let totalSlides: number;
+  let generator: PdfGenerator;
   try {
     const doc = await openPdf({ data: new Uint8Array(buffer) });
     totalSlides = doc.numPages;
+    // For analytics only (see shared/pdfGenerator); bad metadata isn't a bad PDF.
+    generator = await doc.getMetadata().then((m) => generatorFromInfo(m.info), () => ({ tool: "unknown" }));
     void closePdf(doc);
   } catch {
     return { ok: false, status: 422, error: "The file could not be read as a PDF" };
@@ -94,5 +98,5 @@ export async function countDeckPages(
   if (!isValidTotalSlides(totalSlides)) {
     return { ok: false, status: 400, error: `PDF exceeds the ${MAX_TOTAL_SLIDES}-page limit` };
   }
-  return { ok: true, totalSlides };
+  return { ok: true, totalSlides, generator };
 }
