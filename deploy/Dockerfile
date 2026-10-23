@@ -10,7 +10,7 @@
 # multi-arch release build runs Vite under QEMU for no benefit.
 # Digest-pinned so a rebuild of an old release reproduces it; Dependabot
 # (.github/dependabot.yml) proposes the bumps.
-FROM --platform=$BUILDPLATFORM node:26-alpine@sha256:aadf416b2cdce311a8811ba3f0608a61b77dbf997500e2eafe781b51f6a0b019 AS client-build
+FROM --platform=$BUILDPLATFORM node:26-alpine@sha256:40cd011b55415bc894e45b02fdd5a5dfde056921b7d23a64c74f80497af48797 AS client-build
 WORKDIR /app/client
 COPY client/package*.json ./
 RUN npm ci
@@ -27,7 +27,7 @@ RUN npm run build
 
 # Stage 2 runs the server, which serves the API, the websocket, and the built
 # client from ../client/dist (see server/index.ts).
-FROM node:26-alpine@sha256:aadf416b2cdce311a8811ba3f0608a61b77dbf997500e2eafe781b51f6a0b019
+FROM node:26-alpine@sha256:40cd011b55415bc894e45b02fdd5a5dfde056921b7d23a64c74f80497af48797
 WORKDIR /app/server
 COPY server/package*.json ./
 # better-sqlite3 (local mode's storage backend) is a native module with no
