@@ -4,9 +4,8 @@
 # used to point at *production's* Supabase/Postgres, so "staging" isolated
 # the app binary but not the database. A bad dbschema.sql change had nowhere
 # to fail except live prod data. This file gives staging its own Postgres,
-# Auth, Storage, Kong, etc. — trimmed to what deploy/README.md's "Trimming
-# unused services" section says Presio actually needs (drops realtime,
-# functions/edge, and the supavisor pooler).
+# Auth, Storage, Kong, etc. — the same trimmed service set as production (see
+# deploy/README.md's "Trimmed services" section).
 #
 # Deploy-staging.yml brings this up (own -p, see below) BEFORE building the
 # app, and checks presio-db-init's exit code: a broken migration fails here,
@@ -79,10 +78,8 @@ services:
       AUTH_JWT_SECRET: ${JWT_SECRET}
       ENABLED_FEATURES_LOGS_ALL: "false"
       SNIPPETS_MANAGEMENT_FOLDER: /app/snippets
-      EDGE_FUNCTIONS_MANAGEMENT_FOLDER: /app/edge-functions
     volumes:
       - ./deploy/volumes/snippets:/app/snippets:z
-      - ./deploy/volumes/functions:/app/edge-functions:ro,z
 
   staging-kong:
     container_name: staging-supabase-kong
@@ -121,6 +118,9 @@ services:
       KONG_PLUGINS: request-transformer,cors,key-auth,acl,basic-auth,request-termination,ip-restriction,post-function
       KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
       KONG_NGINX_PROXY_PROXY_BUFFERS: 64 160k
+      # Kong defaults to one nginx worker per CPU core (~110 MB each); Presio's
+      # traffic needs nowhere near that.
+      KONG_NGINX_WORKER_PROCESSES: "2"
       KONG_PROXY_ACCESS_LOG: /dev/stdout combined
       SUPABASE_ANON_KEY: ${ANON_KEY}
       SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
@@ -234,8 +234,6 @@ services:
         condition: service_healthy
       staging-rest:
         condition: service_started
-      staging-imgproxy:
-        condition: service_started
       staging-minio:
         condition: service_healthy
       staging-minio-createbucket:
@@ -273,30 +271,12 @@ services:
       FILE_STORAGE_BACKEND_PATH: /var/lib/storage
       TENANT_ID: ${STORAGE_TENANT_ID}
       REGION: ${REGION}
-      ENABLE_IMAGE_TRANSFORMATION: "true"
-      IMGPROXY_URL: http://staging-imgproxy:5001
+      # Presio never requests image transforms, so imgproxy is not deployed.
+      ENABLE_IMAGE_TRANSFORMATION: "false"
       S3_PROTOCOL_ACCESS_KEY_ID: ${S3_PROTOCOL_ACCESS_KEY_ID}
       S3_PROTOCOL_ACCESS_KEY_SECRET: ${S3_PROTOCOL_ACCESS_KEY_SECRET}
     volumes:
       - staging-storage-data:/var/lib/storage
-
-  staging-imgproxy:
-    container_name: staging-supabase-imgproxy
-    image: darthsim/imgproxy:v3.30.1
-    restart: unless-stopped
-    volumes:
-      - staging-storage-data:/var/lib/storage
-    healthcheck:
-      test: [ "CMD", "imgproxy", "health" ]
-      timeout: 5s
-      interval: 30s
-      retries: 3
-    environment:
-      IMGPROXY_BIND: ":5001"
-      IMGPROXY_LOCAL_FILESYSTEM_ROOT: /
-      IMGPROXY_USE_ETAG: "true"
-      IMGPROXY_AUTO_WEBP: ${IMGPROXY_AUTO_WEBP:-true}
-      IMGPROXY_MAX_SRC_RESOLUTION: 16.8
 
   staging-meta:
     container_name: staging-supabase-meta

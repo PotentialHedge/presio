@@ -1,17 +1,20 @@
 # Presio self-hosted stack — single combined compose, run from the repo root.
 #
 # This is the official Supabase self-hosting compose (vendored, pinned — see
-# deploy/volumes/UPSTREAM_PINNED_SHA.txt) with three local adaptations baked in:
+# deploy/volumes/UPSTREAM_PINNED_SHA.txt) with four local adaptations baked in:
 #   1. Storage uses the S3 backend pointed at the bundled MinIO service
 #      (merged from upstream docker-compose.s3.yml) — synced PDFs live in MinIO.
 #   2. A `presio` service builds and serves this repo (Express + Socket.IO + the
 #      built React client) and talks to Supabase via the internal Kong gateway.
 #   3. The repo's dbschema.sql is mounted as a Postgres init migration, so the
 #      `sessions` table + `presentations` bucket are created on first boot.
+#   4. Services Presio never calls (realtime, edge functions, the supavisor
+#      pooler, imgproxy) are dropped — see "Trimmed services" in deploy/README.md.
 #
 # Ingress: the `presio` and `kong` containers carry Traefik labels and join the
 # external `web` network, so the shared Traefik proxy (see proxy/) terminates TLS
-# and routes the two domains to them. No host ports are published here.
+# and routes the two domains to them. No public host ports are published here
+# (only Postgres, on loopback, for host-local admin access).
 #
 # Everything is driven by a root .env (copy from deploy/.env.example). To run:
 #   docker network create web   # once per host (shared with the proxy)
@@ -71,10 +74,8 @@ services:
       ENABLED_FEATURES_LOGS_ALL: "false"
 
       SNIPPETS_MANAGEMENT_FOLDER: /app/snippets
-      EDGE_FUNCTIONS_MANAGEMENT_FOLDER: /app/edge-functions
     volumes:
       - ./deploy/volumes/snippets:/app/snippets:z
-      - ./deploy/volumes/functions:/app/edge-functions:ro,z
 
   kong:
     container_name: supabase-kong
@@ -120,6 +121,9 @@ services:
       KONG_PLUGINS: request-transformer,cors,key-auth,acl,basic-auth,request-termination,ip-restriction,post-function
       KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
       KONG_NGINX_PROXY_PROXY_BUFFERS: 64 160k
+      # Kong defaults to one nginx worker per CPU core (~110 MB each); Presio's
+      # traffic needs nowhere near that.
+      KONG_NGINX_WORKER_PROCESSES: "2"
       KONG_PROXY_ACCESS_LOG: /dev/stdout combined
       #KONG_SSL_CERT: /home/kong/server.crt
       #KONG_SSL_CERT_KEY: /home/kong/server.key
@@ -311,52 +315,6 @@ services:
         "postgrest"
       ]
 
-  realtime:
-    # This container name looks inconsistent but is correct because realtime constructs tenant id by parsing the subdomain
-    container_name: realtime-dev.supabase-realtime
-    image: supabase/realtime:v2.102.3
-    restart: unless-stopped
-    depends_on:
-      db:
-        # Disable this if you are using an external Postgres database
-        condition: service_healthy
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl -sSfL --head -o /dev/null -H \"Authorization: Bearer ${ANON_KEY}\" http://localhost:4000/api/tenants/realtime-dev/health"
-        ]
-      timeout: 5s
-      interval: 30s
-      retries: 3
-      start_period: 10s
-    environment:
-      PORT: 4000
-      DB_HOST: ${POSTGRES_HOST}
-      DB_PORT: ${POSTGRES_PORT}
-      DB_USER: supabase_admin
-      DB_PASSWORD: ${POSTGRES_PASSWORD}
-      DB_NAME: ${POSTGRES_DB}
-      DB_AFTER_CONNECT_QUERY: 'SET search_path TO _realtime'
-      DB_ENC_KEY: supabaserealtime
-
-      # Legacy symmetric HS256 key
-      API_JWT_SECRET: ${JWT_SECRET}
-
-      # JWKS for token verification (EC public + legacy symmetric).
-      # For Podman, use: API_JWT_JWKS: ${JWT_JWKS}
-      #API_JWT_JWKS: ${JWT_JWKS:-{"keys":[]}}
-
-      SECRET_KEY_BASE: ${SECRET_KEY_BASE}
-      METRICS_JWT_SECRET: ${JWT_SECRET}
-      ERL_AFLAGS: -proto_dist inet_tcp
-      DNS_NODES: "''"
-      RLIMIT_NOFILE: "10000"
-      APP_NAME: realtime
-      SEED_SELF_HOST: "true"
-      RUN_JANITOR: "true"
-      DISABLE_HEALTHCHECK_LOGGING: "true"
-
   # To use S3 backed storage: docker compose -f docker-compose.yml -f docker-compose.s3.yml up
   storage:
     container_name: supabase-storage
@@ -367,8 +325,6 @@ services:
         # Disable this if you are using an external Postgres database
         condition: service_healthy
       rest:
-        condition: service_started
-      imgproxy:
         condition: service_started
       minio:
         condition: service_healthy
@@ -418,36 +374,13 @@ services:
       TENANT_ID: ${STORAGE_TENANT_ID}
       # TODO: https://github.com/supabase/storage-api/issues/55
       REGION: ${REGION}
-      ENABLE_IMAGE_TRANSFORMATION: "true"
-      IMGPROXY_URL: http://imgproxy:5001
+      # Presio never requests image transforms, so imgproxy is not deployed.
+      ENABLE_IMAGE_TRANSFORMATION: "false"
       # S3 protocol endpoint configuration
       S3_PROTOCOL_ACCESS_KEY_ID: ${S3_PROTOCOL_ACCESS_KEY_ID}
       S3_PROTOCOL_ACCESS_KEY_SECRET: ${S3_PROTOCOL_ACCESS_KEY_SECRET}
     volumes:
       - ./deploy/volumes/storage:/var/lib/storage:z
-
-  imgproxy:
-    container_name: supabase-imgproxy
-    image: darthsim/imgproxy:v3.30.1
-    restart: unless-stopped
-    volumes:
-      - ./deploy/volumes/storage:/var/lib/storage:z
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "imgproxy",
-          "health"
-        ]
-      timeout: 5s
-      interval: 30s
-      retries: 3
-    environment:
-      IMGPROXY_BIND: ":5001"
-      IMGPROXY_LOCAL_FILESYSTEM_ROOT: /
-      IMGPROXY_USE_ETAG: "true"
-      IMGPROXY_AUTO_WEBP: ${IMGPROXY_AUTO_WEBP}
-      IMGPROXY_MAX_SRC_RESOLUTION: 16.8
 
   meta:
     container_name: supabase-meta
@@ -475,48 +408,17 @@ services:
       interval: 30s
       retries: 3
 
-  functions:
-    container_name: supabase-edge-functions
-    image: supabase/edge-runtime:v1.74.0
-    restart: unless-stopped
-    volumes:
-      - ./deploy/volumes/functions:/home/deno/functions:z
-      - deno-cache:/root/.cache/deno
-    depends_on:
-      kong:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "timeout 1 bash -c '</dev/tcp/127.0.0.1/9000'"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-    environment:
-      # Legacy symmetric HS256 key
-      JWT_SECRET: ${JWT_SECRET}
-      SUPABASE_URL: http://kong:8000
-      SUPABASE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL}
-      # Legacy API keys (HS256-signed JWTs)
-      SUPABASE_ANON_KEY: ${ANON_KEY}
-      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
-      # New opaque API keys
-      SUPABASE_PUBLISHABLE_KEYS: "{\"default\":\"${SUPABASE_PUBLISHABLE_KEY:-}\"}"
-      SUPABASE_SECRET_KEYS: "{\"default\":\"${SUPABASE_SECRET_KEY:-}\"}"
-      SUPABASE_DB_URL: postgresql://postgres:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
-      # TODO: Allow configuring VERIFY_JWT per function.
-      VERIFY_JWT: "${FUNCTIONS_VERIFY_JWT}"
-    command:
-      [
-        "start",
-        "--main-service",
-        "/home/deno/functions/main"
-      ]
-
   # Comment out everything below this point if you are using an external Postgres database
   db:
     container_name: supabase-db
     # To upgrade an existing Postgres 15 database in place, see utils/upgrade-pg17.sh.
     image: supabase/postgres:17.6.1.136
     restart: unless-stopped
+    ports:
+      # Loopback only, for host-local admin access (psql); the stack itself
+      # reaches Postgres over the compose network. Publishing it unqualified
+      # would expose Postgres to the internet (Docker's iptables rules bypass ufw).
+      - 127.0.0.1:${POSTGRES_PORT}:5432
     volumes:
       - ./deploy/volumes/db/realtime.sql:/docker-entrypoint-initdb.d/migrations/99-realtime.sql:Z
       # Must be superuser to create event trigger
@@ -565,64 +467,6 @@ services:
         "config_file=/etc/postgresql/postgresql.conf",
         "-c",
         "log_min_messages=fatal" # prevents Realtime polling queries from appearing in logs
-      ]
-
-  # Update the DATABASE_URL if you are using an external Postgres database
-  supavisor:
-    container_name: supabase-pooler
-    image: supabase/supavisor:2.9.5
-    restart: unless-stopped
-    ports:
-      # Loopback only: everything in the stack reaches the pooler over the
-      # compose network; these binds exist purely for host-local admin access.
-      # Publishing them unqualified would expose Postgres to the internet
-      # (Docker's iptables rules bypass ufw).
-      - 127.0.0.1:${POSTGRES_PORT}:5432
-      - 127.0.0.1:${POOLER_PROXY_PORT_TRANSACTION}:6543
-    volumes:
-      - ./deploy/volumes/pooler/pooler.exs:/etc/pooler/pooler.exs:ro,z
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "curl",
-          "-sSfL",
-          "--head",
-          "-o",
-          "/dev/null",
-          "http://127.0.0.1:4000/api/health"
-        ]
-      interval: 30s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
-    depends_on:
-      db:
-        condition: service_healthy
-    environment:
-      PORT: 4000
-      POSTGRES_PORT: ${POSTGRES_PORT}
-      POSTGRES_HOST: ${POSTGRES_HOST}
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      DATABASE_URL: ecto://supabase_admin:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/_supabase
-      CLUSTER_POSTGRES: "true"
-      SECRET_KEY_BASE: ${SECRET_KEY_BASE}
-      VAULT_ENC_KEY: ${VAULT_ENC_KEY}
-      API_JWT_SECRET: ${JWT_SECRET}
-      METRICS_JWT_SECRET: ${JWT_SECRET}
-      REGION: local
-      ERL_AFLAGS: -proto_dist inet_tcp
-      POOLER_TENANT_ID: ${POOLER_TENANT_ID}
-      POOLER_DEFAULT_POOL_SIZE: ${POOLER_DEFAULT_POOL_SIZE}
-      POOLER_MAX_CLIENT_CONN: ${POOLER_MAX_CLIENT_CONN}
-      POOLER_POOL_MODE: transaction
-      DB_POOL_SIZE: ${POOLER_DB_POOL_SIZE}
-    command:
-      [
-        "/bin/sh",
-        "-c",
-        "/app/bin/migrate && /app/bin/supavisor eval \"$$(cat /etc/pooler/pooler.exs)\" && /app/bin/server"
       ]
 
   # --- Presio additions -----------------------------------------------------
@@ -808,5 +652,4 @@ networks:
 
 volumes:
   db-config:
-  deno-cache:
   minio-data:

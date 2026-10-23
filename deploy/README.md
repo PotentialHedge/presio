@@ -470,16 +470,30 @@ The vendored files come from the `supabase/supabase` commit recorded in
 `docker/volumes/**` at the new commit, then re-apply the local adaptations (S3
 backend on `storage`; the `minio` / `minio-createbucket` / `presio-db-init` /
 `presio` services; the Traefik labels + `web` network on `presio`/`kong`; and the
-uncommented GitHub provider lines in `auth`).
+uncommented GitHub provider lines in `auth`) and drop the services listed under
+[Trimmed services](#trimmed-services), with their Kong routes.
 
-## Trimming unused services
+## Trimmed services
 
-Presio itself only needs `db`, `kong`, `auth`, `rest`, `storage`, `imgproxy`,
-plus `minio`. `realtime`, `functions` (edge), and `supavisor` (pooler) are not
-used (Presio runs its own Socket.IO and talks to Kong, not Postgres directly).
-They're kept so the upstream stack boots exactly as shipped; you can disable them
-to save resources, but leave `studio`/`meta` (Kong's health gate depends on
-`studio`).
+Of the upstream Supabase stack, Presio uses only Auth (the client signs in
+through it; the server verifies tokens), PostgREST (the server's table reads
+and writes) and Storage (synced PDFs, backed by `minio`), all reached through
+`kong`, plus `db`. `studio` and `meta` are kept for the admin dashboard at the
+Supabase domain.
+
+These upstream services are left out because nothing calls them:
+
+| Service | Why it's not needed |
+| --- | --- |
+| `realtime` | Live sync is Presio's own Socket.IO. |
+| `functions` (edge runtime) | No edge functions. |
+| `supavisor` (pooler) | The app talks to Kong, never to Postgres directly. `db` publishes Postgres on `127.0.0.1:${POSTGRES_PORT}` for host-local admin access instead. |
+| `imgproxy` | Storage's image transforms are never requested (`ENABLE_IMAGE_TRANSFORMATION=false`). |
+
+Their Kong routes are removed too, and Kong runs 2 nginx workers instead of
+one per CPU core. The `_realtime` / `_supavisor` init SQL under
+`deploy/volumes/db/` is still mounted, unchanged from upstream; it only creates
+empty schemas on a fresh database.
 
 ## Running fully local / offline
 
