@@ -7,10 +7,10 @@ Apply or update one with:
 
 ```bash
 # create
-gh api -X POST repos/benedict-armstrong/presio/rulesets --input .github/rulesets/main.json
+gh api -X POST repos/PotentialHedge/presio/rulesets --input .github/rulesets/main.json
 
-# update an existing one (find the id with: gh api repos/benedict-armstrong/presio/rulesets)
-gh api -X PUT repos/benedict-armstrong/presio/rulesets/<id> --input .github/rulesets/main.json
+# update an existing one (find the id with: gh api repos/PotentialHedge/presio/rulesets)
+gh api -X PUT repos/PotentialHedge/presio/rulesets/<id> --input .github/rulesets/main.json
 ```
 
 | File | What it does |

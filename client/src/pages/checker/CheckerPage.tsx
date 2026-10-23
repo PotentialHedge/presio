@@ -262,7 +262,7 @@ export default function CheckerPage() {
               <p className="text-sm text-muted-foreground">
                 Upload a Presio PDF to see per-page thumbnails and validate embedded speaker notes and media sidecars.{" "}
                 <a
-                  href="https://github.com/benedict-armstrong/presio-typst-package"
+                  href="https://github.com/PotentialHedge/presio-typst-package"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="underline underline-offset-4 hover:text-foreground transition-colors"

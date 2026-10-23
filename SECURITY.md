@@ -3,7 +3,7 @@
 ## Reporting a vulnerability
 
 Please report security issues privately through GitHub's
-[private vulnerability reporting](https://github.com/benedict-armstrong/presio/security/advisories/new)
+[private vulnerability reporting](https://github.com/PotentialHedge/presio/security/advisories/new)
 rather than in a public issue. If that isn't available to you, email
 benedict.armstrong@gmail.com.
 
@@ -38,13 +38,13 @@ address is a deployment choice rather than a vulnerability.
 Published images carry a signed build provenance attestation:
 
 ```bash
-docker buildx imagetools inspect ghcr.io/benedict-armstrong/presio-local:1 \
+docker buildx imagetools inspect ghcr.io/potentialhedge/presio-local:1 \
   --format '{{ json .Provenance }}'   # how and from what commit it was built
-docker buildx imagetools inspect ghcr.io/benedict-armstrong/presio-local:1 \
+docker buildx imagetools inspect ghcr.io/potentialhedge/presio-local:1 \
   --format '{{ json .SBOM }}'         # what is inside it
 
 # Releases from v1.2.0 onward also carry a Sigstore-signed attestation in
 # GitHub's own store, which the CLI checks against this repository:
-gh attestation verify --repo benedict-armstrong/presio \
-  oci://ghcr.io/benedict-armstrong/presio-local:1
+gh attestation verify --repo PotentialHedge/presio \
+  oci://ghcr.io/potentialhedge/presio-local:1
 ```

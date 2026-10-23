@@ -1,6 +1,6 @@
 # Fully local / offline Presio — a single container, no Supabase, no .env.
 #
-# Addresses https://github.com/benedict-armstrong/presio/issues/2: the root
+# Addresses https://github.com/PotentialHedge/presio/issues/2: the root
 # docker-compose.yml is the full self-hosted stack (Supabase + Traefik +
 # MinIO + analytics/uptime), which is deployment-only baggage if all you want
 # is to present PDFs on your own machine or LAN. In PRESIO_MODE=local the
@@ -13,7 +13,7 @@
 #
 # Nothing to clone — this file is all you need, and it pulls a prebuilt image:
 #
-#   curl -fsSLO https://raw.githubusercontent.com/benedict-armstrong/presio/main/local.docker-compose.yml
+#   curl -fsSLO https://raw.githubusercontent.com/PotentialHedge/presio/main/local.docker-compose.yml
 #   docker compose -f local.docker-compose.yml up
 #   open http://localhost:3001
 #
@@ -47,7 +47,7 @@ services:
     # compose pull`, but never an unreviewed breaking change. Other channels —
     # `:1.2.3` to pin exactly, `:latest` for the newest release whatever its
     # major, `:main` for the unstable tip of the default branch.
-    image: ghcr.io/benedict-armstrong/presio-local:1
+    image: ghcr.io/potentialhedge/presio-local:1
     # Explicit so `up` pulls rather than silently building from source — with
     # both image: and build: set, Compose's default is version-dependent, and a
     # copy of this file downloaded on its own has no build context to fall back

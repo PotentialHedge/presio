@@ -57,7 +57,7 @@ jobs:
 
           # A tag with no Universe release yet is normal for a day or two after
           # a release, so it is a note in the summary, not a failure.
-          tag=$(gh api repos/benedict-armstrong/presio-typst-package/tags \
+          tag=$(gh api repos/PotentialHedge/presio-typst-package/tags \
             --jq '[.[].name | ltrimstr("v") | select(test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))]
                   | sort_by(split(".") | map(tonumber)) | last // ""')
           if [ -n "$tag" ] && [ "$tag" != "$latest" ] \
@@ -67,7 +67,7 @@ jobs:
 
           # The LaTeX package is installed by copying presio.sty, so nothing in
           # this repo pins a version for it. Say so if it ever starts releasing.
-          latex=$(gh api repos/benedict-armstrong/presio-latex-package/tags \
+          latex=$(gh api repos/PotentialHedge/presio-latex-package/tags \
             --jq '[.[].name | ltrimstr("v") | select(test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))] | length')
           if [ "$latex" != "0" ]; then
             echo "::warning::presio-latex-package now publishes versioned tags — the docs still install it unversioned and may need to pin one."

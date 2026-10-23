@@ -10,7 +10,7 @@ Present PDFs from your browser: a no-install alternative to
 Open a PDF, drive the slides from one browser window and show them in another.
 This repository is the source of the hosted service.
 
-![Demo](https://github.com/benedict-armstrong/presio/releases/download/demo/presio.gif)
+![Demo](https://github.com/PotentialHedge/presio/releases/download/demo/presio.gif)
 
 ![How it works](example/diagram.png)
 
@@ -31,8 +31,8 @@ This repository is the source of the hosted service.
 Any PDF works. For notes and media, use the official packages, or embed them
 by hand (see [Embedding notes by hand](#embedding-notes-by-hand)):
 
-- **Typst** — [presio-typst-package](https://github.com/benedict-armstrong/presio-typst-package)
-- **LaTeX** — [presio-latex-package](https://github.com/benedict-armstrong/presio-latex-package)
+- **Typst** — [presio-typst-package](https://github.com/PotentialHedge/presio-typst-package)
+- **LaTeX** — [presio-latex-package](https://github.com/PotentialHedge/presio-latex-package)
 
 ### Typst
 
@@ -52,7 +52,7 @@ Hello world.
 
 ### LaTeX
 
-[![Open in Overleaf](https://img.shields.io/badge/Open%20in%20Overleaf-1F2A37?logo=overleaf&logoColor=white)](https://www.overleaf.com/docs?snip_uri[]=https://raw.githubusercontent.com/benedict-armstrong/presio-latex-package/main/starter/main.tex&snip_uri[]=https://raw.githubusercontent.com/benedict-armstrong/presio-latex-package/main/presio.sty&snip_uri[]=https://raw.githubusercontent.com/benedict-armstrong/presio-latex-package/main/starter/clip.gif&snip_uri[]=https://raw.githubusercontent.com/benedict-armstrong/presio-latex-package/main/starter/poster.png&snip_name[]=main.tex&snip_name[]=presio.sty&snip_name[]=clip.gif&snip_name[]=poster.png&engine=pdflatex)
+[![Open in Overleaf](https://img.shields.io/badge/Open%20in%20Overleaf-1F2A37?logo=overleaf&logoColor=white)](https://www.overleaf.com/docs?snip_uri[]=https://raw.githubusercontent.com/PotentialHedge/presio-latex-package/main/starter/main.tex&snip_uri[]=https://raw.githubusercontent.com/PotentialHedge/presio-latex-package/main/presio.sty&snip_uri[]=https://raw.githubusercontent.com/PotentialHedge/presio-latex-package/main/starter/clip.gif&snip_uri[]=https://raw.githubusercontent.com/PotentialHedge/presio-latex-package/main/starter/poster.png&snip_name[]=main.tex&snip_name[]=presio.sty&snip_name[]=clip.gif&snip_name[]=poster.png&engine=pdflatex)
 
 ```latex
 \documentclass{beamer}
@@ -148,7 +148,7 @@ For a single offline container with no accounts or Supabase:
 ```bash
 docker run -d -p 3001:3001 -e PRESIO_MODE=local -e LOCAL_DATA_DIR=/data \
   -e TRUST_PROXY=false -v presio-data:/data \
-  ghcr.io/benedict-armstrong/presio-local:1
+  ghcr.io/potentialhedge/presio-local:1
 ```
 
 `:1` tracks the current major version, so it gets no breaking changes (see

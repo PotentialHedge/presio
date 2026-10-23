@@ -7,7 +7,7 @@
 // behind.
 //
 // This tracks what Typst Universe actually serves, not the tags on
-// benedict-armstrong/presio-typst-package: `@preview/presio:<version>` only
+// PotentialHedge/presio-typst-package: `@preview/presio:<version>` only
 // resolves once a release has been published there, so a freshly tagged version
 // would break every snippet that copies this.
 //
@@ -15,6 +15,6 @@
 // repeat the literal; the workflow above rewrites all three together.
 export const TYPST_PACKAGE_VERSION = "0.2.3";
 
-// The LaTeX package (benedict-armstrong/presio-latex-package) is installed by
+// The LaTeX package (PotentialHedge/presio-latex-package) is installed by
 // copying presio.sty next to the .tex file and publishes no versioned releases,
 // so there is no version to pin for it. The workflow flags it if that changes.

@@ -324,7 +324,7 @@ exists. That throttle is part of the app and needs no configuration.
 ## Versions and upgrading
 
 Releases are `v*` git tags, published as container tags on
-`ghcr.io/benedict-armstrong/presio-local`:
+`ghcr.io/potentialhedge/presio-local`:
 
 | Tag | Moves when | Use it for |
 | --- | --- | --- |
@@ -339,15 +339,15 @@ Every published image carries a signed build provenance attestation and an
 SBOM. Verify a build really came from this repository with:
 
 ```bash
-docker buildx imagetools inspect ghcr.io/benedict-armstrong/presio-local:1 \
+docker buildx imagetools inspect ghcr.io/potentialhedge/presio-local:1 \
   --format '{{ json .Provenance }}'   # how and from what commit it was built
-docker buildx imagetools inspect ghcr.io/benedict-armstrong/presio-local:1 \
+docker buildx imagetools inspect ghcr.io/potentialhedge/presio-local:1 \
   --format '{{ json .SBOM }}'         # what is inside it
 
 # Releases from v1.2.0 onward also carry a Sigstore-signed attestation in
 # GitHub's own store, which the CLI checks against this repository:
-gh attestation verify --repo benedict-armstrong/presio \
-  oci://ghcr.io/benedict-armstrong/presio-local:1
+gh attestation verify --repo PotentialHedge/presio \
+  oci://ghcr.io/potentialhedge/presio-local:1
 ```
 
 ### Upgrading
@@ -506,14 +506,14 @@ no `.env`, no checkout:
 docker run -d --name presio -p 3001:3001 \
   -e PRESIO_MODE=local -e LOCAL_DATA_DIR=/data -e TRUST_PROXY=false \
   -v presio-data:/data \
-  ghcr.io/benedict-armstrong/presio-local:1
+  ghcr.io/potentialhedge/presio-local:1
 open http://localhost:3001
 ```
 
 Or with Compose, which sets all of that for you:
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/benedict-armstrong/presio/main/local.docker-compose.yml
+curl -fsSLO https://raw.githubusercontent.com/PotentialHedge/presio/main/local.docker-compose.yml
 docker compose -f local.docker-compose.yml up -d
 ```
 
@@ -546,7 +546,7 @@ docker run -d --name presio -p 3001:3001 \
   -e PRESIO_MODE=local -e LOCAL_DATA_DIR=/data -e TRUST_PROXY=false \
   -e PRESIO_PUBLIC_HOST=192.168.1.20:3001 \
   -v presio-data:/data \
-  ghcr.io/benedict-armstrong/presio-local:1
+  ghcr.io/potentialhedge/presio-local:1
 ```
 
 On Linux, `--network host` works instead and needs no address at all — but not

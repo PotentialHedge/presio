@@ -30,7 +30,7 @@ name: PR preview
 #      have no default — set them as repo variables (Settings → Secrets and
 #      variables → Actions → Variables) or the workflow fails loudly before
 #      it touches the host:
-#        git clone --bare https://github.com/benedict-armstrong/presio.git "$REPO_DIR"
+#        git clone --bare https://github.com/PotentialHedge/presio.git "$REPO_DIR"
 #        mkdir -p "$PREVIEW_DIR"
 #        ssh-keygen -t ed25519 -f ~/presio-preview-key -N '' -C presio-previews
 #      authorized_keys entry is restricted to tailnet source IPs:

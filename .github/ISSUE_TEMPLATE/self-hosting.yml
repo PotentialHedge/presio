@@ -35,7 +35,7 @@ body:
     id: image
     attributes:
       label: Image tag
-      placeholder: "ghcr.io/benedict-armstrong/presio-local:1"
+      placeholder: "ghcr.io/potentialhedge/presio-local:1"
 
   - type: textarea
     id: what

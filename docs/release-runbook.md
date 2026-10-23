@@ -6,9 +6,9 @@ The commands that are not automated, in the order they need to run.
 
 ```bash
 # 1. Protect the branches and tags. Definitions live in .github/rulesets/.
-gh api -X POST repos/benedict-armstrong/presio/rulesets --input .github/rulesets/main.json
-gh api -X POST repos/benedict-armstrong/presio/rulesets --input .github/rulesets/tags.json
-gh api -X POST repos/benedict-armstrong/presio/rulesets --input .github/rulesets/staging.json
+gh api -X POST repos/PotentialHedge/presio/rulesets --input .github/rulesets/main.json
+gh api -X POST repos/PotentialHedge/presio/rulesets --input .github/rulesets/tags.json
+gh api -X POST repos/PotentialHedge/presio/rulesets --input .github/rulesets/staging.json
 
 # 2. Create the staging branch at the merged main. From here on
 #    promote-staging.yml fast-forwards it automatically.
@@ -32,8 +32,8 @@ gh release create v1.0.0 --title v1.0.0 --generate-notes
 gh run watch "$(gh run list --workflow=publish-local-image.yml --limit 1 --json databaseId --jq '.[0].databaseId')"
 
 # 6. Confirm what shipped.
-docker run --rm ghcr.io/benedict-armstrong/presio-local:1 node -e 'console.log(process.env.APP_VERSION)'
-gh attestation verify --owner benedict-armstrong oci://ghcr.io/benedict-armstrong/presio-local:1
+docker run --rm ghcr.io/potentialhedge/presio-local:1 node -e 'console.log(process.env.APP_VERSION)'
+gh attestation verify --owner PotentialHedge oci://ghcr.io/potentialhedge/presio-local:1
 ```
 
 ## Every release after that
