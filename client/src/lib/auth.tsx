@@ -87,6 +87,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (error) throw error;
     },
     signInWithPassword: async (email, password) => {
+      // A GitHub sign-in started earlier and abandoned leaves its flag behind;
+      // this login's SIGNED_IN would otherwise count as GitHub too.
+      takeGitHubPending();
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
       track("login", { method: "password" });
@@ -100,6 +103,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       if (error) throw error;
       track("signup");
+    },
+    resendConfirmation: async (email) => {
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email,
+        options: { emailRedirectTo: currentPageUrl() },
+      });
+      if (error) throw error;
+      track("signup-resend");
     },
     signOut: async () => {
       const { error } = await supabase.auth.signOut();
