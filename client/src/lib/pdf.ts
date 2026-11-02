@@ -273,6 +273,12 @@ const isIOS =
   (/iPhone|iPad|iPod/.test(navigator.userAgent) ||
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1));
 
+/** Safari on macOS: a UA that says Safari without naming another engine's browser. */
+const isDesktopSafari =
+  typeof navigator !== "undefined" &&
+  !isIOS &&
+  /^((?!chrome|chromium|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent);
+
 /**
  * Whether a failed load is worth another go: the connection dropped (each
  * browser words that its own way: Safari's "Load failed", Chrome's "Failed to
@@ -315,10 +321,18 @@ function openUrl(url: string): Promise<PDFDocumentProxy> {
   // the whole file has arrived (the rest keeps streaming in behind it). A
   // server that doesn't advertise byte ranges simply gets one full GET.
   //
+  // Our storage only became range-capable cross-origin once Kong exposed
+  // Accept-Ranges/Content-Range (deploy/volumes/api/kong.yml); until then every
+  // browser took the full-GET path.
+  //
   // On iOS fetch the whole file in one request instead: WebKit there
   // mishandles cross-origin 206 Partial Content responses, so range-loaded
-  // PDFs that work on desktop fail on iOS.
-  return openPdf(isIOS ? { url, disableRange: true, disableStream: true } : { url });
+  // PDFs that work on desktop fail on iOS. Desktop Safari keeps the streamed
+  // full GET it always effectively had, until it has been checked against
+  // range loading.
+  if (isIOS) return openPdf({ url, disableRange: true, disableStream: true });
+  if (isDesktopSafari) return openPdf({ url, disableRange: true });
+  return openPdf({ url });
 }
 
 export async function loadPdfData(data: Uint8Array): Promise<PDFDocumentProxy> {
