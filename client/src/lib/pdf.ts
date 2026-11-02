@@ -53,9 +53,15 @@ const loadingTasks = new WeakMap<PDFDocumentProxy, ReturnType<typeof getDocument
 export async function openPdf(source: DocumentSource): Promise<PDFDocumentProxy> {
   const [{ getDocument }, worker] = await Promise.all([loadPdfjs(), loadWorker()]);
   const task = getDocument({ ...source, worker });
-  const doc = await task.promise;
-  loadingTasks.set(doc, task);
-  return doc;
+  try {
+    const doc = await task.promise;
+    loadingTasks.set(doc, task);
+    return doc;
+  } catch (e) {
+    // A failed load still holds its share of the worker; nobody else can free it.
+    void task.destroy();
+    throw e;
+  }
 }
 
 /**
@@ -267,7 +273,43 @@ const isIOS =
   (/iPhone|iPad|iPod/.test(navigator.userAgent) ||
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1));
 
+/**
+ * Whether a failed load is worth another go: the connection dropped (each
+ * browser words that its own way: Safari's "Load failed", Chrome's "Failed to
+ * fetch", Firefox's "NetworkError …"), or the server had a moment (5xx). A
+ * 404 or a broken PDF won't fix itself.
+ */
+export function isTransient(e: unknown): boolean {
+  if (!(e instanceof Error)) return false;
+  const status = (e as { status?: number }).status;
+  if (typeof status === "number") return status === 0 || status >= 500;
+  return e.name === "TypeError" || /load failed|failed to fetch|networkerror|network connection/i.test(e.message);
+}
+
+const RETRY_DELAYS_MS = [1000, 3000, 8000];
+
+/**
+ * Run a deck download, retrying when the network drops it. Big decks are one
+ * long download, and a room of laptops sharing a venue's Wi-Fi drops some:
+ * at one 30-viewer talk, every few minutes a viewer's 35 MB load died partway
+ * and left them on an error page until they thought to reload.
+ */
+async function withRetry<T>(load: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await load();
+    } catch (e) {
+      if (attempt >= RETRY_DELAYS_MS.length || !isTransient(e)) throw e;
+      await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[attempt]));
+    }
+  }
+}
+
 export async function loadPdf(url: string): Promise<PDFDocumentProxy> {
+  return withRetry(() => openUrl(url));
+}
+
+function openUrl(url: string): Promise<PDFDocumentProxy> {
   // Elsewhere, let pdf.js range-load: it reads the cross-reference table and
   // just the objects the first slide needs, so a large deck paints long before
   // the whole file has arrived (the rest keeps streaming in behind it). A
@@ -311,9 +353,12 @@ export async function loadLatestPdf(
 ): Promise<PDFDocumentProxy> {
   if (!external) return loadPdf(freshPdfUrl(url, version));
   // One GET for the whole file, matching loadPdf's reasons for not ranging.
-  const res = await fetch(url, { cache: "reload" });
-  if (!res.ok) throw new Error(`Failed to fetch the PDF (${res.status})`);
-  return loadPdfData(new Uint8Array(await res.arrayBuffer()));
+  const data = await withRetry(async () => {
+    const res = await fetch(url, { cache: "reload" });
+    if (!res.ok) throw Object.assign(new Error(`Failed to fetch the PDF (${res.status})`), { status: res.status });
+    return new Uint8Array(await res.arrayBuffer());
+  });
+  return loadPdfData(data);
 }
 
 // Cap the rendered canvas width (device pixels). The viewer is often the whole

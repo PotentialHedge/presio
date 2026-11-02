@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useParams, useSearchParams, useNavigate, useLocation, Link } from "react-router-dom";
 import type { PDFDocumentProxy } from "pdfjs-dist";
-import { loadPdf, loadPdfData, freshPdfUrl, loadLatestPdf, renderPageInto, clearCache, destroyPdf, preloadPdf } from "@/lib/pdf";
+import { loadPdf, loadPdfData, freshPdfUrl, loadLatestPdf, renderPageInto, clearCache, destroyPdf, preloadPdf, isTransient } from "@/lib/pdf";
 import { makeDeck, loadDeckExtras, type DeckExtras } from "@/lib/deck";
 import { useRenderTargetSize } from "@/hooks/useRenderTargetSize";
 import { useElementRef } from "@/hooks/useElementRef";
@@ -34,6 +34,8 @@ import { ControllerView } from "./ControllerView";
 import { ViewerView } from "./ViewerView";
 
 const SESSION_NOT_FOUND = "Session not found";
+/** The deck download kept failing even after loadPdf's retries. */
+const DOWNLOAD_FAILED = "Couldn't download the presentation";
 
 export default function Presentation() {
   const { id } = useParams<{ id: string }>();
@@ -391,7 +393,11 @@ export default function Presentation() {
         setTotalSlides(session.total_slides);
         setCurrentSlide(session.current_slide);
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load presentation");
+        if (!cancelled) {
+          setError(
+            isTransient(e) ? DOWNLOAD_FAILED : e instanceof Error ? e.message : "Failed to load presentation"
+          );
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -812,9 +818,16 @@ export default function Presentation() {
               <p className="text-sm text-muted-foreground">
                 {sessionEnded
                   ? "Keep this page open: if the presenter starts a new session, you'll be taken there automatically."
-                  : "The presentation may have expired or been ended by the presenter."}
+                  : error === DOWNLOAD_FAILED
+                    ? "The connection dropped while the slides were loading. Large decks on a busy network can take a few tries."
+                    : "The presentation may have expired or been ended by the presenter."}
               </p>
             </div>
+            {error === DOWNLOAD_FAILED && (
+              <Button className="w-full" onClick={() => window.location.reload()}>
+                Try again
+              </Button>
+            )}
             {suggestedCode && (
               <Button asChild className="w-full">
                 <Link to={`/s/${suggestedCode}?role=viewer`} replace onClick={() => track("join-code-suggestion")}>
@@ -822,7 +835,7 @@ export default function Presentation() {
                 </Link>
               </Button>
             )}
-            <Button asChild className="w-full" variant={suggestedCode ? "outline" : "default"}>
+            <Button asChild className="w-full" variant={suggestedCode || error === DOWNLOAD_FAILED ? "outline" : "default"}>
               <Link to="/">Back to Home</Link>
             </Button>
           </CardContent>
