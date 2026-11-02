@@ -48,7 +48,7 @@ async function hasRoom(supabase: SupabaseClient, res: express.Response, userId: 
     return false;
   }
   if (live >= MAX_CONCURRENT_PRESENTATIONS) {
-    res.status(403).json({ error: CAP_REACHED });
+    res.status(403).json({ error: CAP_REACHED, code: "cap_reached" });
     return false;
   }
   return true;
@@ -212,7 +212,7 @@ export function registerSyncRoutes(app: express.Express, { supabase }: RouteDeps
 
     if (userId && (await overshot(supabase, userId))) {
       await discard();
-      res.status(403).json({ error: CAP_REACHED });
+      res.status(403).json({ error: CAP_REACHED, code: "cap_reached" });
       return;
     }
 
@@ -351,7 +351,7 @@ export function registerSyncRoutes(app: express.Express, { supabase }: RouteDeps
     if (userId && (await overshot(supabase, userId))) {
       await supabase.storage.from("presentations").remove([pdfPath]);
       await supabase.from("sessions").update({ local: true, pdf_path: "" }).eq("id", row.id);
-      res.status(403).json({ error: CAP_REACHED });
+      res.status(403).json({ error: CAP_REACHED, code: "cap_reached" });
       return;
     }
 

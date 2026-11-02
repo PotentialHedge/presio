@@ -23,6 +23,7 @@ export function ShareDialog({
   loggedIn,
   syncing,
   syncError,
+  capReached,
   onLogin,
   onSync,
   onClose,
@@ -40,6 +41,7 @@ export function ShareDialog({
   loggedIn: boolean;
   syncing: boolean;
   syncError: string;
+  capReached: boolean;
   onLogin: () => void;
   onSync: () => void;
   onClose: () => void;
@@ -61,6 +63,7 @@ export function ShareDialog({
             loggedIn={loggedIn}
             syncing={syncing}
             syncError={syncError}
+            capReached={capReached}
             onLogin={onLogin}
             onSync={onSync}
           />

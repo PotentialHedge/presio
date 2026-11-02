@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { authEnabled } from "@/lib/authMode";
 import { idbGet } from "@/lib/localStore";
 import { MAX_PDF_BYTES, MAX_PDF_MB } from "@/lib/limits";
+import { SyncedSlots } from "@/components/SyncedSlots";
 
 // Why this deck can't be uploaded, or "" when it can. Read fresh from
 // IndexedDB each time the share surface opens, so a PDF replaced since (a
@@ -37,6 +38,7 @@ export function ShareEmptyState({
   loggedIn,
   syncing,
   syncError,
+  capReached = false,
   onLogin,
   onSync,
 }: {
@@ -44,6 +46,7 @@ export function ShareEmptyState({
   loggedIn: boolean;
   syncing: boolean;
   syncError: string;
+  capReached?: boolean;
   onLogin: () => void;
   onSync: () => void;
 }) {
@@ -76,6 +79,7 @@ export function ShareEmptyState({
             {syncing ? "Syncing…" : "Sync online to share"}
           </Button>
           {syncError && <p className="text-sm text-destructive text-center">{syncError}</p>}
+          {capReached && <SyncedSlots onFreed={onSync} />}
         </>
       ) : (
         <Button onClick={onLogin} disabled={syncing}>Log in to share</Button>

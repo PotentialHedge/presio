@@ -18,7 +18,7 @@ export default function Share() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const loggedIn = !!user;
-  const { syncing, syncError, sync } = useClaim(id!);
+  const { syncing, syncError, capReached, sync } = useClaim(id!);
 
   // Starts true for a browser-local id: there is no server row to ask about,
   // so the share screen renders its no-code-yet state immediately — offline
@@ -96,6 +96,7 @@ export default function Share() {
                 loggedIn={loggedIn}
                 syncing={syncing}
                 syncError={syncError}
+                capReached={capReached}
                 onLogin={() => setLoginOpen(true)}
                 onSync={syncOnline}
               />
