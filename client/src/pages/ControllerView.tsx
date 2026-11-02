@@ -212,7 +212,7 @@ export function ControllerView({
 
   const { user } = useAuth();
   const loggedIn = !!user;
-  const { syncing, syncError, sync } = useClaim(id);
+  const { syncing, syncError, capReached, sync } = useClaim(id);
 
   // One-time email list prompt after a few minutes of presenting. Waits for
   // the first-run tutorial to be out of the way.
@@ -620,6 +620,7 @@ export function ControllerView({
           loggedIn={loggedIn}
           syncing={syncing}
           syncError={syncError}
+          capReached={capReached}
           onLogin={() => setLoginOpen(true)}
           onSync={syncOnline}
           onClose={() => setShareDialogOpen(false)}

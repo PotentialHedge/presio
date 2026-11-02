@@ -26,6 +26,9 @@ export function useClaim(id: string) {
   const { session } = useAuth();
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState("");
+  // The account is at its synced-presentation cap: the share surface offers
+  // ending one of them instead of only reporting the error.
+  const [capReached, setCapReached] = useState(false);
 
   const sync = async (currentSlide?: number): Promise<string | null> => {
     // Local/offline mode has no accounts: authorize with the controller token
@@ -41,6 +44,7 @@ export function useClaim(id: string) {
       return null;
     }
     setSyncError("");
+    setCapReached(false);
     setSyncing(true);
     try {
       // A deck that was never registered has no row to claim: creating one is
@@ -80,6 +84,7 @@ export function useClaim(id: string) {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
+        if (body.code === "cap_reached") setCapReached(true);
         throw new Error(body.error || "Failed to sync presentation");
       }
       const data = await res.json();
@@ -118,5 +123,5 @@ export function useClaim(id: string) {
     }
   };
 
-  return { syncing, syncError, sync };
+  return { syncing, syncError, capReached, sync };
 }

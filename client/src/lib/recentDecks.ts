@@ -76,7 +76,7 @@ async function listControlledSynced(): Promise<RecentDeck[]> {
 // Decks the signed-in account owns server-side. Anonymous visitors must make
 // zero extra network round-trips, so the fetch is skipped entirely when no
 // session token exists — signing out drops the list back to local-only for free.
-async function listAccountSynced(): Promise<RecentDeck[]> {
+export async function listAccountSynced(): Promise<RecentDeck[]> {
   // Same reasoning as above, plus getSession() itself auto-refreshes a
   // near-expiry token — a network round trip before the fetch even starts.
   if (!navigator.onLine) return [];
