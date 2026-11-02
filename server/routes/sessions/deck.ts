@@ -8,6 +8,7 @@ import { fetchRemotePdfMeta } from "../../lib/remotePdf.js";
 import { countDeckPages } from "../../lib/pdfDoc.js";
 import { announceDeck, clampSlide, replaceHostedPdf } from "../../lib/hostedDeck.js";
 import { loadControlledSession } from "../../lib/sessionAccess.js";
+import { likelyIntendedCode } from "../../lib/codeTypos.js";
 import { deckTitle, isPdfUpload, uploadField } from "../../lib/upload.js";
 import type { RouteDeps } from "./index.js";
 
@@ -182,6 +183,28 @@ export function registerDeckRoutes(app: express.Express, { supabase, io, socketS
       .filter((c) => new Date(c.created_at).getTime() - start <= SUCCESSOR_WINDOW_MS)
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
     res.json({ ended: true, next: next?.id ?? null });
+  });
+
+  // A code that matches nothing: the live session it is one typo away from,
+  // if exactly one is. Viewer pages offer it as "Did you mean …?". Only live
+  // synced sessions qualify, since a local deck can't be joined from
+  // elsewhere anyway.
+  app.get("/api/sessions/:id/similar", async (req, res) => {
+    const typed = String(req.params.id).toUpperCase();
+    const { data, error } = await supabase
+      .from("sessions")
+      .select("id")
+      .eq("local", false)
+      .neq("status", "expired")
+      .gt("expires_at", new Date().toISOString());
+    if (error) {
+      res.status(500).json({ error: "Failed to look up sessions" });
+      return;
+    }
+    const ids = (data ?? []).map((r: { id: string }) => r.id);
+    // A code that exists needs no correction.
+    const suggestion = ids.includes(typed) ? null : likelyIntendedCode(typed, ids);
+    res.json({ suggestion });
   });
 
   app.get("/api/sessions/:id", async (req, res) => {
