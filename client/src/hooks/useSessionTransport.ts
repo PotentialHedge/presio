@@ -9,6 +9,9 @@ import { socket } from "@/lib/socket";
 import { startClockSync } from "@/lib/clock";
 import { getSessionAuth } from "@/lib/utils";
 
+/** The error a viewer shows once its synced session has been ended. */
+export const SESSION_ENDED = "This presentation has ended";
+
 export interface SessionTransportOptions {
   id: string | undefined;
   /** Whether the deck is local; null while that isn't known yet. */
@@ -188,8 +191,19 @@ export function useSessionTransport({
       setError(message);
     });
 
+    // The controller's other windows go home with it. A viewer stays put on
+    // an "ended" notice instead: the presenter often starts a new session
+    // straight away, and the page follows them there (useSessionSuccessor).
     socket.on("session_ended", () => {
-      navigate("/", { replace: true });
+      if (requestedRole !== "viewer") {
+        navigate("/", { replace: true });
+        return;
+      }
+      // Nothing left to rejoin: stop the watchdog reconnecting the whole
+      // audience every few seconds into a "Session not found".
+      clearInterval(watchdog);
+      socket.off("connect", join);
+      setError(SESSION_ENDED);
     });
 
     return () => {

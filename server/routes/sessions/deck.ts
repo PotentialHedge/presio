@@ -11,6 +11,9 @@ import { loadControlledSession } from "../../lib/sessionAccess.js";
 import { deckTitle, isPdfUpload, uploadField } from "../../lib/upload.js";
 import type { RouteDeps } from "./index.js";
 
+/** How long after an ended session's start a new one still counts as its continuation. */
+const SUCCESSOR_WINDOW_MS = 12 * 60 * 60 * 1000;
+
 export function registerDeckRoutes(app: express.Express, { supabase, io, socketState }: RouteDeps) {
   // Replace a synced presentation's PDF in place, keeping its id, code,
   // controller token and passphrase. Two callers:
@@ -139,6 +142,46 @@ export function registerDeckRoutes(app: express.Express, { supabase, io, socketS
 
     announceDeck({ io, socketState }, String(req.params.id), { filename: row.filename, totalSlides });
     res.json({ ok: true, totalSlides, filename: row.filename });
+  });
+
+  // Where an ended session's audience should go next. Presenters restart:
+  // a fresh upload, a different deck for the next agenda item, a session
+  // ended by mistake. The viewers still hold the old code and, until now,
+  // sat on a dead page. The answer is the same owner's newest live synced
+  // session started within SUCCESSOR_WINDOW_MS of the ended one. That is
+  // close enough to be the same meeting, and an old bookmark won't drop
+  // someone into an unrelated talk days later. `next: null` means ended with
+  // no successor yet, and the viewer page keeps asking. An unknown code is a
+  // 404, like the session itself. Anonymous sessions have no owner to follow.
+  app.get("/api/sessions/:id/next", async (req, res) => {
+    const { data: row, error } = await supabase
+      .from("sessions")
+      .select("id, status, expires_at, user_id, created_at")
+      .eq("id", req.params.id)
+      .single();
+    if (error || !row) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
+    const ended = row.status === "expired" || new Date(row.expires_at).getTime() <= Date.now();
+    if (!ended || !row.user_id) {
+      res.json({ ended, next: null });
+      return;
+    }
+
+    const start = new Date(row.created_at).getTime();
+    const { data: candidates } = await supabase
+      .from("sessions")
+      .select("id, created_at")
+      .eq("user_id", row.user_id)
+      .eq("local", false)
+      .neq("status", "expired")
+      .gt("expires_at", new Date().toISOString())
+      .gt("created_at", row.created_at);
+    const next = (candidates ?? [])
+      .filter((c) => new Date(c.created_at).getTime() - start <= SUCCESSOR_WINDOW_MS)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+    res.json({ ended: true, next: next?.id ?? null });
   });
 
   app.get("/api/sessions/:id", async (req, res) => {

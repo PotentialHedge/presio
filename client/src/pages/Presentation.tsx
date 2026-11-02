@@ -8,7 +8,8 @@ import { useElementRef } from "@/hooks/useElementRef";
 import { lsGetString, lsSetString, lsRemove, deckWatchKey, slideKey } from "@/lib/storage";
 import { socket } from "@/lib/socket";
 import { useLatestRef } from "@/hooks/useLatestRef";
-import { useSessionTransport } from "@/hooks/useSessionTransport";
+import { useSessionTransport, SESSION_ENDED } from "@/hooks/useSessionTransport";
+import { useSessionSuccessor } from "@/hooks/useSessionSuccessor";
 import { DeckLoadTimer } from "@/lib/deckLoadMetrics";
 import { endSession } from "@/lib/utils";
 import { idbGet, idbPut, idbDelete } from "@/lib/localStore";
@@ -64,6 +65,13 @@ export default function Presentation() {
   const [totalSlides, setTotalSlides] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  // Following a presenter to a new session (useSessionSuccessor) re-renders
+  // this same page under a new id: the old session's error must not stay up.
+  const [errorFor, setErrorFor] = useState(id);
+  if (errorFor !== id) {
+    setErrorFor(id);
+    setError("");
+  }
   const [blanked, setBlanked] = useState(false);
 
   // Everything extracted from the loaded PDF, re-derived whenever the
@@ -777,6 +785,9 @@ export default function Presentation() {
     void watcherRef.current?.resume();
   }, []);
 
+  // A viewer whose session is gone waits for the presenter's next one.
+  const sessionEnded = useSessionSuccessor(id, !!error && local !== true && requestedRole === "viewer");
+
   if (loading || (!error && !deck)) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -792,9 +803,11 @@ export default function Presentation() {
           <CardContent className="pt-6 space-y-4 text-center">
             <p className="text-3xl">😕</p>
             <div className="space-y-1">
-              <h2 className="text-lg font-semibold">{error}</h2>
+              <h2 className="text-lg font-semibold">{sessionEnded ? SESSION_ENDED : error}</h2>
               <p className="text-sm text-muted-foreground">
-                The presentation may have expired or been ended by the presenter.
+                {sessionEnded
+                  ? "Keep this page open: if the presenter starts a new session, you'll be taken there automatically."
+                  : "The presentation may have expired or been ended by the presenter."}
               </p>
             </div>
             <Button asChild className="w-full">

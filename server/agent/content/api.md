@@ -80,6 +80,7 @@ curl -s BASE/api/plugins | jq '.plugins[] | {source, description}'
 - `GET /api/sessions/mine` — header `Authorization: Bearer <login JWT>` — the signed-in user's live synced presentations, newest first.
   **200:** `[{ id, filename, total_slides, created_at, expires_at, controllerToken }]`. `controllerToken` is included because the owner is entitled to it — it lets any device the user signs in on open the presentation as its controller. 401 without a valid token; not available in local mode.
 - `DELETE /api/sessions/:id` — header `x-controller-token` — end a presentation: viewers are disconnected, the PDF is removed, and the row is marked expired (not recoverable).
+- `GET /api/sessions/:id/next` — no auth — for an ended session: `{ "ended": true, "next": "<id>" | null }`. `next` is the same owner's newest live synced presentation started within 12 hours of the ended one (viewer pages poll this to follow a presenter who restarted). A live session answers `{ "ended": false, "next": null }`; an unknown code is a 404.
 
 ## URL-backed decks (republish detection)
 
