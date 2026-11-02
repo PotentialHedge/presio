@@ -8,6 +8,8 @@ export interface AuthContextValue {
   signInWithGitHub: (redirectTo?: string) => Promise<void>;
   signInWithPassword: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
+  /** Send the signup confirmation email again (it went to spam, or never arrived). */
+  resendConfirmation: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
   /** Email a password-reset link that returns the user to the current page. */
   resetPassword: (email: string) => Promise<void>;

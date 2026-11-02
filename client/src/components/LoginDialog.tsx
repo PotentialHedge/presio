@@ -1,17 +1,26 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { DialogOverlay } from "@/components/ui/dialog-overlay";
 import { useAuth } from "@/hooks/useAuth";
 import { GitHubIcon } from "@/components/GitHubIcon";
 
 export function LoginDialog({ onClose }: { onClose: () => void }) {
-  const { signInWithGitHub, signInWithPassword, signUp, resetPassword, verifyResetCode } = useAuth();
-  const [mode, setMode] = useState<"signin" | "signup" | "reset">("signin");
+  const { signInWithGitHub, signInWithPassword, signUp, resendConfirmation, resetPassword, verifyResetCode } = useAuth();
+  // "confirm": signed up, waiting on the confirmation email.
+  const [mode, setMode] = useState<"signin" | "signup" | "reset" | "confirm">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [info, setInfo] = useState("");
+  // Seconds until another confirmation email may be requested. GoTrue refuses
+  // a resend within a minute of the last send anyway; this says so up front.
+  const [resendIn, setResendIn] = useState(0);
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const t = setTimeout(() => setResendIn((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendIn]);
   // Reset flow: set once the email is sent; shows the one-time-code input.
   const [resetSent, setResetSent] = useState(false);
   const [resetCode, setResetCode] = useState("");
@@ -23,8 +32,11 @@ export function LoginDialog({ onClose }: { onClose: () => void }) {
     try {
       if (mode === "signup") {
         await signUp(email, password);
-        setInfo("Account created. Check your email for a confirmation link, then sign in.");
-        setMode("signin");
+        // A dedicated step rather than a line of text under the login form:
+        // people who never saw the email kept signing up again (one did four
+        // times, under three addresses, in nine minutes).
+        setMode("confirm");
+        setResendIn(60);
       } else if (mode === "reset") {
         if (resetSent) {
           // Verifying the emailed code starts the recovery session; the global
@@ -47,6 +59,21 @@ export function LoginDialog({ onClose }: { onClose: () => void }) {
     }
   };
 
+  const resend = async () => {
+    setError("");
+    setInfo("");
+    try {
+      await resendConfirmation(email);
+      setResendIn(60);
+      setInfo("Sent again.");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Couldn't resend the email");
+    }
+  };
+
+  // Logging in before confirming fails with GoTrue's "Email not confirmed".
+  const unconfirmed = mode === "signin" && /not confirmed/i.test(error);
+
   const github = async () => {
     setError("");
     try {
@@ -58,6 +85,40 @@ export function LoginDialog({ onClose }: { onClose: () => void }) {
       setError(e instanceof Error ? e.message : "GitHub sign-in failed");
     }
   };
+
+  if (mode === "confirm") {
+    return (
+      <DialogOverlay onClose={onClose} maxWidth="max-w-xs">
+        <div className="space-y-2 text-center">
+          <h2 className="text-lg font-semibold">Check your email</h2>
+          <p className="text-sm">
+            We sent a confirmation link to <span className="font-medium break-all">{email}</span>. Open it, then log in.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Nothing after a minute? Look in your spam folder or resend it. If the address above has a typo, sign up
+            again with the right one.
+          </p>
+        </div>
+        {error && <p className="text-sm text-destructive text-center">{error}</p>}
+        {info && <p className="text-sm text-muted-foreground text-center">{info}</p>}
+        <div className="space-y-2">
+          <Button className="w-full" onClick={() => { setMode("signin"); setError(""); setInfo(""); }}>
+            I've confirmed: log in
+          </Button>
+          <Button variant="outline" className="w-full" disabled={resendIn > 0} onClick={resend}>
+            {resendIn > 0 ? `Resend email (${resendIn}s)` : "Resend email"}
+          </Button>
+        </div>
+        <button
+          type="button"
+          onClick={() => { setMode("signup"); setEmail(""); setError(""); setInfo(""); }}
+          className="text-xs text-muted-foreground hover:text-foreground transition-colors underline underline-offset-4 mx-auto block"
+        >
+          Use a different email
+        </button>
+      </DialogOverlay>
+    );
+  }
 
   return (
     <DialogOverlay onClose={onClose} maxWidth="max-w-xs">
@@ -124,6 +185,11 @@ export function LoginDialog({ onClose }: { onClose: () => void }) {
           />
         )}
         {error && <p className="text-sm text-destructive">{error}</p>}
+        {unconfirmed && (
+          <Button variant="outline" className="w-full" disabled={resendIn > 0} onClick={resend}>
+            {resendIn > 0 ? `Resend confirmation email (${resendIn}s)` : "Resend confirmation email"}
+          </Button>
+        )}
         {info && <p className="text-sm text-muted-foreground">{info}</p>}
         <Button
           className="w-full"
