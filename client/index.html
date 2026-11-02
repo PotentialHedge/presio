@@ -51,7 +51,13 @@
   <noscript>
     <style>#root > main { display: block; }</style>
   </noscript>
-  <script defer src="https://analytics.presio.ch/script.js" data-website-id="3b9c85c6-1dae-4a30-9508-200f274cb857"></script>
+  <!-- data-exclude-hash: Supabase returns OAuth and email-link sessions as
+       `#access_token=…&refresh_token=…` on the landing URL, and the tracker
+       fires before supabase-js gets to clear it, so tracked URLs would carry
+       live credentials (and the user's email inside the JWT). Nothing Presio
+       measures lives in the hash. -->
+  <script defer src="https://analytics.presio.ch/script.js" data-website-id="3b9c85c6-1dae-4a30-9508-200f274cb857"
+    data-exclude-hash="true"></script>
   <!-- Session recording (recorder.js) is not loaded here: lib/analytics.ts
        injects it on demand, so viewers — the audience — are never recorded. -->
 </head>
