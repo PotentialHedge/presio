@@ -10,6 +10,7 @@ import { socket } from "@/lib/socket";
 import { useLatestRef } from "@/hooks/useLatestRef";
 import { useSessionTransport, SESSION_ENDED } from "@/hooks/useSessionTransport";
 import { useSessionSuccessor } from "@/hooks/useSessionSuccessor";
+import { useCodeSuggestion } from "@/hooks/useCodeSuggestion";
 import { DeckLoadTimer } from "@/lib/deckLoadMetrics";
 import { endSession } from "@/lib/utils";
 import { idbGet, idbPut, idbDelete } from "@/lib/localStore";
@@ -31,6 +32,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { usePluginHost } from "@/lib/plugins/usePluginHost";
 import { ControllerView } from "./ControllerView";
 import { ViewerView } from "./ViewerView";
+
+const SESSION_NOT_FOUND = "Session not found";
 
 export default function Presentation() {
   const { id } = useParams<{ id: string }>();
@@ -357,7 +360,7 @@ export default function Presentation() {
           throw new Error("This presentation is only available in the same browser on the device it was created on");
         }
         const res = await fetch(`/api/sessions/${id}`);
-        if (!res.ok) throw new Error("Session not found");
+        if (!res.ok) throw new Error(SESSION_NOT_FOUND);
         const session = await res.json();
         if (session.local) {
           // Server knows this code, but the PDF only lives on the presenter's device.
@@ -787,6 +790,8 @@ export default function Presentation() {
 
   // A viewer whose session is gone waits for the presenter's next one.
   const sessionEnded = useSessionSuccessor(id, !!error && local !== true && requestedRole === "viewer");
+  // A code that never existed was most likely mistyped.
+  const suggestedCode = useCodeSuggestion(id, error === SESSION_NOT_FOUND && !sessionEnded && requestedRole === "viewer");
 
   if (loading || (!error && !deck)) {
     return (
@@ -810,7 +815,14 @@ export default function Presentation() {
                   : "The presentation may have expired or been ended by the presenter."}
               </p>
             </div>
-            <Button asChild className="w-full">
+            {suggestedCode && (
+              <Button asChild className="w-full">
+                <Link to={`/s/${suggestedCode}?role=viewer`} replace onClick={() => track("join-code-suggestion")}>
+                  Did you mean <span className="font-mono font-bold tracking-widest">{suggestedCode}</span>?
+                </Link>
+              </Button>
+            )}
+            <Button asChild className="w-full" variant={suggestedCode ? "outline" : "default"}>
               <Link to="/">Back to Home</Link>
             </Button>
           </CardContent>
