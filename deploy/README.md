@@ -470,7 +470,8 @@ The vendored files come from the `supabase/supabase` commit recorded in
 `docker/volumes/**` at the new commit, then re-apply the local adaptations (S3
 backend on `storage`; the `minio` / `minio-createbucket` / `presio-db-init` /
 `presio` services; the Traefik labels + `web` network on `presio`/`kong`; and the
-uncommented GitHub provider lines in `auth`) and drop the services listed under
+uncommented GitHub provider lines in `auth`; the range headers exposed by the
+`storage-v1` route's `cors` plugin in `kong.yml`) and drop the services listed under
 [Trimmed services](#trimmed-services), with their Kong routes.
 
 ## Trimmed services

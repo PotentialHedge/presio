@@ -204,7 +204,16 @@ services:
         paths:
           - /storage/v1/
     plugins:
+      # Presio: expose the range headers. Without them a cross-origin pdf.js
+      # can't see that storage serves byte ranges, so it downloads a whole deck
+      # before painting slide one instead of range-loading what that slide needs.
       - name: cors
+        config:
+          exposed_headers:
+            - Accept-Ranges
+            - Content-Range
+            - Content-Length
+            - Content-Encoding
       - name: request-transformer
         config:
           add:
