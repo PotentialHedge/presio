@@ -3,7 +3,7 @@
 // is the one every screen follows; viewers never show controls.
 
 import { createPlayer, type Player } from "./players";
-import { isEmbed, isPlayable, readPlacements, release, type Placement, type Placements } from "./placements";
+import { isEmbed, isPlayable, isVideo, readPlacements, release, type Placement, type Placements } from "./placements";
 import { poster } from "./posters";
 import {
   DEFAULT_AUDIO,
@@ -62,6 +62,9 @@ export function runSlide() {
           ? (t, playing) => presio.messages.send("time", { slide: p.slide, id: p.id, t, playing, sampledAt: presio.clock.now() })
           : undefined,
         changed: () => update(item),
+        // The video's own controls: what they do is the presenter's command.
+        acted: presenter ? (action) => act(p, action) : undefined,
+        mutedHere: presenter ? (muted) => setAudio(nativeMute(muted)) : undefined,
       });
       // The poster shows until the player has something to show.
       void poster(p).then((url) => {
@@ -113,6 +116,14 @@ export function runSlide() {
     applyState();
   };
 
+  // Unmuting here means hearing it here: a deck routed to viewers only plays
+  // on both.
+  const nativeMute = (muted: boolean): AudioState => {
+    if (muted) return { ...audio, muted: true };
+    if (presio.session.local) return { muted: false, target: "presenter" };
+    return { muted: false, target: audio.target === "viewers" ? "both" : audio.target };
+  };
+
   const setAudio = (next: AudioState) => {
     audio = next;
     presio.messages.send("audio", audio, { retain: true });
@@ -139,31 +150,39 @@ export function runSlide() {
     const { p, player } = item;
     const bar = document.createElement("div");
     bar.className = "controls";
-    if (isPlayable(p)) {
-      const playing = player.playing;
-      bar.append(
-        button(playing ? "pause" : "play", playing ? "Pause" : "Play", () => act(p, playing ? "pause" : "play"), playing ? "on" : "")
-      );
-    }
-    bar.append(button("restart", "Restart from the beginning", () => act(p, "reset")));
-    if (isPlayable(p)) {
-      // A local deck's viewer window is on this machine: audio plays here
-      // only, so there's nothing to route.
-      const local = presio.session.local;
-      const muted = audio.muted;
-      bar.append(
-        button(
-          muted ? "muted" : "sound",
-          muted ? "Unmute" : "Mute",
-          () => setAudio({ muted: !muted, target: local ? "presenter" : audio.target }),
-          muted ? "" : "on"
-        )
-      );
+    // A local deck's viewer window is on this machine: audio plays here
+    // only, so there's nothing to route.
+    const local = presio.session.local;
+    const openMenu = () => {
+      menuFor = menuFor === p.id ? null : p.id;
+      for (const i of items) update(i);
+    };
+    if (isVideo(p)) {
+      // A video plays, seeks and mutes from its own controls; all that's left
+      // here is where a synced deck's audio plays.
       if (!local) {
-        bar.append(button("chevron", "Play audio on…", () => {
-          menuFor = menuFor === p.id ? null : p.id;
-          for (const i of items) update(i);
-        }, "narrow"));
+        const heard = !audio.muted;
+        bar.append(button(heard ? "sound" : "muted", "Play audio on…", openMenu, heard ? "on" : ""));
+      }
+    } else {
+      if (isEmbed(p)) {
+        const playing = player.playing;
+        bar.append(
+          button(playing ? "pause" : "play", playing ? "Pause" : "Play", () => act(p, playing ? "pause" : "play"), playing ? "on" : "")
+        );
+      }
+      bar.append(button("restart", "Restart from the beginning", () => act(p, "reset")));
+      if (isEmbed(p)) {
+        const muted = audio.muted;
+        bar.append(
+          button(
+            muted ? "muted" : "sound",
+            muted ? "Unmute" : "Mute",
+            () => setAudio({ muted: !muted, target: local ? "presenter" : audio.target }),
+            muted ? "" : "on"
+          )
+        );
+        if (!local) bar.append(button("chevron", "Play audio on…", openMenu, "narrow"));
       }
     }
     if (menuFor === p.id) {
@@ -188,8 +207,8 @@ export function runSlide() {
       bar.append(menu);
     }
     item.controls?.remove();
-    item.controls = bar;
-    item.el.append(bar);
+    item.controls = bar.childElementCount ? bar : null;
+    if (item.controls) item.el.append(bar);
     // Open upward when there's no room below.
     const menu = bar.querySelector<HTMLElement>(".menu");
     if (menu && menu.getBoundingClientRect().bottom > window.innerHeight) menu.classList.add("up");
@@ -218,11 +237,11 @@ export function runSlide() {
       const width = window.innerWidth;
       const height = window.innerHeight;
       if (!width || !height) return;
-      // The presenter's controls, and the embeds' own controls; a viewer's
-      // "tap to enable audio".
+      // The presenter's controls, and the videos' and embeds' own controls;
+      // a viewer's "tap to enable audio".
       const targets = presenter
         ? items.flatMap((i) => [
-            ...(isEmbed(i.p) ? [i.el] : []),
+            ...(isPlayable(i.p) ? [i.el] : []),
             ...(i.controls ? [...i.controls.children] : []),
           ])
         : [...root.querySelectorAll(".tap-audio")];
