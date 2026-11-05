@@ -21,6 +21,10 @@ export interface PlayerHooks {
   sample?: (t: number, playing: boolean) => void;
   /** It became ready, started or stopped, or wants a tap — redraw around it. */
   changed: () => void;
+  /** Presenter: played or paused from its own controls, not by a command. */
+  acted?: (action: "play" | "pause") => void;
+  /** Presenter: muted or unmuted from its own controls. */
+  mutedHere?: (muted: boolean) => void;
 }
 
 export interface Player {
@@ -101,7 +105,8 @@ class Gif implements Player {
   }
 }
 
-/** A video file (from the PDF, or a URL). */
+/** A video file (from the PDF, or a URL). The presenter's has the browser's
+ *  own controls; viewers' have none and only follow. */
 class Video implements Player {
   readonly element = box("video");
   ready = false;
@@ -112,6 +117,9 @@ class Video implements Player {
   private timer = 0;
   private sample: (t: number, playing: boolean) => void;
   private lastSample = { at: 0, t: -1 };
+  // Whether the last command asked it to play, so a play or pause that no
+  // command asked for is known to come from its own controls.
+  private commanded = false;
 
   constructor(p: Placement, presenter: boolean, hooks: PlayerHooks) {
     const v = this.v;
@@ -124,8 +132,24 @@ class Video implements Player {
       this.ready = true;
       hooks.changed();
     });
-    v.addEventListener("play", hooks.changed);
-    v.addEventListener("pause", hooks.changed);
+    v.addEventListener("play", () => this.played(true, hooks));
+    v.addEventListener("pause", () => this.played(false, hooks));
+    if (presenter) {
+      v.controls = true;
+      v.disablePictureInPicture = true;
+      v.setAttribute("controlslist", "nodownload noremoteplayback noplaybackrate");
+      // A seek from the scrubber reaches viewers at once.
+      v.addEventListener("seeked", () => this.report(v.currentTime, !v.paused));
+      // Its mute is the deck's audio.
+      v.addEventListener("volumechange", () => {
+        if (v.muted !== this.muted) hooks.mutedHere?.(v.muted);
+      });
+      // While it plays, keys are the player's (Space pauses, arrows seek);
+      // paused, they are the deck's again.
+      v.addEventListener("keydown", (e) => {
+        if (!v.paused && e.key !== "Escape" && !e.metaKey && !e.ctrlKey && !e.altKey) e.stopPropagation();
+      });
+    }
     // Rate trimming should sound like a tape, not a vocoder.
     v.preservesPitch = false;
     this.element.append(v);
@@ -145,12 +169,28 @@ class Video implements Player {
     return !this.v.paused;
   }
 
+  private played(playing: boolean, hooks: PlayerHooks) {
+    const v = this.v;
+    if (playing !== this.commanded) {
+      this.commanded = playing;
+      hooks.acted?.(playing ? "play" : "pause");
+    }
+    this.report(v.currentTime, playing);
+    // Paused (or at its end), hand the keyboard back to the deck.
+    if (!playing && v.controls && document.hasFocus()) {
+      v.blur();
+      (window.frameElement as HTMLElement | null)?.blur();
+    }
+    hooks.changed();
+  }
+
   private report(t: number, playing: boolean) {
     this.lastSample = { at: Date.now(), t };
     this.sample(t, playing);
   }
 
   autostart() {
+    this.commanded = true;
     this.v.currentTime = 0;
     this.v.play().catch(noop);
   }
@@ -161,13 +201,16 @@ class Video implements Player {
     const v = this.v;
     this.drift = null;
     if (action === "play") {
+      this.commanded = true;
       v.play().catch(noop);
       this.report(v.currentTime, true);
     } else if (action === "pause") {
+      this.commanded = false;
       v.pause();
       this.report(v.currentTime, false);
     } else {
       const wasPlaying = !v.paused;
+      this.commanded = wasPlaying;
       v.currentTime = 0;
       if (wasPlaying) v.play().catch(noop);
       this.report(0, wasPlaying);
@@ -183,6 +226,7 @@ class Video implements Player {
   //  4. Re-seek only past a hard limit, as a backstop.
   follow(sync: TimeSync) {
     const v = this.v;
+    this.commanded = sync.playing;
     if (sync.playing && v.paused) v.play().catch(noop);
     else if (!sync.playing && !v.paused) v.pause();
 

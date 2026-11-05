@@ -6,6 +6,9 @@ import { TouchBackend } from "react-dnd-touch-backend";
 import { MultiBackend, PointerTransition, TouchTransition } from "react-dnd-multi-backend";
 import { X } from "lucide-react";
 import { CARD_LABELS } from "@/lib/controllerLayout";
+import { track } from "@/lib/analytics";
+import { GitHubIcon } from "@/components/GitHubIcon";
+import { REPO_URL } from "@/components/home/links";
 import "react-mosaic-component/react-mosaic-component.css";
 import "@/pages/controllerMosaic.css";
 
@@ -83,8 +86,22 @@ export function ControllerDashboard({
           </MosaicWindow>
         )}
         zeroStateView={
-          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            All cards hidden — enable them in Settings.
+          <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-sm text-muted-foreground">
+            <p>All cards hidden — enable them in Settings.</p>
+            <p>
+              Enjoying Presio?{" "}
+              <a
+                href={REPO_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-testid="dashboard-empty-star"
+                onClick={() => track("github-star", { from: "empty-dashboard" })}
+                className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-4"
+              >
+                <GitHubIcon className="h-3.5 w-3.5" />
+                Star it on GitHub
+              </a>
+            </p>
           </div>
         }
       />
