@@ -1,5 +1,36 @@
 # Changelog
 
+## [2.1.0](https://github.com/PotentialHedge/presio/compare/v2.0.0...v2.1.0) (2026-11-05)
+
+
+### Features
+
+* **deploy:** retire the Let's Encrypt resolver and monitor origin certs ([#122](https://github.com/PotentialHedge/presio/issues/122)) ([fe8d86a](https://github.com/PotentialHedge/presio/commit/fe8d86a5115da1597942d5c1e364a609ddc11d75)), closes [#64](https://github.com/PotentialHedge/presio/issues/64)
+* **drawing:** Apple Pencil support and PR 125's tools on the plugin system ([#135](https://github.com/PotentialHedge/presio/issues/135)) ([8656053](https://github.com/PotentialHedge/presio/commit/865605309e7a9ca12945c0b87be3473b2b63bec8))
+* plugin system v2 — agent-built plugins, ?plugins= trust prompt, palette, audience input ([#150](https://github.com/PotentialHedge/presio/issues/150)) ([1cc6f8f](https://github.com/PotentialHedge/presio/commit/1cc6f8f88744627cc612ec2b95f4b14e54c08e86))
+* plugins ([#130](https://github.com/PotentialHedge/presio/issues/130)) ([85c629b](https://github.com/PotentialHedge/presio/commit/85c629b0963db61e4f19437715423cc41e1ed965))
+* **plugins:** presio.history, a per-deck edit history, with the drawing plugin on it ([#131](https://github.com/PotentialHedge/presio/issues/131)) ([3fc1551](https://github.com/PotentialHedge/presio/commit/3fc1551b7e1e943282a47724fc98992ee781fab6))
+* **share:** offer to end a synced deck when the cap blocks a share ([6e35cba](https://github.com/PotentialHedge/presio/commit/6e35cbaafa3229bdc66acef8be53e89b06f59d23))
+* **viewer:** follow the presenter when a session is restarted ([4a2b7dd](https://github.com/PotentialHedge/presio/commit/4a2b7ddaf4ad653e0a330bb6c452e3a3187b3514))
+* **viewer:** suggest the intended code for a mistyped join code ([a8ab895](https://github.com/PotentialHedge/presio/commit/a8ab895e320d51fa9b130b26d526853bdb9fdf05))
+
+
+### Bug Fixes
+
+* **analytics:** keep Supabase auth tokens out of Umami URLs ([abdfc0f](https://github.com/PotentialHedge/presio/commit/abdfc0f46d072bce1b850ed8190550e12a55ca13))
+* **auth:** a real "check your email" step after signing up ([9566c17](https://github.com/PotentialHedge/presio/commit/9566c17c0c448a32aa2c335316dd5832ee120d2d))
+* **client:** polyfill Iterator, URL.parse and friends for older Safari; add compat checks ([#147](https://github.com/PotentialHedge/presio/issues/147)) ([dadf0e4](https://github.com/PotentialHedge/presio/commit/dadf0e4b74ab3d78014b5cdc533c1fc2b0dc3ca7)), closes [#145](https://github.com/PotentialHedge/presio/issues/145)
+* **client:** polyfill Uint8Array.toHex inside the pdf.js worker ([#146](https://github.com/PotentialHedge/presio/issues/146)) ([51e3fb9](https://github.com/PotentialHedge/presio/commit/51e3fb986eb1043f46739a0cdd801c20a2f280ad)), closes [#144](https://github.com/PotentialHedge/presio/issues/144)
+* **deploy:** install busybox-extras so the cert-expiry responder has httpd ([#155](https://github.com/PotentialHedge/presio/issues/155)) ([9d4d91b](https://github.com/PotentialHedge/presio/commit/9d4d91b807da8a194a4d152030acaed4e4b992e8))
+* join code QR, clean viewer links, recover from stale chunks ([#152](https://github.com/PotentialHedge/presio/issues/152)) ([024e934](https://github.com/PotentialHedge/presio/commit/024e934ee8fbf314ed7e9134b325196c0fadefe6))
+* **share:** disable Sync for PDFs over the upload limit ([#134](https://github.com/PotentialHedge/presio/issues/134)) ([4f786c5](https://github.com/PotentialHedge/presio/commit/4f786c51dc7763d444883522c46f6a245ed58246))
+* **viewer:** retry deck downloads the network drops ([465b716](https://github.com/PotentialHedge/presio/commit/465b716a784cc42d16fa9fad19f3858c703d4fa7))
+
+
+### Performance Improvements
+
+* **viewer:** let pdf.js range-load synced decks ([249903e](https://github.com/PotentialHedge/presio/commit/249903e54a478674394c3e80cdf0a3acb596cbf4))
+
 ## [2.0.0](https://github.com/benedict-armstrong/presio/compare/v1.1.0...v2.0.0) (2026-09-21)
 
 
