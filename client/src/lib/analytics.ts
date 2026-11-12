@@ -7,6 +7,12 @@ declare global {
   interface Window {
     umami?: {
       track: (name: string, data?: Record<string, unknown>) => void;
+      // Umami 3.5+ error tracking. Absent on older trackers (and on a cached
+      // pre-3.5 script.js), so callers must not assume it exists.
+      captureException?: (
+        error: unknown,
+        options?: { tags?: Record<string, string>; fingerprint?: string[] }
+      ) => Promise<void>;
     };
   }
 }
@@ -16,6 +22,17 @@ export function track(name: string, data?: Record<string, unknown>) {
     window.umami?.track(name, data);
   } catch {
     // Swallow: a failed beacon is never worth surfacing to a presenter.
+  }
+}
+
+// Report an error we caught ourselves (uncaught ones and unhandled rejections
+// are picked up by the tracker on its own, via data-errors in index.html).
+// Shows up under Umami's Errors, grouped into issues and linked to the visit.
+export function captureException(error: unknown, tags?: Record<string, string>) {
+  try {
+    void window.umami?.captureException?.(error, tags ? { tags } : undefined)?.catch(() => {});
+  } catch {
+    // Same rule as track(): reporting must never become the failure.
   }
 }
 

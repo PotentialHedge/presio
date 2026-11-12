@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client'
 import * as Sentry from '@sentry/react'
 import './index.css'
 import App from './App.tsx'
+import { captureException } from './lib/analytics'
 
 // Error tracking, gated by VITE_SENTRY_DSN (baked in at build time). With no DSN
 // the SDK never initializes, so this is a no-op by default. The DSN can point at
@@ -58,6 +59,9 @@ if (window.matchMedia('(display-mode: standalone)').matches || nav.standalone) {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <Sentry.ErrorBoundary
+      // A render error caught here never reaches window.onerror, so Umami's
+      // automatic capture would miss the one crash that blanks the whole app.
+      onError={(error) => captureException(error, { where: 'error-boundary' })}
       fallback={
         <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, textAlign: 'center' }}>
           <p>Something went wrong. Please reload the page.</p>

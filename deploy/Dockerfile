@@ -23,6 +23,9 @@ ARG VITE_SENTRY_DSN
 ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
 ENV VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY=$VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY
 ENV VITE_SENTRY_DSN=$VITE_SENTRY_DSN
+# Tags client error reports with the build (vite.config.ts → index.html).
+# Declared last so a new version only invalidates the build step itself.
+ARG APP_VERSION=dev
 RUN npm run build
 
 # Stage 2 runs the server, which serves the API, the websocket, and the built
