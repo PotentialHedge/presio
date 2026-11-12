@@ -6,6 +6,11 @@ import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { builtinPlugins, pluginKit } from './plugins/build'
 
+// The build's version, for %VITE_APP_VERSION% in index.html (Umami's
+// data-release). Docker builds pass APP_VERSION as a build arg — the same value
+// /healthz reports — and Vite reads VITE_* from process.env after this runs.
+process.env.VITE_APP_VERSION ??= process.env.APP_VERSION || "dev"
+
 // Bake the built asset list into the shipped service worker so a fresh install
 // precaches the whole app up front. The pdf.js worker and its wasm helper are
 // separate chunks that aren't fetched until the first PDF renders, so caching

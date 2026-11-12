@@ -26,7 +26,7 @@ import {
   type DeckWatchStatus,
 } from "@/lib/deckWatcher";
 import { ConfirmDeckReloadDialog } from "@/components/controller/ConfirmDeckReloadDialog";
-import { track, startRecording } from "@/lib/analytics";
+import { track, startRecording, captureException } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { usePluginHost } from "@/lib/plugins/usePluginHost";
@@ -394,6 +394,9 @@ export default function Presentation() {
         setCurrentSlide(session.current_slide);
       } catch (e) {
         if (!cancelled) {
+          // Transient download failures are network weather, not bugs; the
+          // rest (e.g. pdf.js failing to start its worker) want a stack trace.
+          if (!isTransient(e)) captureException(e, { where: "deck-load", role: settledRoleRef.current ?? "unknown" });
           setError(
             isTransient(e) ? DOWNLOAD_FAILED : e instanceof Error ? e.message : "Failed to load presentation"
           );

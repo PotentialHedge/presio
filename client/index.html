@@ -55,9 +55,13 @@
        `#access_token=…&refresh_token=…` on the landing URL, and the tracker
        fires before supabase-js gets to clear it, so tracked URLs would carry
        live credentials (and the user's email inside the JWT). Nothing Presio
-       measures lives in the hash. -->
+       measures lives in the hash.
+       data-errors: Umami error tracking (3.5+) — uncaught exceptions and
+       unhandled rejections; handled ones go through captureException() in
+       lib/analytics.ts. data-release is the build's APP_VERSION (see
+       vite.config.ts), so staging builds report as `staging-<sha>`. -->
   <script defer src="https://analytics.presio.ch/script.js" data-website-id="3b9c85c6-1dae-4a30-9508-200f274cb857"
-    data-exclude-hash="true"></script>
+    data-exclude-hash="true" data-errors="true" data-release="%VITE_APP_VERSION%"></script>
   <!-- Session recording (recorder.js) is not loaded here: lib/analytics.ts
        injects it on demand, so viewers — the audience — are never recorded. -->
 </head>
