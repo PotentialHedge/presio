@@ -21,7 +21,7 @@ This repository is the source of the hosted service.
 - **Present across devices**: log in and sync to get a 6-character code. Viewers enter it on the home page and follow along live.
 - **Shared control**: give someone a passphrase to drive.
 - **Speaker notes**: shown next to the current and next slide, rendered as markdown.
-- **Embedded media**: videos, GIFs and YouTube/Vimeo, with playback synced to viewers.
+- **Embedded media**: videos, GIFs, YouTube/Vimeo and HTML animations, with playback synced to viewers — or, for an animation, handed to each viewer to play and explore themselves.
 - **Timer**, a **customizable layout** and **remappable shortcuts**.
 - **Plugins**: add features such as polls or captions; see [Plugins](#plugins).
 - **Agent APIs**: an MCP server and a REST API; see [Use it from an AI agent](#use-it-from-an-ai-agent).
@@ -48,6 +48,16 @@ Hello world.
 ]
 
 #media("https://www.youtube.com/watch?v=dQw4w9WgXcQ", width: 60%, aspect-ratio: 16/9)
+```
+
+From presio 0.3.0, `media` also plays **HTML animations**: point it at an
+`.html` page and list the files it loads. Viewers follow you, or, with
+`sync: "independent"` (switchable while presenting), each viewer plays and
+explores it themselves with its own controls. The same call puts a live
+animation on the page in Typst's HTML export.
+
+```typst
+#media(path("orbit/index.html"), assets: (path("orbit/js/main.js"),), width: 70%, aspect-ratio: 16/9)
 ```
 
 ### LaTeX

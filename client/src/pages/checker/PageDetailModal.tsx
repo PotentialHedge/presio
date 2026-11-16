@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { DialogOverlay } from "@/components/ui/dialog-overlay";
 import { Button } from "@/components/ui/button";
 import type { PageReport, InspectedAttachment } from "@/lib/inspectAttachments";
+import { attachmentMime } from "@shared/attachments";
 import { ValidityBadge } from "./ValidityBadge";
 
 type Tab = "notes" | "media";
@@ -55,9 +56,9 @@ export function PageDetailModal({
 
   function openBinary(att: InspectedAttachment) {
     if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
-    const ext = att.filename.split(".").pop()?.toLowerCase() ?? "";
-    const mime = ext === "gif" ? "image/gif" : ext === "mp4" ? "video/mp4" : "video/webm";
-    const blob = new Blob([att.content.slice()], { type: mime });
+    // An HTML animation opens as its source: run on this origin, it could act
+    // as the signed-in user.
+    const blob = new Blob([att.content.slice()], { type: attachmentMime(att.filename) ?? "text/plain" });
     blobUrlRef.current = URL.createObjectURL(blob);
     window.open(blobUrlRef.current, "_blank", "noopener,noreferrer");
   }

@@ -6,6 +6,8 @@
 //  - "audio" (retained): whether media is heard, and where.
 //  - "time": a playing item's position, a few times a second, stamped with
 //    the server clock, for viewers to keep in time with.
+//  - "modes" (retained): HTML animations the presenter has switched between
+//    following the presenter and viewers running it themselves, by item id.
 
 import type { Action } from "./players";
 
@@ -31,6 +33,16 @@ export interface TimeMessage {
   t: number;
   playing: boolean;
   sampledAt: number;
+}
+
+/** Item id → true when viewers run it themselves. Missing: the author's default. */
+export type Modes = Record<string, boolean>;
+
+export function parseModes(v: unknown): Modes | null {
+  if (!isRecord(v)) return null;
+  const out: Modes = {};
+  for (const [id, independent] of Object.entries(v)) if (typeof independent === "boolean") out[id] = independent;
+  return out;
 }
 
 export const DEFAULT_AUDIO: AudioState = { muted: true, target: "both" };

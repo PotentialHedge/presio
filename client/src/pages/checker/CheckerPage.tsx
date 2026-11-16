@@ -451,19 +451,13 @@ export default function CheckerPage() {
                       <button
                         className="ml-auto text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground shrink-0"
                         onClick={() => {
-                          if (a.kind === "media-binary") {
-                            const ext = a.filename.split(".").pop()?.toLowerCase() ?? "";
-                            const mime = ext === "gif" ? "image/gif" : ext === "mp4" ? "video/mp4" : "video/webm";
-                            const blob = new Blob([a.content.slice()], { type: mime });
-                            const url = URL.createObjectURL(blob);
-                            window.open(url, "_blank", "noopener,noreferrer");
-                            setTimeout(() => URL.revokeObjectURL(url), 30_000);
-                          } else {
-                            const blob = new Blob([a.content.slice()], { type: attachmentMime(a.filename) ?? "text/plain" });
-                            const url = URL.createObjectURL(blob);
-                            window.open(url, "_blank", "noopener,noreferrer");
-                            setTimeout(() => URL.revokeObjectURL(url), 30_000);
-                          }
+                          // Anything that isn't JSON, an image or a video (an
+                          // HTML animation, its scripts) opens as text: run on
+                          // this origin, it could act as the signed-in user.
+                          const blob = new Blob([a.content.slice()], { type: attachmentMime(a.filename) ?? "text/plain" });
+                          const url = URL.createObjectURL(blob);
+                          window.open(url, "_blank", "noopener,noreferrer");
+                          setTimeout(() => URL.revokeObjectURL(url), 30_000);
                         }}
                       >
                         Open

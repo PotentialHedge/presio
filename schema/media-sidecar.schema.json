@@ -2,26 +2,43 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://presio.xyz/schema/media-sidecar.json",
   "title": "Presio media sidecar",
-  "description": "Embedded-file attachment named media-slide-{N}-{id}.json inside a Presio PDF. A companion binary attachment media-{id}.{gif|mp4|webm} is also embedded when kind is 'file'.",
+  "description": "Embedded-file attachment named media-slide-{N}-{id}.json inside a Presio PDF. A companion binary attachment media-{id}.{gif|mp4|webm} is also embedded when kind is 'file'; an HTML animation (kind 'html') embeds its page as media-{id}.html plus any asset files it lists.",
   "type": "object",
   "required": ["slide", "id", "mime", "x_pt", "y_pt", "w_pt", "h_pt"],
   "additionalProperties": false,
   "properties": {
-    "kind":     { "enum": ["file", "url", "youtube", "vimeo"], "description": "Media source type. Inferred as 'url' when `url` is present and `kind` is omitted, otherwise 'file'." },
+    "kind":     { "enum": ["file", "url", "youtube", "vimeo", "html"], "description": "Media source type. Inferred as 'url' when `url` is present and `kind` is omitted, otherwise 'file'. 'html' is an HTML animation: a page (and its assets) run in a sandboxed frame on a clock Presio controls." },
     "slide":    { "type": "integer", "minimum": 1, "description": "Physical PDF page number (1-based)." },
     "id":       { "type": "string",  "description": "Stable identifier derived from the source path or URL (non-alphanumeric chars replaced with _)." },
-    "mime":     { "type": "string",  "examples": ["image/gif", "video/mp4", "video/webm", "text/html"], "description": "MIME type of the media. YouTube/Vimeo use text/html." },
+    "mime":     { "type": "string",  "examples": ["image/gif", "video/mp4", "video/webm", "text/html"], "description": "MIME type of the media. YouTube/Vimeo and HTML animations use text/html." },
     "x_pt":    { "type": "number",  "description": "Left edge of the overlay in PDF points, top-left origin." },
     "y_pt":    { "type": "number",  "description": "Top edge of the overlay in PDF points, top-left origin." },
     "w_pt":    { "type": "number",  "exclusiveMinimum": 0, "description": "Width of the overlay in PDF points." },
     "h_pt":    { "type": "number",  "exclusiveMinimum": 0, "description": "Height of the overlay in PDF points." },
     "autoplay": { "type": "boolean", "default": true,  "description": "Start playing automatically when the slide is shown." },
     "loop":     { "type": "boolean", "default": true,  "description": "Loop the media continuously." },
-    "filename": { "type": "string",  "pattern": "^media-.+\\.(gif|mp4|webm)$", "description": "Name of the companion binary attachment. Required when kind='file'." },
+    "filename": { "type": "string",  "pattern": "^media-.+\\.(gif|mp4|webm|html?)$", "description": "Name of the companion attachment: the media file (kind='file') or the animation's entry page (kind='html'). Required for both." },
     "url":      { "type": "string",  "format": "uri", "description": "Source URL. Required when kind='url', 'youtube', or 'vimeo'." },
-    "video_id": { "type": "string",  "description": "Extracted video ID used for iframe embeds. Present when kind='youtube' or 'vimeo'." }
+    "video_id": { "type": "string",  "description": "Extracted video ID used for iframe embeds. Present when kind='youtube' or 'vimeo'." },
+    "assets":   {
+      "type": "array",
+      "description": "kind='html': the files the page loads, each embedded as its own attachment. `path` is the URL the page uses for it, relative to the entry page (e.g. 'js/app.js'); `filename` is the attachment.",
+      "items": {
+        "type": "object",
+        "required": ["path", "filename"],
+        "additionalProperties": false,
+        "properties": {
+          "path":     { "type": "string" },
+          "filename": { "type": "string", "pattern": "^media-asset-.+$" }
+        }
+      }
+    },
+    "sync":        { "enum": ["presenter", "independent"], "default": "presenter", "description": "kind='html': whether viewers' copies follow the presenter's, or each viewer plays it themselves. The presenter can switch it during the talk." },
+    "controls":    { "type": "boolean", "default": true, "description": "kind='html': show play/pause, restart and (when the length is known) a scrubber to viewers playing it themselves. The presenter always has them." },
+    "interactive": { "type": "boolean", "default": true, "description": "kind='html': pointer input (clicks, drags, hovers) reaches the page, for the presenter and for viewers playing it themselves." },
+    "duration":    { "type": "number", "exclusiveMinimum": 0, "description": "kind='html': the animation's length in seconds, for the scrubber and looping. Without it, it's measured from CSS animations when those are all it runs; otherwise it plays open-ended." }
   },
-  "if":   { "properties": { "kind": { "const": "file" } }, "required": ["kind"] },
+  "if":   { "properties": { "kind": { "enum": ["file", "html"] } }, "required": ["kind"] },
   "then": { "required": ["filename"] },
   "else": { "required": ["url"] }
 }

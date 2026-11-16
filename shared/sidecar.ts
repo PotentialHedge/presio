@@ -24,9 +24,12 @@ export interface SidecarCheck {
 
 export const NOTES_RE = /^notes-slide-(\d+)\.json$/;
 export const MEDIA_JSON_RE = /^media-slide-(\d+)-(.+)\.json$/;
-export const MEDIA_BINARY_RE = /^media-.+\.(gif|mp4|webm)$/i;
+// Files a media sidecar points at: a GIF / video, an HTML animation's entry
+// page, or one of its assets (media-asset-…, any type).
+export const MEDIA_BINARY_RE = /^media-(?!slide-\d+-).+\.(gif|mp4|webm|html?)$|^media-asset-.+$/i;
+const HTML_ENTRY_RE = /^media-.+\.html?$/i;
 
-const MEDIA_KINDS = new Set(["file", "url", "youtube", "vimeo"]);
+const MEDIA_KINDS = new Set(["file", "url", "youtube", "vimeo", "html"]);
 
 export function validityOf(issues: AttachmentIssue[]): Validity {
   if (issues.some((i) => i.level === "error")) return "invalid";
@@ -126,13 +129,15 @@ export function checkMediaJson(filename: string, content: Uint8Array, pageCount:
 
   const inferred = m.url ? "url" : "file";
   if (m.kind !== undefined && !MEDIA_KINDS.has(m.kind as string)) {
-    issues.push({ level: "error", message: `"kind" must be one of: file, url, youtube, vimeo` });
+    issues.push({ level: "error", message: `"kind" must be one of: file, url, youtube, vimeo, html` });
   } else if (!m.kind) {
     issues.push({ level: "warning", message: `"kind" not set; inferred as "${inferred}"` });
   }
   const kind = MEDIA_KINDS.has(m.kind as string) ? (m.kind as string) : inferred;
 
-  if (kind === "file") {
+  if (kind === "html") {
+    checkHtml(m, names, issues);
+  } else if (kind === "file") {
     if (!m.filename) {
       issues.push({ level: "error", message: '"filename" is required for kind "file"' });
     } else if (!names.has(m.filename as string)) {
@@ -149,6 +154,40 @@ export function checkMediaJson(filename: string, content: Uint8Array, pageCount:
   return { slide, issues, validity: validityOf(issues), parsed };
 }
 
+/** An HTML animation's sidecar: its entry page and assets are in the PDF, and
+ *  its options have the right types. */
+function checkHtml(m: Record<string, unknown>, names: Set<string>, issues: AttachmentIssue[]) {
+  if (typeof m.filename !== "string" || !m.filename) {
+    issues.push({ level: "error", message: '"filename" is required for kind "html"' });
+  } else if (!names.has(m.filename)) {
+    issues.push({ level: "error", message: `HTML attachment "${m.filename}" not found in PDF` });
+  } else if (!HTML_ENTRY_RE.test(m.filename)) {
+    issues.push({ level: "warning", message: `"filename" "${m.filename}" does not match expected media-{id}.html pattern` });
+  }
+  if (m.assets !== undefined) {
+    if (!Array.isArray(m.assets)) {
+      issues.push({ level: "error", message: '"assets" must be an array of { path, filename }' });
+    } else {
+      for (const asset of m.assets) {
+        if (!isRecord(asset) || typeof asset.path !== "string" || typeof asset.filename !== "string") {
+          issues.push({ level: "error", message: 'Each entry in "assets" needs a string "path" and "filename"' });
+        } else if (!names.has(asset.filename)) {
+          issues.push({ level: "error", message: `Asset "${asset.path}" ("${asset.filename}") not found in PDF` });
+        }
+      }
+    }
+  }
+  if (m.sync !== undefined && m.sync !== "presenter" && m.sync !== "independent") {
+    issues.push({ level: "error", message: '"sync" must be "presenter" or "independent"' });
+  }
+  for (const field of ["controls", "interactive"] as const) {
+    if (m[field] !== undefined && typeof m[field] !== "boolean") issues.push({ level: "error", message: `"${field}" must be a boolean` });
+  }
+  if (m.duration !== undefined && !(typeof m.duration === "number" && m.duration > 0)) {
+    issues.push({ level: "error", message: '"duration" must be a number of seconds > 0' });
+  }
+}
+
 /** The binaries some media sidecar points at (unparseable ones are checkMediaJson's to report). */
 export function referencedBinaries(entries: { filename: string; content: Uint8Array }[]): Set<string> {
   const referenced = new Set<string>();
@@ -157,6 +196,9 @@ export function referencedBinaries(entries: { filename: string; content: Uint8Ar
     try {
       const m = JSON.parse(new TextDecoder().decode(content)) as unknown;
       if (isRecord(m) && typeof m.filename === "string") referenced.add(m.filename);
+      if (isRecord(m) && Array.isArray(m.assets)) {
+        for (const asset of m.assets) if (isRecord(asset) && typeof asset.filename === "string") referenced.add(asset.filename);
+      }
     } catch {
       /* reported by checkMediaJson */
     }
