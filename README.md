@@ -53,7 +53,9 @@ Hello world.
 From presio 0.3.0, `media` also plays **HTML animations**: point it at an
 `.html` page and list the files it loads. Viewers follow you, or, with
 `sync: "independent"` (switchable while presenting), each viewer plays and
-explores it themselves with its own controls. Thumbnails, the next-slide view
+explores it themselves with its own controls. What you change on the page
+(form fields, or any state it hands to `presio.sync({ get, set })`) reaches
+viewers following you, and everyone when you press **Sync**. Thumbnails, the next-slide view
 and downloaded PDFs show a frame of it (pick which with `poster-at:`). The
 same call puts a live animation on the page in Typst's HTML export.
 

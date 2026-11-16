@@ -13,6 +13,8 @@ import {
   parseModes,
   parseState,
   parseTime,
+  parsePageStates,
+  type PageStates,
   sendState,
   type AudioState,
   type AudioTarget,
@@ -57,6 +59,10 @@ export function runSlide() {
   let state: MediaState | null = null;
   let audio: AudioState = DEFAULT_AUDIO;
   let modes: Modes = {};
+  // The page states of the slide's HTML animations: the presenter's own, or
+  // (viewers) the presenter's latest.
+  let pages: PageStates | null = null;
+  let pagesTooBig = false;
   // The audio menu, open under this item's controls.
   let menuFor: string | null = null;
 
@@ -69,6 +75,7 @@ export function runSlide() {
     for (const item of items) item.player.destroy();
     root.replaceChildren();
     menuFor = null;
+    if (presenter) pages = { slide, states: {} };
     items = (placements.get(slide) ?? []).map((p) => {
       const el = document.createElement("div");
       el.className = "item";
@@ -84,8 +91,11 @@ export function runSlide() {
         // The presenter's "Sync": every viewer running it themselves jumps
         // to this moment (and carries on from there on their own).
         syncViewers: presenter
-          ? (t, playing) => presio.messages.send("jump", { slide: p.slide, id: p.id, t, playing, sampledAt: presio.clock.now() })
+          ? (t, playing, page) => presio.messages.send("jump", { slide: p.slide, id: p.id, t, playing, sampledAt: presio.clock.now(), state: page })
           : undefined,
+        // What the presenter changed on an animation: viewers following it
+        // take it on, and later ones start from it.
+        state: presenter ? (page) => sharePage(p, page) : undefined,
         mutedHere: presenter ? (muted) => setAudio(nativeMute(muted)) : undefined,
         key: (key) => {
           const command = NAV_COMMANDS[key];
@@ -93,6 +103,7 @@ export function runSlide() {
         },
       });
       item.player.setIndependent?.(independent(p));
+      if (!presenter && pages?.slide === slide && p.id in pages.states) item.player.setState?.(pages.states[p.id]);
       // A spinner until the player has something to show (shown after a
       // moment, so a quick load doesn't flash it).
       const spinner = document.createElement("div");
@@ -170,6 +181,16 @@ export function runSlide() {
     modes = { ...modes, [p.id]: value };
     presio.messages.send("modes", modes, { retain: true });
     applyModes();
+  };
+
+  const sharePage = (p: Placement, page: unknown) => {
+    if (pages?.slide !== p.slide) return;
+    pages.states[p.id] = page;
+    // A message has to fit the relay's limit (16 KB).
+    const big = JSON.stringify(pages).length > 15_000;
+    if (big && !pagesTooBig) console.warn("[media] An animation's state is too big to share with viewers (over 15 KB).");
+    pagesTooBig = big;
+    if (!big) presio.messages.send("page", pages, { retain: true });
   };
 
   const applyModes = () => {
@@ -346,7 +367,12 @@ export function runSlide() {
     } else if (type === "jump" && !presenter) {
       const time = parseTime(payload);
       const item = time?.slide === slide ? items.find((i) => i.p.id === time.id) : undefined;
-      if (time && item && independent(item.p)) item.player.jump?.(time);
+      if (time && item && independent(item.p)) item.player.jump?.(time, (payload as { state?: unknown }).state ?? null);
+    } else if (type === "page" && !presenter) {
+      pages = parsePageStates(payload) ?? pages;
+      if (pages?.slide === slide) {
+        for (const item of items) if (item.p.id in pages.states) item.player.setState?.(pages.states[item.p.id]);
+      }
     } else if (type === "time" && !presenter) {
       const time = parseTime(payload);
       const item = time?.slide === slide ? items.find((i) => i.p.id === time.id) : undefined;
