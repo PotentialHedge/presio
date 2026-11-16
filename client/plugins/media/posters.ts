@@ -3,17 +3,22 @@
 // gets baked in. An embed puts only its watch URL on the page itself, so
 // without one those places show a raw youtube.com/watch?v=… line.
 
-import { isVideo, type Placement } from "./placements";
+import { htmlPoster } from "./html-poster";
+import { isHtml, isVideo, type Placement } from "./placements";
 
 const cache = new Map<string, Promise<string | null>>();
+const htmlCache = new WeakMap<() => string, Map<string, Promise<string | null>>>();
 
 /** The item's poster URL (https: or data:), or null when there's none to be had. */
 export function poster(p: Placement): Promise<string | null> {
-  const key = `${p.kind}:${p.videoId ?? p.src}`;
-  let hit = cache.get(key);
+  // An animation's: per document (a reloaded deck builds new ones), moment
+  // and shape.
+  const store = isHtml(p) && p.srcdoc ? (htmlCache.get(p.srcdoc) ?? htmlCache.set(p.srcdoc, new Map()).get(p.srcdoc)!) : cache;
+  const key = isHtml(p) ? `${p.posterAt ?? ""}:${p.aspect.toFixed(3)}` : `${p.kind}:${p.videoId ?? p.src}`;
+  let hit = store.get(key);
   if (!hit) {
     hit = resolve(p).catch(() => null);
-    cache.set(key, hit);
+    store.set(key, hit);
   }
   return hit;
 }
@@ -22,6 +27,8 @@ function resolve(p: Placement): Promise<string | null> {
   // hqdefault always exists; maxresdefault isn't guaranteed.
   if (p.kind === "youtube") return Promise.resolve(`https://img.youtube.com/vi/${p.videoId}/hqdefault.jpg`);
   if (p.kind === "vimeo") return vimeoThumbnail(p.videoId!);
+  // An animation draws its own, at its poster time.
+  if (isHtml(p)) return htmlPoster(p);
   // A GIF's first frame, so previews hold still.
   if (p.mime === "image/gif") return firstFrame(p.src);
   if (p.mime.startsWith("image/")) return Promise.resolve(p.src);

@@ -17,6 +17,8 @@ interface Ui {
   controls: boolean;
   delegate: boolean;
   interactive: boolean;
+  /** The presenter's "Sync" button, while viewers run it themselves. */
+  sync: boolean;
 }
 
 type FromFrame =
@@ -25,6 +27,7 @@ type FromFrame =
   | { type: "acted"; action: Action }
   | { type: "seek"; t: number }
   | { type: "key"; key: string }
+  | { type: "syncViewers" }
   | { type: "reload" };
 
 export class HtmlPlayer implements Player {
@@ -52,8 +55,8 @@ export class HtmlPlayer implements Player {
     this.presenter = presenter;
     this.hooks = hooks;
     this.ui = presenter
-      ? { controls: true, delegate: true, interactive: p.interactive }
-      : { controls: false, delegate: false, interactive: false };
+      ? { controls: true, delegate: true, interactive: p.interactive, sync: false }
+      : { controls: false, delegate: false, interactive: false, sync: false };
     const f = this.iframe;
     f.setAttribute("sandbox", "allow-scripts");
     f.setAttribute("referrerpolicy", "no-referrer");
@@ -109,6 +112,12 @@ export class HtmlPlayer implements Player {
         if (this.presenter && Number.isFinite(m.t)) {
           this.releaseKeyboard();
           this.send({ cmd: "seek", t: m.t });
+        }
+        break;
+      case "syncViewers":
+        if (this.presenter) {
+          this.releaseKeyboard();
+          this.hooks.syncViewers?.(this.localTime(), this.st.playing);
         }
         break;
       case "key":
@@ -201,14 +210,26 @@ export class HtmlPlayer implements Player {
   }
 
   setIndependent(independent: boolean) {
-    if (this.presenter) return;
+    if (this.presenter) {
+      this.ui = { ...this.ui, sync: independent };
+      if (this.ready) this.send({ cmd: "ui", ...this.ui });
+      return;
+    }
     this.ui = independent
-      ? { controls: this.p.controls, delegate: false, interactive: this.p.interactive }
-      : { controls: false, delegate: false, interactive: false };
+      ? { controls: this.p.controls, delegate: false, interactive: this.p.interactive, sync: false }
+      : { controls: false, delegate: false, interactive: false, sync: false };
     this.drift = null;
     this.issued = null;
     this.setRate(1);
     if (this.ready) this.send({ cmd: "ui", ...this.ui });
+  }
+
+  jump(sync: TimeSync) {
+    if (!this.ready) return;
+    const t = Math.max(0, expectedTime(sync));
+    this.send({ cmd: "seek", t });
+    this.setPlaying(sync.playing);
+    this.st = { t, playing: sync.playing, at: performance.now() };
   }
 
   destroy() {

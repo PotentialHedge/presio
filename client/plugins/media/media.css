@@ -29,3 +29,8 @@ body { font: 13px/1.2 system-ui, -apple-system, sans-serif; }
 .menu button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; border: 0; border-radius: 6px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .menu button:hover { background: #27272a; }
 .menu svg { width: 14px; height: 14px; flex: none; }
+
+/* Loading: a spinner over the item until its player shows something. */
+.loading { position: absolute; left: 50%; top: 50%; width: 28px; height: 28px; margin: -14px 0 0 -14px; border-radius: 50%; border: 3px solid rgba(255,255,255,.25); border-top-color: #fff; background: rgba(15,23,42,.55); box-shadow: 0 0 0 7px rgba(15,23,42,.55); pointer-events: none; opacity: 0; animation: media-spin .8s linear infinite, media-appear .2s .3s forwards; }
+@keyframes media-spin { to { transform: rotate(1turn); } }
+@keyframes media-appear { to { opacity: 1; } }

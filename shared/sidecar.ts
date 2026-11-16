@@ -186,6 +186,9 @@ function checkHtml(m: Record<string, unknown>, names: Set<string>, issues: Attac
   if (m.duration !== undefined && !(typeof m.duration === "number" && m.duration > 0)) {
     issues.push({ level: "error", message: '"duration" must be a number of seconds > 0' });
   }
+  if (m.poster_at !== undefined && !(typeof m.poster_at === "number" && m.poster_at >= 0)) {
+    issues.push({ level: "error", message: '"poster_at" must be a number of seconds >= 0' });
+  }
 }
 
 /** The binaries some media sidecar points at (unparseable ones are checkMediaJson's to report). */

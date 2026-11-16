@@ -99,6 +99,7 @@
   }
 
   var blobUrls = {};
+  var blobPaths = {};
   function assetUrl(path) {
     if (blobUrls[path]) return blobUrls[path];
     var file = files[path];
@@ -111,6 +112,7 @@
     else if (ext === "js" || ext === "mjs") body = rewriteJs(textOf(file), path);
     else body = bytesOf(file);
     blobUrls[path] = URL.createObjectURL(new Blob([body], { type: mimeOf(path, file) }));
+    blobPaths[blobUrls[path]] = path;
     return blobUrls[path];
   }
 
@@ -578,6 +580,8 @@
     var d = duration();
     if (d) target = Math.min(target, d);
     var t = now();
+    // Animations started since the last frame begin now, not at the target.
+    syncAnimations();
     if (target < t - 1 && scripted) {
       reload(target);
       return;
@@ -701,13 +705,15 @@
 
   // What the embedder lets this frame show and do: its controls; whether
   // they act here or only tell the embedder (delegate); whether the
-  // animation itself takes pointer input.
+  // animation itself takes pointer input; and a "Sync" button (the
+  // presenter's, while viewers run it themselves).
   var ui = {
     controls: opts.controls !== false,
     delegate: false,
     interactive: opts.interactive !== false,
+    sync: false,
   };
-  if (embedded) ui = { controls: false, delegate: true, interactive: false };
+  if (embedded) ui = { controls: false, delegate: true, interactive: false, sync: false };
 
   W.addEventListener("message", function (e) {
     if (e.source !== W.parent || !e.data || e.data.presio !== "html") return;
@@ -722,8 +728,10 @@
         el.muted = muted;
       });
     } else if (m.cmd === "ui") {
-      ui = { controls: !!m.controls, delegate: !!m.delegate, interactive: !!m.interactive };
+      ui = { controls: !!m.controls, delegate: !!m.delegate, interactive: !!m.interactive, sync: !!m.sync };
       renderUi();
+    } else if (m.cmd === "snapshot") {
+      snapshotAt(m.t, Number(m.scale) || 1);
     }
   });
 
@@ -760,6 +768,7 @@
   var ICONS = {
     play: '<path d="M7 4.5v15l12-7.5z" fill="currentColor"/>',
     pause: '<rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor"/><rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor"/>',
+    sync: '<path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 3v5h5M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 16h5v5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
     restart: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 3v5h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
   };
   function svg(name) {
@@ -771,6 +780,11 @@
     ".shield{position:absolute;inset:0;pointer-events:auto}" +
     ".bar{position:absolute;left:8px;right:8px;bottom:8px;display:flex;align-items:center;gap:6px;padding:4px 8px 4px 4px;border-radius:8px;background:rgba(0,0,0,.62);color:#fff;pointer-events:auto;opacity:0}" +
     ".bar.show,.bar.paused{opacity:1}" +
+    // No known length: no timeline, just the buttons.
+    ".bar.compact{right:auto;padding:4px}" +
+    ".bar.compact .scrub,.bar.compact .spacer,.bar.compact .time{display:none}" +
+    ".sync{width:auto;display:flex;align-items:center;gap:5px;padding:6px 9px 6px 7px;font:500 12px/1 system-ui,-apple-system,sans-serif;white-space:nowrap}" +
+    ".sync svg{width:16px;height:16px}" +
     "button{flex:none;width:28px;height:28px;padding:6px;border:0;border-radius:6px;background:transparent;color:inherit;cursor:pointer}" +
     "button:hover{background:rgba(255,255,255,.18)}" +
     "svg{display:block;width:100%;height:100%}" +
@@ -792,6 +806,7 @@
       '<input class="scrub" type="range" min="0" max="1000" value="0" aria-label="Position">' +
       '<span class="spacer"></span>' +
       '<span class="time"></span>' +
+      '<button class="sync" type="button" title="Jump every viewer to where you are" hidden>' + svg("sync") + "Sync</button>" +
       "</div>";
     els.shield = uiRoot.querySelector(".shield");
     els.bar = uiRoot.querySelector(".bar");
@@ -800,6 +815,10 @@
     els.scrub = uiRoot.querySelector(".scrub");
     els.spacer = uiRoot.querySelector(".spacer");
     els.time = uiRoot.querySelector(".time");
+    els.sync = uiRoot.querySelector(".sync");
+    els.sync.addEventListener("click", function () {
+      post({ type: "syncViewers" });
+    });
 
     els.toggle.addEventListener("click", function () {
       act(clock.playing ? "pause" : "play");
@@ -861,6 +880,7 @@
     if (!uiHost) return;
     uiShown = ui.controls;
     els.bar.hidden = !ui.controls;
+    els.sync.hidden = !ui.sync;
     // Not interactive: the page under the controls takes no input.
     els.shield.hidden = ui.interactive;
     if (!ui.controls && ui.interactive) uiHost.style.display = "none";
@@ -878,6 +898,7 @@
       els.toggle.setAttribute("aria-label", label);
     }
     var d = duration();
+    els.bar.classList.toggle("compact", !d);
     els.scrub.hidden = !d;
     els.spacer.hidden = !!d;
     if (!scrubbing) {
@@ -888,6 +909,260 @@
       var text = d ? fmt(clock.t) + " / " + fmt(d) : fmt(clock.t);
       if (els.time.textContent !== text) els.time.textContent = text;
     }
+  }
+
+  // --- Snapshots (posters) ---
+  //
+  // A still of the page at a moment of its clock, as a PNG data URL: what
+  // Presio shows in thumbnails and Next Slide and bakes into a downloaded
+  // PDF. Nothing outside the frame can screenshot it, so it draws itself:
+  // the DOM is copied with every element's computed style written inline (so
+  // animations are caught mid-flight and nothing restarts), canvases and
+  // videos as images, SVG animations at their current values, and bundled
+  // files as data URLs; then rendered through an SVG <foreignObject> onto a
+  // canvas.
+
+  var XHTML = "http://www.w3.org/1999/xhtml";
+  var SVGNS = "http://www.w3.org/2000/svg";
+  var dataUrls = {};
+
+  function dataUrlOf(path) {
+    if (dataUrls[path]) return dataUrls[path];
+    var file = files[path];
+    if (!file) return null;
+    var b64 = typeof file.text === "string" ? btoa(unescape(encodeURIComponent(textOf(file)))) : file.b64 || "";
+    dataUrls[path] = "data:" + mimeOf(path, file) + ";base64," + b64;
+    return dataUrls[path];
+  }
+  function inlineUrls(text) {
+    return String(text).replace(/blob:[^"')\s]+/g, function (b) {
+      var path = blobPaths[b.split("#")[0]];
+      return (path && dataUrlOf(path)) || b;
+    });
+  }
+
+  // Each tag's computed style untouched by the page's CSS: only what differs
+  // from it is written out, which keeps the copy small. The probes live in a
+  // shadow root, where the page's stylesheets (even `html, body { … }`)
+  // don't reach.
+  var defaults = {};
+  var defaultsHost = null;
+  function defaultStyle(el) {
+    var key = (el.namespaceURI === SVGNS ? "svg:" : "") + el.localName;
+    if (defaults[key]) return defaults[key];
+    if (!defaultsHost) {
+      var shadowHost = D.createElement("presio-defaults");
+      shadowHost.style.cssText = "all:initial;position:absolute;visibility:hidden;width:0;height:0;overflow:hidden";
+      D.documentElement.appendChild(shadowHost);
+      defaultsHost = D.createElement("div");
+      defaultsHost.style.cssText = "all:initial";
+      shadowHost.attachShadow({ mode: "closed" }).appendChild(defaultsHost);
+    }
+    var probe = el.namespaceURI === SVGNS ? D.createElementNS(SVGNS, el.localName) : D.createElement(el.localName);
+    var parent = el.namespaceURI === SVGNS && el.localName !== "svg" ? D.createElementNS(SVGNS, "svg") : defaultsHost;
+    if (parent !== defaultsHost) defaultsHost.appendChild(parent);
+    parent.appendChild(probe);
+    var cs = getComputedStyle(probe);
+    var out = {};
+    for (var i = 0; i < cs.length; i++) out[cs[i]] = cs.getPropertyValue(cs[i]);
+    (parent === defaultsHost ? probe : parent).remove();
+    defaults[key] = out;
+    return out;
+  }
+
+  function inlineStyle(el, out) {
+    var cs = getComputedStyle(el);
+    var base = defaultStyle(el);
+    var text = "";
+    for (var i = 0; i < cs.length; i++) {
+      var prop = cs[i];
+      var value = cs.getPropertyValue(prop);
+      if (base[prop] !== value || prop === "display") text += prop + ":" + value + ";";
+    }
+    text += "animation:none;transition:none;";
+    out.setAttribute("style", inlineUrls(text));
+  }
+
+  var SKIP = { script: 1, noscript: 1, template: 1, link: 1, style: 1, meta: 1, base: 1, title: 1, "presio-controls": 1, "presio-defaults": 1 };
+  var SMIL = { animate: 1, animateTransform: 1, animateMotion: 1, set: 1, animateColor: 1 };
+  var GEOMETRY = ["cx", "cy", "r", "rx", "ry", "x", "y", "width", "height", "x1", "y1", "x2", "y2"];
+
+  function imageOf(source, width, height, el) {
+    var img = D.createElementNS(XHTML, "img");
+    try {
+      var c = D.createElement("canvas");
+      c.width = width || 1;
+      c.height = height || 1;
+      c.getContext("2d").drawImage(source, 0, 0, c.width, c.height);
+      img.setAttribute("src", c.toDataURL("image/png"));
+    } catch (e) { /* tainted: leave it blank */ }
+    inlineStyle(el, img);
+    return img;
+  }
+
+  function copy(node) {
+    if (node.nodeType === 3) return D.createTextNode(node.nodeValue);
+    if (node.nodeType !== 1) return null;
+    var el = node;
+    var tag = el.localName;
+    if (SKIP[tag] || SMIL[tag]) return null;
+    var out;
+    if (tag === "canvas") {
+      out = D.createElementNS(XHTML, "img");
+      try {
+        out.setAttribute("src", el.toDataURL("image/png"));
+      } catch (e) { /* tainted */ }
+      inlineStyle(el, out);
+      return out;
+    }
+    if (tag === "video") return imageOf(el, el.videoWidth, el.videoHeight, el);
+    if (tag === "iframe") {
+      out = D.createElementNS(XHTML, "div");
+      inlineStyle(el, out);
+      return out;
+    }
+    out = el.cloneNode(false);
+    if (el.namespaceURI === SVGNS) {
+      // SVG animations show their current values, not their base ones.
+      for (var i = 0; i < GEOMETRY.length; i++) {
+        var a = el[GEOMETRY[i]];
+        if (a && a.animVal && typeof a.animVal.value === "number" && el.hasAttribute(GEOMETRY[i])) out.setAttribute(GEOMETRY[i], a.animVal.value);
+      }
+      var list = el.transform && el.transform.animVal;
+      if (list && list.numberOfItems) {
+        // (animVal is read-only, so no consolidate(): multiply it out.)
+        var m = new DOMMatrix();
+        for (var k = 0; k < list.numberOfItems; k++) m = m.multiply(list.getItem(k).matrix);
+        out.setAttribute("transform", "matrix(" + [m.a, m.b, m.c, m.d, m.e, m.f].join(" ") + ")");
+      }
+      if (el.href && el.href.baseVal !== undefined && blobPaths[el.href.baseVal]) out.setAttribute("href", dataUrlOf(blobPaths[el.href.baseVal]));
+    }
+    if (tag === "img" && el.currentSrc) out.setAttribute("src", inlineUrls(el.currentSrc));
+    if (tag === "input" || tag === "textarea" || tag === "select") {
+      if ("value" in el) out.setAttribute("value", el.value);
+      if (el.checked) out.setAttribute("checked", "");
+    }
+    if (tag !== "defs" && tag !== "head") inlineStyle(el, out);
+    for (var c = el.firstChild; c; c = c.nextSibling) {
+      var child = copy(c);
+      if (child) out.appendChild(child);
+    }
+    return out;
+  }
+
+  // @font-face rules, so text keeps its fonts (with bundled font files inline).
+  function fontFaces() {
+    var css = "";
+    for (var i = 0; i < D.styleSheets.length; i++) {
+      var rules;
+      try {
+        rules = D.styleSheets[i].cssRules;
+      } catch (e) {
+        continue; // a stylesheet from another origin
+      }
+      for (var j = 0; j < rules.length; j++) {
+        if (rules[j].type === 5) css += inlineUrls(rules[j].cssText);
+      }
+    }
+    return css;
+  }
+
+  function render(scale) {
+    var w = Math.max(1, D.documentElement.clientWidth || W.innerWidth);
+    var h = Math.max(1, D.documentElement.clientHeight || W.innerHeight);
+    var root = copy(D.documentElement);
+    var faces = fontFaces();
+    if (faces) {
+      var style = D.createElementNS(XHTML, "style");
+      style.textContent = faces;
+      root.insertBefore(style, root.firstChild);
+    }
+    root.setAttribute("style", (root.getAttribute("style") || "") + "width:" + w + "px;height:" + h + "px;overflow:hidden;");
+    var markup = new XMLSerializer().serializeToString(root);
+    var svgText =
+      '<svg xmlns="' + SVGNS + '" width="' + w + '" height="' + h + '"><foreignObject x="0" y="0" width="100%" height="100%">' +
+      markup + "</foreignObject></svg>";
+    return new Promise(function (done) {
+      var img = new Image();
+      img.onload = function () {
+        try {
+          var c = D.createElement("canvas");
+          c.width = Math.round(w * scale);
+          c.height = Math.round(h * scale);
+          var ctx = c.getContext("2d");
+          ctx.scale(scale, scale);
+          ctx.drawImage(img, 0, 0, w, h);
+          done(c.toDataURL("image/png"));
+        } catch (e) {
+          done(canvasFallback()); // the browser won't read back a foreignObject (Safari)
+        }
+      };
+      img.onerror = function () {
+        done(canvasFallback());
+      };
+      img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgText);
+    });
+  }
+
+  // Without a DOM render: the page's biggest canvas, when it fills most of it.
+  function canvasFallback() {
+    var best = null;
+    var area = 0;
+    Array.prototype.forEach.call(D.getElementsByTagName("canvas"), function (c) {
+      var a = c.clientWidth * c.clientHeight;
+      if (a > area) {
+        area = a;
+        best = c;
+      }
+    });
+    var total = (D.documentElement.clientWidth || 1) * (D.documentElement.clientHeight || 1);
+    if (!best || area < total * 0.5) return null;
+    try {
+      return best.toDataURL("image/png");
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /** Post a still at `t` seconds — by default the end, for an animation with
+   *  a length, else two seconds in — once the page has loaded. */
+  function snapshotAt(t, scale) {
+    function wait(ms) {
+      return new Promise(function (r) {
+        realSetTimeout(r, ms);
+      });
+    }
+    var loaded = D.readyState === "complete" ? Promise.resolve() : new Promise(function (r) {
+      W.addEventListener("load", r);
+    });
+    loaded
+      .then(function () {
+        return D.fonts && D.fonts.ready;
+      })
+      .then(function () {
+        return wait(300); // data the page fetches, and what it builds from it
+      })
+      .then(function () {
+        measure();
+        var d = duration();
+        var target = typeof t === "number" && t >= 0 ? t * 1000 : d ? d - 50 : 2000;
+        setPlaying(false);
+        seek(target);
+        runFrames();
+        syncAnimations();
+        return wait(50);
+      })
+      .then(function () {
+        return render(scale);
+      })
+      .then(
+        function (url) {
+          post({ type: "snapshot", url: url });
+        },
+        function () {
+          post({ type: "snapshot", url: null });
+        }
+      );
   }
 
   // --- Start ---

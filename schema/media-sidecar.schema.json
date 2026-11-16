@@ -36,6 +36,7 @@
     "sync":        { "enum": ["presenter", "independent"], "default": "presenter", "description": "kind='html': whether viewers' copies follow the presenter's, or each viewer plays it themselves. The presenter can switch it during the talk." },
     "controls":    { "type": "boolean", "default": true, "description": "kind='html': show play/pause, restart and (when the length is known) a scrubber to viewers playing it themselves. The presenter always has them." },
     "interactive": { "type": "boolean", "default": true, "description": "kind='html': pointer input (clicks, drags, hovers) reaches the page, for the presenter and for viewers playing it themselves." },
+    "poster_at":   { "type": "number", "minimum": 0, "description": "kind='html': the moment, in seconds, shown as its preview (thumbnails, the next-slide view, a downloaded PDF). Default: near the end, or 2s in when it has no set length." },
     "duration":    { "type": "number", "exclusiveMinimum": 0, "description": "kind='html': the animation's length in seconds, for the scrubber and looping. Without it, it's measured from CSS animations when those are all it runs; otherwise it plays open-ended." }
   },
   "if":   { "properties": { "kind": { "enum": ["file", "html"] } }, "required": ["kind"] },
