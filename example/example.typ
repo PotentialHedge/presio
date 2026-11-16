@@ -2,7 +2,7 @@
 // Compile with: typst compile examples/touying/example.typ
 #import "@preview/touying:0.7.4": *
 #import themes.simple: *
-#import "@preview/presio:0.2.3": media, speaker-notes
+#import "@preview/presio:0.3.0": media, speaker-notes
 
 #show: simple-theme.with(aspect-ratio: "16-9")
 

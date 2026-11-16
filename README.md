@@ -37,7 +37,7 @@ by hand (see [Embedding notes by hand](#embedding-notes-by-hand)):
 ### Typst
 
 ```typst
-#import "@preview/presio:0.2.3": media, speaker-notes
+#import "@preview/presio:0.3.0": media, speaker-notes
 
 = Introduction
 
