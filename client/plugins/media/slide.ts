@@ -1,20 +1,23 @@
 // The live media on the slide, on the presenter's current slide and on every
 // viewer. The presenter's copy carries the controls, drawn on each item, and
-// is the one every screen follows; viewers never show controls.
+// is the one every screen follows. Viewers show no controls, except on an
+// HTML animation the presenter lets them run themselves.
 
 import { createPlayer, type Player } from "./players";
-import { isEmbed, isPlayable, isVideo, readPlacements, release, type Placement, type Placements } from "./placements";
+import { isEmbed, isHtml, isPlayable, isVideo, readPlacements, release, type Placement, type Placements } from "./placements";
 import { poster } from "./posters";
 import {
   DEFAULT_AUDIO,
   mutedHere,
   parseAudio,
+  parseModes,
   parseState,
   parseTime,
   sendState,
   type AudioState,
   type AudioTarget,
   type MediaState,
+  type Modes,
 } from "./protocol";
 import { icon } from "./icons";
 
@@ -35,6 +38,16 @@ const AUDIO_CHOICES: { label: string; muted: boolean; target?: AudioTarget }[] =
   { label: "Presenter and viewers", muted: false, target: "both" },
 ];
 
+// Keys an HTML animation hands back, and the deck command each one runs.
+const NAV_COMMANDS: Record<string, string> = {
+  ArrowRight: "presio.nextSlide",
+  ArrowDown: "presio.nextSlide",
+  PageDown: "presio.nextSlide",
+  ArrowLeft: "presio.prevSlide",
+  ArrowUp: "presio.prevSlide",
+  PageUp: "presio.prevSlide",
+};
+
 export function runSlide() {
   const presenter = presio.role === "presenter";
   const root = document.getElementById("root")!;
@@ -43,8 +56,12 @@ export function runSlide() {
   let items: Item[] = [];
   let state: MediaState | null = null;
   let audio: AudioState = DEFAULT_AUDIO;
+  let modes: Modes = {};
   // The audio menu, open under this item's controls.
   let menuFor: string | null = null;
+
+  /** An HTML animation viewers run themselves, not following the presenter. */
+  const independent = (p: Placement) => isHtml(p) && (modes[p.id] ?? p.sync === "independent");
 
   // --- Players ---
 
@@ -65,7 +82,12 @@ export function runSlide() {
         // The video's own controls: what they do is the presenter's command.
         acted: presenter ? (action) => act(p, action) : undefined,
         mutedHere: presenter ? (muted) => setAudio(nativeMute(muted)) : undefined,
+        key: (key) => {
+          const command = NAV_COMMANDS[key];
+          if (command) void presio.commands.execute(command).catch(() => {});
+        },
       });
+      item.player.setIndependent?.(independent(p));
       // The poster shows until the player has something to show.
       void poster(p).then((url) => {
         if (!url || item.player.ready || !items.includes(item)) return;
@@ -86,18 +108,24 @@ export function runSlide() {
   };
 
   /** Act on the presenter's latest command, once per command. Before there
-   *  is one for this slide, viewers start autoplay media themselves. */
+   *  is one for this slide, viewers start autoplay media themselves; so does
+   *  everyone with an autoplay HTML animation, which plays alongside the
+   *  slide's other media rather than taking turns with it. A viewer running
+   *  an animation themselves takes no commands for it. */
   const applyState = () => {
     const current = state?.slide === slide ? state : null;
     for (const item of items) {
-      if (!current || current.id === null) {
-        if (!presenter && item.p.autoplay && item.applied === 0) {
+      const own = !presenter && independent(item.p);
+      const forItem = !own && current && current.id === item.p.id ? current : null;
+      if (!forItem) {
+        const start = !presenter || isHtml(item.p);
+        if (start && item.p.autoplay && item.applied === 0 && (!current || current.id === null || isHtml(item.p))) {
           item.applied = -1;
           item.player.autostart();
         }
-      } else if (current.id === item.p.id && current.seq !== item.applied) {
-        item.applied = current.seq;
-        item.player.command(current.action, current.seq);
+      } else if (forItem.seq !== item.applied) {
+        item.applied = forItem.seq;
+        item.player.command(forItem.action, forItem.seq);
       }
     }
     for (const item of items) update(item);
@@ -122,6 +150,17 @@ export function runSlide() {
     if (muted) return { ...audio, muted: true };
     if (presio.session.local) return { muted: false, target: "presenter" };
     return { muted: false, target: audio.target === "viewers" ? "both" : audio.target };
+  };
+
+  const setIndependent = (p: Placement, value: boolean) => {
+    modes = { ...modes, [p.id]: value };
+    presio.messages.send("modes", modes, { retain: true });
+    applyModes();
+  };
+
+  const applyModes = () => {
+    for (const item of items) item.player.setIndependent?.(independent(item.p));
+    applyState();
   };
 
   const setAudio = (next: AudioState) => {
@@ -157,7 +196,22 @@ export function runSlide() {
       menuFor = menuFor === p.id ? null : p.id;
       for (const i of items) update(i);
     };
-    if (isVideo(p)) {
+    if (isHtml(p)) {
+      // The animation's own controls (in its frame) play, pause, restart and
+      // seek; here is who drives it on viewers' screens. A local deck's
+      // viewer window is this machine's, so there's no one else to hand it to.
+      if (!local) {
+        const own = independent(p);
+        bar.append(
+          button(
+            own ? "users" : "follow",
+            own ? "Viewers control it themselves — click to have them follow you" : "Viewers follow you — click to let them control it",
+            () => setIndependent(p, !own),
+            own ? "on" : ""
+          )
+        );
+      }
+    } else if (isVideo(p)) {
       // A video plays, seeks and mutes from its own controls; all that's left
       // here is where a synced deck's audio plays.
       if (!local) {
@@ -237,14 +291,18 @@ export function runSlide() {
       const width = window.innerWidth;
       const height = window.innerHeight;
       if (!width || !height) return;
-      // The presenter's controls, and the videos' and embeds' own controls;
-      // a viewer's "tap to enable audio".
+      // The presenter's controls, and the videos', embeds' and animations'
+      // own controls; a viewer's "tap to enable audio", and an animation
+      // they run themselves.
       const targets = presenter
         ? items.flatMap((i) => [
             ...(isPlayable(i.p) ? [i.el] : []),
             ...(i.controls ? [...i.controls.children] : []),
           ])
-        : [...root.querySelectorAll(".tap-audio")];
+        : [
+            ...root.querySelectorAll(".tap-audio"),
+            ...items.filter((i) => independent(i.p) && (i.p.controls || i.p.interactive)).map((i) => i.el),
+          ];
       const regions = targets.map((el) => {
         const r = el.getBoundingClientRect();
         return { x: r.left / width, y: r.top / height, w: r.width / width, h: r.height / height };
@@ -266,9 +324,14 @@ export function runSlide() {
     } else if (type === "audio") {
       audio = parseAudio(payload) ?? audio;
       applyAudio();
+    } else if (type === "modes") {
+      modes = parseModes(payload) ?? modes;
+      applyModes();
+      for (const item of items) update(item);
     } else if (type === "time" && !presenter) {
       const time = parseTime(payload);
-      if (time?.slide === slide) items.find((i) => i.p.id === time.id)?.player.follow(time);
+      const item = time?.slide === slide ? items.find((i) => i.p.id === time.id) : undefined;
+      if (time && item && !independent(item.p)) item.player.follow(time);
     }
   });
 

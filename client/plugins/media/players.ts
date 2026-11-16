@@ -1,11 +1,12 @@
-// One player per media item on the slide: a GIF, a <video>, or a YouTube /
-// Vimeo embed. The presenter's players are the source of truth — they act on
+// One player per media item on the slide: a GIF, a <video>, a YouTube /
+// Vimeo embed, or an HTML animation (html.ts). The presenter's players are the source of truth — they act on
 // the presenter's commands and report where they are (a time sample, stamped
 // with the server clock); viewers' players act on the same commands and then
 // follow those samples to stay in time.
 
 import { embedSrc, loadVimeoApi, loadYouTubeApi, pause, play, seek, setMuted, YT_STATE, type EmbedPlayer } from "./embeds";
-import { isEmbed, isVideo, type Placement } from "./placements";
+import { HtmlPlayer } from "./html";
+import { isEmbed, isHtml, isVideo, type Placement } from "./placements";
 
 export type Action = "play" | "pause" | "reset";
 
@@ -21,10 +22,12 @@ export interface PlayerHooks {
   sample?: (t: number, playing: boolean) => void;
   /** It became ready, started or stopped, or wants a tap — redraw around it. */
   changed: () => void;
-  /** Presenter: played or paused from its own controls, not by a command. */
-  acted?: (action: "play" | "pause") => void;
+  /** Presenter: played, paused or restarted from its own controls, not by a command. */
+  acted?: (action: Action) => void;
   /** Presenter: muted or unmuted from its own controls. */
   mutedHere?: (muted: boolean) => void;
+  /** A slide-navigation key pressed inside it, which it didn't use. */
+  key?: (key: string) => void;
 }
 
 export interface Player {
@@ -41,6 +44,9 @@ export interface Player {
   /** Viewer: stay in time with the presenter. */
   follow(sync: TimeSync): void;
   setMuted(muted: boolean): void;
+  /** HTML animations, on a viewer: run by the viewer (true) or following
+   *  the presenter. */
+  setIndependent?(independent: boolean): void;
   destroy(): void;
 }
 
@@ -53,18 +59,19 @@ const PAUSED_SAMPLE_MS = 2000;
 const noop = () => {};
 
 /** Where the presenter "is" now: a playing sample plus its time in transit. */
-function expectedTime(sync: TimeSync): number {
+export function expectedTime(sync: TimeSync): number {
   const latency = Math.max(0, (presio.clock.now() - sync.sampledAt) / 1000);
   return sync.playing ? sync.t + latency : sync.t;
 }
 
 export function createPlayer(p: Placement, presenter: boolean, hooks: PlayerHooks): Player {
+  if (isHtml(p)) return new HtmlPlayer(p, presenter, hooks);
   if (isEmbed(p)) return new Embed(p, presenter, hooks);
   if (isVideo(p)) return new Video(p, presenter, hooks);
   return new Gif(p, hooks);
 }
 
-function box(className: string): HTMLDivElement {
+export function box(className: string): HTMLDivElement {
   const el = document.createElement("div");
   el.className = `player ${className}`;
   return el;

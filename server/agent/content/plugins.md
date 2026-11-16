@@ -612,7 +612,9 @@ background sharing `presio.storage`, and Speaker Notes
 and saves edits back with `presio.deck.save` — both React. Media and Drawing
 load each surface's code as its own chunk, and pdf-lib only for a download.
 Media ([manifest](BASE/plugins/media/presio-plugin.json)) plays the GIFs,
-videos and YouTube/Vimeo embeds a deck carries: a `slide` surface with the
+videos, YouTube/Vimeo embeds and HTML animations a deck carries (each
+animation in a sandboxed frame of its own, on a clock the plugin plays,
+pauses and seeks): a `slide` surface with the
 players (controls drawn on each item for the presenter, claimed with
 `setInteractive` areas), retained messages for play state and audio plus time
 samples stamped with `presio.clock.now()` that viewers follow, posters as
