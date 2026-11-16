@@ -51,6 +51,14 @@ if (typeof (Promise as { withResolvers?: unknown }).withResolvers !== "function"
   };
 }
 
+// pdf.js 6's worker calls Promise.try(); Safari < 18.2 / Chrome < 128 lack it.
+if (typeof (Promise as { try?: unknown }).try !== "function") {
+  (Promise as unknown as { try: (fn: (...args: unknown[]) => unknown, ...args: unknown[]) => Promise<unknown> }).try =
+    function (fn, ...args) {
+      return new Promise((resolve) => resolve(fn(...args)));
+    };
+}
+
 if (typeof AbortSignal.any !== "function") {
   (AbortSignal as unknown as { any: (signals: AbortSignal[]) => AbortSignal }).any = (signals) => {
     const controller = new AbortController();

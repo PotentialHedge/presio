@@ -32,10 +32,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { usePluginHost } from "@/lib/plugins/usePluginHost";
 import { ControllerView } from "./ControllerView";
 import { ViewerView } from "./ViewerView";
+import { LocalDeckElsewhere } from "@/components/LocalDeckElsewhere";
 
 const SESSION_NOT_FOUND = "Session not found";
 /** The deck download kept failing even after loadPdf's retries. */
 const DOWNLOAD_FAILED = "Couldn't download the presentation";
+/** A local deck opened somewhere its PDF isn't (another browser or device). */
+const LOCAL_ELSEWHERE = "This presentation is only available in the same browser on the device it was created on";
 
 export default function Presentation() {
   const { id } = useParams<{ id: string }>();
@@ -359,14 +362,14 @@ export default function Presentation() {
         // better. Say so instead of waiting out a lookup that can't succeed
         // (and, offline, can't even be attempted).
         if (isLocalDeckId(id!)) {
-          throw new Error("This presentation is only available in the same browser on the device it was created on");
+          throw new Error(LOCAL_ELSEWHERE);
         }
         const res = await fetch(`/api/sessions/${id}`);
         if (!res.ok) throw new Error(SESSION_NOT_FOUND);
         const session = await res.json();
         if (session.local) {
           // Server knows this code, but the PDF only lives on the presenter's device.
-          throw new Error("This presentation is only available in the same browser on the device it was created on");
+          throw new Error(LOCAL_ELSEWHERE);
         }
         if (cancelled) return;
         setLocal(false);
@@ -396,7 +399,15 @@ export default function Presentation() {
         if (!cancelled) {
           // Transient download failures are network weather, not bugs; the
           // rest (e.g. pdf.js failing to start its worker) want a stack trace.
-          if (!isTransient(e)) captureException(e, { where: "deck-load", role: settledRoleRef.current ?? "unknown" });
+          // Nor are a mistyped code or a local deck opened in another
+          // browser: those are expected outcomes with their own UI, counted
+          // as events rather than reported as errors.
+          const message = e instanceof Error ? e.message : "";
+          if (message === LOCAL_ELSEWHERE || message === SESSION_NOT_FOUND) {
+            track("deck-load-unavailable", { reason: message === LOCAL_ELSEWHERE ? "local-elsewhere" : "not-found" });
+          } else if (!isTransient(e)) {
+            captureException(e, { where: "deck-load", role: settledRoleRef.current ?? "unknown" });
+          }
           setError(
             isTransient(e) ? DOWNLOAD_FAILED : e instanceof Error ? e.message : "Failed to load presentation"
           );
@@ -808,6 +819,10 @@ export default function Presentation() {
         <p className="text-muted-foreground">Loading presentation...</p>
       </div>
     );
+  }
+
+  if (error === LOCAL_ELSEWHERE) {
+    return <LocalDeckElsewhere requestedRole={requestedRole} />;
   }
 
   if (error) {

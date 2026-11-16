@@ -29,6 +29,7 @@ const WATCHED = [
   { name: "Uint8Array#toHex", pattern: /\.toHex\(\)/, bcd: "javascript.builtins.Uint8Array.toHex", polyfilled: true },
   { name: "Map#getOrInsertComputed", pattern: /\.getOrInsertComputed\(/, bcd: "javascript.builtins.Map.getOrInsertComputed", polyfilled: true },
   { name: "Promise.withResolvers", pattern: /\bPromise\.withResolvers\(/, bcd: "javascript.builtins.Promise.withResolvers", polyfilled: true, polyfilled: true },
+  { name: "Promise.try", pattern: /\bPromise\.try\(/, bcd: "javascript.builtins.Promise.try", polyfilled: true },
   { name: "Array#toSorted", pattern: /\.toSorted\(/, bcd: "javascript.builtins.Array.toSorted", polyfilled: true },
   { name: "Array#toReversed", pattern: /\.toReversed\(/, bcd: "javascript.builtins.Array.toReversed" },
   { name: "Array#findLast", pattern: /\.findLast(Index)?\(/, bcd: "javascript.builtins.Array.findLast" },
