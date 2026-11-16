@@ -21,7 +21,9 @@ import { track } from "@/lib/analytics";
 //     exist, and sharing claims that row under the same id.
 //
 // Returns the id the deck is now reachable at — the same one for a claim, a
-// brand new code when the deck was re-keyed — or null on failure.
+// brand new code when the deck was re-keyed — or null on failure. `deckId`
+// overrides the hook's id for a deck imported after the hook mounted (the
+// "opened in another browser" recovery imports the PDF and shares it at once).
 export function useClaim(id: string) {
   const { session } = useAuth();
   const [syncing, setSyncing] = useState(false);
@@ -30,7 +32,8 @@ export function useClaim(id: string) {
   // ending one of them instead of only reporting the error.
   const [capReached, setCapReached] = useState(false);
 
-  const sync = async (currentSlide?: number): Promise<string | null> => {
+  const sync = async (currentSlide?: number, deckId: string = id): Promise<string | null> => {
+    const id = deckId;
     // Local/offline mode has no accounts: authorize with the controller token
     // this browser stored when the session was created (handoff decks only —
     // a deck imported here has no server row to be the controller of yet), and
