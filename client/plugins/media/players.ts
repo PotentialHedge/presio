@@ -28,6 +28,8 @@ export interface PlayerHooks {
   mutedHere?: (muted: boolean) => void;
   /** A slide-navigation key pressed inside it, which it didn't use. */
   key?: (key: string) => void;
+  /** Presenter: send every viewer running it themselves to this moment. */
+  syncViewers?: (t: number, playing: boolean) => void;
 }
 
 export interface Player {
@@ -47,6 +49,9 @@ export interface Player {
   /** HTML animations, on a viewer: run by the viewer (true) or following
    *  the presenter. */
   setIndependent?(independent: boolean): void;
+  /** HTML animations, on a viewer running it themselves: go to where the
+   *  presenter is, once. */
+  jump?(sync: TimeSync): void;
   destroy(): void;
 }
 

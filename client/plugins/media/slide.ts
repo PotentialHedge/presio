@@ -81,6 +81,11 @@ export function runSlide() {
         changed: () => update(item),
         // The video's own controls: what they do is the presenter's command.
         acted: presenter ? (action) => act(p, action) : undefined,
+        // The presenter's "Sync": every viewer running it themselves jumps
+        // to this moment (and carries on from there on their own).
+        syncViewers: presenter
+          ? (t, playing) => presio.messages.send("jump", { slide: p.slide, id: p.id, t, playing, sampledAt: presio.clock.now() })
+          : undefined,
         mutedHere: presenter ? (muted) => setAudio(nativeMute(muted)) : undefined,
         key: (key) => {
           const command = NAV_COMMANDS[key];
@@ -88,8 +93,17 @@ export function runSlide() {
         },
       });
       item.player.setIndependent?.(independent(p));
-      // The poster shows until the player has something to show.
-      void poster(p).then((url) => {
+      // A spinner until the player has something to show (shown after a
+      // moment, so a quick load doesn't flash it).
+      const spinner = document.createElement("div");
+      spinner.className = "loading";
+      spinner.setAttribute("role", "progressbar");
+      spinner.setAttribute("aria-label", "Loading");
+      el.append(spinner);
+      // The poster shows until the player has something to show. An
+      // animation's poster takes about as long as the animation itself, so
+      // it gets the PDF's placeholder and the spinner instead.
+      if (!isHtml(p)) void poster(p).then((url) => {
         if (!url || item.player.ready || !items.includes(item)) return;
         const img = document.createElement("img");
         img.className = "poster";
@@ -273,6 +287,7 @@ export function runSlide() {
   const update = (item: Item) => {
     if (!items.includes(item)) return;
     item.el.classList.toggle("ready", item.player.ready);
+    if (item.player.ready) item.el.querySelector(":scope > .loading")?.remove();
     if (item.player.ready && item.poster) {
       item.poster.remove();
       item.poster = null;
@@ -328,6 +343,10 @@ export function runSlide() {
       modes = parseModes(payload) ?? modes;
       applyModes();
       for (const item of items) update(item);
+    } else if (type === "jump" && !presenter) {
+      const time = parseTime(payload);
+      const item = time?.slide === slide ? items.find((i) => i.p.id === time.id) : undefined;
+      if (time && item && independent(item.p)) item.player.jump?.(time);
     } else if (type === "time" && !presenter) {
       const time = parseTime(payload);
       const item = time?.slide === slide ? items.find((i) => i.p.id === time.id) : undefined;

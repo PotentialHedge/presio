@@ -27,10 +27,12 @@ export function PluginPanel({ host, plugin, panel }: { host: PluginHost; plugin:
   return <PluginFrame host={host} plugin={plugin} surface="panel" panel={panel} className="w-full h-full" />;
 }
 
-/** Background surfaces: mounted for as long as the deck is open, never shown. */
+/** Background surfaces: mounted for as long as the deck is open, never shown.
+ *  Off-screen rather than display:none, so a background frame still lays out
+ *  and paints (the media plugin renders animation previews there). */
 export function PluginBackgrounds({ host, plugins }: { host: PluginHost; plugins: LoadedPlugin[] }) {
   return (
-    <div className="hidden" aria-hidden>
+    <div className="fixed -left-[10000px] top-0 w-px h-px overflow-hidden pointer-events-none" aria-hidden inert>
       {plugins
         .filter((p) => p.manifest.surfaces.includes("background"))
         .map((plugin) => (

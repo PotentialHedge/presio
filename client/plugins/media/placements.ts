@@ -43,6 +43,11 @@ export interface Placement {
   controls: boolean;
   /** Pointer input reaches the animation (sliders, buttons, dragging). */
   interactive: boolean;
+  /** The box's width / height. */
+  aspect: number;
+  /** HTML animations: the moment (s) its poster shows; by default its end
+   *  when it has a length, else two seconds in. */
+  posterAt?: number;
 }
 
 /** Placements by slide; no entry = no media. */
@@ -73,6 +78,7 @@ interface Sidecar {
   controls?: boolean;
   interactive?: boolean;
   duration?: number;
+  poster_at?: number;
 }
 
 const SIDECAR_RE = /^media-slide-\d+-.+\.json$/;
@@ -176,6 +182,8 @@ export async function readPlacements(): Promise<Placements> {
       sync: m.sync === "independent" ? "independent" : "presenter",
       controls: m.controls !== false,
       interactive: m.interactive !== false,
+      aspect: m.w_pt / m.h_pt,
+      posterAt: typeof m.poster_at === "number" && m.poster_at >= 0 ? m.poster_at : undefined,
     };
     if (![placement.x, placement.y, placement.w, placement.h].every(Number.isFinite) || placement.w <= 0 || placement.h <= 0) continue;
     const list = out.get(m.slide) ?? [];
