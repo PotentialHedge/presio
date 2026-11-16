@@ -7,6 +7,10 @@
 // reports where it is, and viewers following the presenter trim their speed
 // to stay in time, the way a <video> does. A viewer the presenter has let run
 // it themselves ignores all that and gets its controls.
+//
+// Besides the time, the presenter's frame shares what was changed on the
+// page — form fields, and whatever the page hands over with presio.sync
+// (html-runtime.js) — and viewers following it take that on as it changes.
 
 import { box, expectedTime, type Action, type Player, type PlayerHooks, type TimeSync } from "./players";
 import type { Placement } from "./placements";
@@ -19,7 +23,12 @@ interface Ui {
   interactive: boolean;
   /** The presenter's "Sync" button, while viewers run it themselves. */
   sync: boolean;
+  /** Report the page's state as it changes (the presenter's). */
+  share: boolean;
 }
+
+/** A page's shareable state, as html-runtime.js reads it: opaque here. */
+export type PageState = unknown;
 
 type FromFrame =
   | { type: "ready"; restored: boolean }
@@ -27,7 +36,8 @@ type FromFrame =
   | { type: "acted"; action: Action }
   | { type: "seek"; t: number }
   | { type: "key"; key: string }
-  | { type: "syncViewers" }
+  | { type: "syncViewers"; state?: PageState }
+  | { type: "state"; state: PageState }
   | { type: "reload" };
 
 export class HtmlPlayer implements Player {
@@ -49,14 +59,18 @@ export class HtmlPlayer implements Player {
   // The last play/pause sent while following, so it's sent once per change.
   private issued: boolean | null = null;
   private drift: number | null = null;
+  // Viewer: running it themselves, not following.
+  private independent = false;
+  // Viewer: the presenter's latest page state (undefined: none heard yet).
+  private presenterState: PageState | undefined = undefined;
 
   constructor(p: Placement, presenter: boolean, hooks: PlayerHooks) {
     this.p = p;
     this.presenter = presenter;
     this.hooks = hooks;
     this.ui = presenter
-      ? { controls: true, delegate: true, interactive: p.interactive, sync: false }
-      : { controls: false, delegate: false, interactive: false, sync: false };
+      ? { controls: true, delegate: true, interactive: p.interactive, sync: false, share: true }
+      : { controls: false, delegate: false, interactive: false, sync: false, share: false };
     const f = this.iframe;
     f.setAttribute("sandbox", "allow-scripts");
     f.setAttribute("referrerpolicy", "no-referrer");
@@ -93,6 +107,11 @@ export class HtmlPlayer implements Player {
         }
         if (this.pendingSync) this.follow(this.pendingSync);
         this.pendingSync = null;
+        // A new or reloaded page starts from its own state: the presenter's
+        // goes on top.
+        if (!this.presenter && !this.independent && this.presenterState !== undefined) {
+          this.send({ cmd: "state", state: this.presenterState });
+        }
         this.hooks.changed();
         break;
       case "status": {
@@ -117,8 +136,11 @@ export class HtmlPlayer implements Player {
       case "syncViewers":
         if (this.presenter) {
           this.releaseKeyboard();
-          this.hooks.syncViewers?.(this.localTime(), this.st.playing);
+          this.hooks.syncViewers?.(this.localTime(), this.st.playing, m.state ?? null);
         }
+        break;
+      case "state":
+        if (this.presenter) this.hooks.state?.(m.state ?? null);
         break;
       case "key":
         if (typeof m.key === "string") {
@@ -215,20 +237,30 @@ export class HtmlPlayer implements Player {
       if (this.ready) this.send({ cmd: "ui", ...this.ui });
       return;
     }
+    const following = this.independent && !independent;
+    this.independent = independent;
     this.ui = independent
-      ? { controls: this.p.controls, delegate: false, interactive: this.p.interactive, sync: false }
-      : { controls: false, delegate: false, interactive: false, sync: false };
+      ? { controls: this.p.controls, delegate: false, interactive: this.p.interactive, sync: false, share: false }
+      : { controls: false, delegate: false, interactive: false, sync: false, share: false };
     this.drift = null;
     this.issued = null;
     this.setRate(1);
     if (this.ready) this.send({ cmd: "ui", ...this.ui });
+    // Back to following: what they changed gives way to the presenter's.
+    if (following && this.ready && this.presenterState !== undefined) this.send({ cmd: "state", state: this.presenterState });
   }
 
-  jump(sync: TimeSync) {
+  /** Viewer: the presenter's page state; taken on unless running it themselves. */
+  setState(state: PageState) {
+    this.presenterState = state;
+    if (this.ready && !this.independent) this.send({ cmd: "state", state });
+  }
+
+  jump(sync: TimeSync, state: PageState = null) {
     if (!this.ready) return;
     const t = Math.max(0, expectedTime(sync));
-    this.send({ cmd: "seek", t });
-    this.setPlaying(sync.playing);
+    this.wantPlaying = sync.playing;
+    this.send({ cmd: "jump", t, playing: sync.playing, state });
     this.st = { t, playing: sync.playing, at: performance.now() };
   }
 

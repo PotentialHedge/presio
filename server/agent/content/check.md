@@ -27,7 +27,10 @@ HTML animations (`"kind": "html"`): the page as `media-{id}.html`, and each
 file it loads as a `media-asset-…` attachment listed in the sidecar's
 `assets` (`{ "path": "js/app.js", "filename": "media-asset-…" }`). Options:
 `sync` (`"presenter"` | `"independent"`), `controls`, `interactive`,
-`duration` (seconds), `poster_at` (seconds; the frame used as its preview). Full schema: BASE/schema/media-sidecar.schema.json
+`duration` (seconds), `poster_at` (seconds; the frame used as its preview).
+What the presenter changes on the page reaches viewers following them: form
+fields by themselves, other state when the page calls
+`presio.sync({ get: () => data, set: (data) => {} })`. Full schema: BASE/schema/media-sidecar.schema.json
 
 ## Sitemap
 

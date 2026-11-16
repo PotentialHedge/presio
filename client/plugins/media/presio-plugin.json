@@ -3,7 +3,7 @@
   "presio": 1,
   "name": "media",
   "displayName": "Media",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "author": "Presio",
   "description": "Plays the GIFs, videos, YouTube/Vimeo embeds and HTML animations in your PDF on their slides, in sync on every screen, with play, restart and audio controls on your current slide. Animations can be handed to viewers to play themselves.",
   "main": "index.html",

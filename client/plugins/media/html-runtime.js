@@ -575,7 +575,9 @@
   /** Go to `target` ms. Forward steps the page through the time between
    *  (frames and timers run, quickly); back reloads it unless only CSS / SVG
    *  animations run, which can simply be set. */
-  function seek(target) {
+  /** `state` (see shareable state, below), when given, is the page's state
+   *  once there. */
+  function seek(target, state) {
     target = Math.max(0, Number(target) || 0);
     var d = duration();
     if (d) target = Math.min(target, d);
@@ -583,7 +585,7 @@
     // Animations started since the last frame begin now, not at the target.
     syncAnimations();
     if (target < t - 1 && scripted) {
-      reload(target);
+      reload(target, state);
       return;
     }
     if (target > t && scripted) {
@@ -602,6 +604,7 @@
       });
     }
     syncAnimations();
+    if (state !== undefined) applyState(state);
     renderOnce = true;
     status(true);
     renderUi();
@@ -632,10 +635,13 @@
   }
 
   var STATE_PREFIX = "presio-html:";
-  function reload(target) {
+  // The page's shareable state comes along when going back to a moment
+  // (what was dragged or set stays), but not on a restart from the top.
+  function reload(target, state) {
+    if (state === undefined) state = target > 0 ? readState() : null;
     pendingReload = true;
     try {
-      W.name = STATE_PREFIX + JSON.stringify({ t: target, playing: clock.playing, rate: clock.rate, ui: ui, muted: muted });
+      W.name = STATE_PREFIX + JSON.stringify({ t: target, playing: clock.playing, rate: clock.rate, ui: ui, muted: muted, state: state });
     } catch (e) { /* no state to carry */ }
     if (embedded) post({ type: "reload" });
     W.location.reload();
@@ -712,8 +718,9 @@
     delegate: false,
     interactive: opts.interactive !== false,
     sync: false,
+    share: false,
   };
-  if (embedded) ui = { controls: false, delegate: true, interactive: false, sync: false };
+  if (embedded) ui = { controls: false, delegate: true, interactive: false, sync: false, share: false };
 
   W.addEventListener("message", function (e) {
     if (e.source !== W.parent || !e.data || e.data.presio !== "html") return;
@@ -728,8 +735,15 @@
         el.muted = muted;
       });
     } else if (m.cmd === "ui") {
-      ui = { controls: !!m.controls, delegate: !!m.delegate, interactive: !!m.interactive, sync: !!m.sync };
+      ui = { controls: !!m.controls, delegate: !!m.delegate, interactive: !!m.interactive, sync: !!m.sync, share: !!m.share };
+      lastShared = null;
       renderUi();
+    } else if (m.cmd === "state") {
+      applyState(m.state);
+    } else if (m.cmd === "jump") {
+      // Go to where the presenter is, as the presenter has it.
+      setPlaying(!!m.playing);
+      seek(Number(m.t) * 1000, m.state === undefined ? null : m.state);
     } else if (m.cmd === "snapshot") {
       snapshotAt(m.t, Number(m.scale) || 1);
     }
@@ -817,7 +831,7 @@
     els.time = uiRoot.querySelector(".time");
     els.sync = uiRoot.querySelector(".sync");
     els.sync.addEventListener("click", function () {
-      post({ type: "syncViewers" });
+      post({ type: "syncViewers", state: readState() });
     });
 
     els.toggle.addEventListener("click", function () {
@@ -1165,6 +1179,113 @@
       );
   }
 
+  // --- Shareable state ---
+  //
+  // What viewers following the presenter need besides the time: what the
+  // presenter changed on the page. Form fields (sliders, checkboxes,
+  // selects, text) come by value, by themselves; anything else the page
+  // hands over:
+  //
+  //   presio.sync({ get: () => ({ points }), set: (s) => { points = s.points } })
+  //
+  // `get` returns JSON-able data and is asked a few times a second; `set`
+  // gets a copy of what the presenter's returned.
+
+  var stateApi = null;
+  var pendingApp; // a state that came before the page called presio.sync
+  var lastShared = null;
+
+  W.presio = {
+    sync: function (api) {
+      if (!api || typeof api.get !== "function" || typeof api.set !== "function") {
+        throw new TypeError("presio.sync takes { get, set }");
+      }
+      stateApi = api;
+      lastShared = null;
+      if (pendingApp !== undefined) {
+        var app = pendingApp;
+        pendingApp = undefined;
+        setApp(app);
+      }
+    },
+  };
+
+  var NOT_FIELDS = /^(file|password|hidden|button|submit|reset|image)$/i;
+  function formFields() {
+    return Array.prototype.filter.call(D.querySelectorAll("input,select,textarea"), function (el) {
+      return !NOT_FIELDS.test(el.type || "");
+    });
+  }
+  function isCheck(el) {
+    return el.type === "checkbox" || el.type === "radio";
+  }
+
+  /** { forms?, app? } — or null when there's nothing to share. */
+  function readState() {
+    var state = {};
+    var fields = formFields();
+    if (fields.length) {
+      state.forms = fields.map(function (el) {
+        return isCheck(el) ? el.checked : el.value;
+      });
+    }
+    if (stateApi) {
+      try {
+        var app = stateApi.get();
+        // A copy, also of what the page keeps changing in place.
+        if (app !== undefined) state.app = JSON.parse(JSON.stringify(app));
+      } catch (e) {
+        console.error("presio.sync get():", e);
+      }
+    }
+    return state.forms || "app" in state ? state : null;
+  }
+
+  function setApp(app) {
+    try {
+      stateApi.set(app);
+    } catch (e) {
+      console.error("presio.sync set():", e);
+    }
+  }
+
+  function applyState(state) {
+    if (!state || typeof state !== "object") return;
+    if (Array.isArray(state.forms)) {
+      var fields = formFields();
+      state.forms.forEach(function (v, i) {
+        var el = fields[i];
+        if (!el) return;
+        if (isCheck(el)) {
+          if (typeof v !== "boolean" || el.checked === v) return;
+          el.checked = v;
+        } else {
+          if (typeof v !== "string" || el.value === v) return;
+          el.value = v;
+        }
+        // So the page reacts as if it were changed here.
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+    }
+    if ("app" in state) {
+      if (stateApi) setApp(state.app);
+      else pendingApp = state.app;
+    }
+    renderOnce = true;
+  }
+
+  // The presenter's frame reports its state when it changes.
+  function share() {
+    realSetTimeout(share, 100);
+    if (!ui.share || pendingReload) return;
+    var state = readState();
+    var json = JSON.stringify(state);
+    if (json === lastShared) return;
+    lastShared = json;
+    post({ type: "state", state: state });
+  }
+
   // --- Start ---
 
   if (saved) {
@@ -1182,7 +1303,7 @@
     renderUi();
     applyMute();
     if (saved) {
-      seek(Number(saved.t) || 0);
+      seek(Number(saved.t) || 0, saved.state || undefined);
       setPlaying(!!saved.playing);
     } else if (!embedded && opts.autoplay !== false) {
       setPlaying(true);
@@ -1190,6 +1311,7 @@
     post({ type: "ready", restored: !!saved });
     status(true);
     realRaf(tick);
+    share();
   }
   if (D.readyState === "loading") D.addEventListener("DOMContentLoaded", start);
   else start();
