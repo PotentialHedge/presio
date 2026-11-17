@@ -13,7 +13,7 @@
 //
 // README.md and example/example.typ are not built from TypeScript, so they
 // repeat the literal; the workflow above rewrites all three together.
-export const TYPST_PACKAGE_VERSION = "0.2.3";
+export const TYPST_PACKAGE_VERSION = "0.3.0";
 
 // The LaTeX package (PotentialHedge/presio-latex-package) is installed by
 // copying presio.sty next to the .tex file and publishes no versioned releases,
