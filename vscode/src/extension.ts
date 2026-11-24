@@ -3,10 +3,12 @@
 // and speaker notes — in a webview (client/src/embed/). This side owns the
 // file: it sends the bytes, again whenever they change on disk, writes back
 // what a plugin saves (edited notes), and puts the sidecar check's findings
-// in the Problems panel.
+// in the Problems panel. PDFs that are Presio decks open here even when
+// another editor is the default (preferDecks.ts).
 
 import * as path from "path";
 import * as vscode from "vscode";
+import { preferPresioForDecks } from "./preferDecks";
 import type { FromWebview, PreviewIssue, SaveResult, ToWebview } from "../../client/src/embed/protocol";
 
 const VIEW_TYPE = "presio.preview";
@@ -29,7 +31,8 @@ export function activate(context: vscode.ExtensionContext) {
       supportsMultipleEditorsPerDocument: true,
     }),
     vscode.commands.registerCommand("presio.openPreview", (uri?: vscode.Uri) => openPreview(uri, false)),
-    vscode.commands.registerCommand("presio.openPreviewToSide", (uri?: vscode.Uri) => openPreview(uri, true))
+    vscode.commands.registerCommand("presio.openPreviewToSide", (uri?: vscode.Uri) => openPreview(uri, true)),
+    preferPresioForDecks(VIEW_TYPE)
   );
 }
 

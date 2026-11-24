@@ -7,6 +7,10 @@ you were on.
 
 ## Use
 
+- **Decks open here by themselves:** a PDF carrying Presio's notes or media (its `notes-slide-*.json` /
+  `media-slide-*.json` attachments) opens in the preview even when another PDF viewer is the default. Other
+  PDFs open as before. Reopen a deck with another editor and it stays there for the session; turn it off
+  altogether with the `presio.preview.openDecks` setting.
 - **From the PDF:** right-click it in the Explorer → *Open Presio Preview*, or *Open With… → Presio
   Preview*.
 - **From the source:** in a `.typ` or `.tex` file, the preview button in the editor title (or *Presio: Open
