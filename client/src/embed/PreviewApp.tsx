@@ -219,21 +219,16 @@ export function PreviewApp() {
         </main>
       </div>
       <footer className="shrink-0 h-10 px-2 flex items-center gap-1 border-t border-border text-sm">
+        {/* Left: what's shown around the slide. */}
         <Button variant="ghost" size="icon-sm" title="Slides" aria-pressed={showThumbs} onClick={() => setShowThumbs((v) => !v)} className={cn(showThumbs && "bg-accent")}>
           <GalleryHorizontalEnd className="size-4" />
         </Button>
-        <Button variant="ghost" size="icon-sm" title="Previous slide (←)" disabled={current <= 1} onClick={() => goTo(current - 1)}>
-          <ChevronLeft className="size-4" />
-        </Button>
-        <span className="tabular-nums px-1 select-none">
-          {current} / {total}
-        </span>
-        <Button variant="ghost" size="icon-sm" title="Next slide (→)" disabled={current >= total} onClick={() => goTo(current + 1)}>
-          <ChevronRight className="size-4" />
-        </Button>
-        <div className="flex items-center gap-1 ml-2">
-          <PluginButtons host={host.host} plugins={plugins} location="controller.currentSlide" />
-        </div>
+        {panels.length > 0 && (
+          <Button variant="ghost" size="icon-sm" title="Speaker notes" aria-pressed={showNotes} onClick={() => setShowNotes((v) => !v)} className={cn(showNotes && "bg-accent")}>
+            <NotebookText className="size-4" />
+          </Button>
+        )}
+        <PluginButtons host={host.host} plugins={plugins} location="controller.currentSlide" />
         <div className="flex-1" />
         {loadError && (
           <span className="text-xs text-muted-foreground truncate" title={loadError}>
@@ -249,11 +244,16 @@ export function PreviewApp() {
             {issues.length}
           </span>
         )}
-        {panels.length > 0 && (
-          <Button variant="ghost" size="icon-sm" title="Speaker notes" aria-pressed={showNotes} onClick={() => setShowNotes((v) => !v)} className={cn(showNotes && "bg-accent")}>
-            <NotebookText className="size-4" />
-          </Button>
-        )}
+        {/* Right: moving through the deck. */}
+        <Button variant="ghost" size="icon-sm" title="Previous slide (←)" disabled={current <= 1} onClick={() => goTo(current - 1)}>
+          <ChevronLeft className="size-4" />
+        </Button>
+        <span className="tabular-nums px-1 select-none">
+          {current} / {total}
+        </span>
+        <Button variant="ghost" size="icon-sm" title="Next slide (→)" disabled={current >= total} onClick={() => goTo(current + 1)}>
+          <ChevronRight className="size-4" />
+        </Button>
       </footer>
       <PluginBackgrounds host={host.host} plugins={plugins} />
     </div>

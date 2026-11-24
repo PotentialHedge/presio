@@ -1,6 +1,6 @@
 // A PluginHost for the preview: the presenter of a deck nobody else is
 // watching. No session, no transport, no plugin registry — the built-ins the
-// deck activates run with their default settings (or this webview's own).
+// deck activates run with this webview's settings (their defaults at first).
 
 import { useEffect, useState } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
@@ -8,7 +8,7 @@ import { PluginHost, type PluginContext } from "@/lib/plugins/host";
 import type { LoadedPlugin } from "@/lib/plugins/manifest";
 import type { PluginHostState } from "@/lib/plugins/usePluginHost";
 import { useAttachmentNamesReader, useAttachmentReader, useBytesReader, usePagesReader } from "@/lib/plugins/deckReaders";
-import { resolvePluginSettings } from "@/lib/settings";
+import { resolvePluginSettings, useSettingsDocument } from "@/lib/settings";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { pluginsFor } from "./builtins";
 
@@ -74,9 +74,12 @@ export function usePreviewHost({
   const runningIds = plugins.map((p) => p.id).join(",");
   useEffect(() => host.setRunning(runningIds ? runningIds.split(",") : []), [host, runningIds]);
 
+  // Plugins' settings, and again whenever one changes: a plugin setting its
+  // own (the drawing palette's toggle, the notes' size) hears it back.
+  const settingsDoc = useSettingsDocument();
   useEffect(() => {
-    for (const { id, manifest } of plugins) host.setPluginSettings(id, resolvePluginSettings(id, manifest.contributes.settings));
-  }, [host, plugins]);
+    for (const { id, manifest } of plugins) host.setPluginSettings(id, resolvePluginSettings(id, manifest.contributes.settings, settingsDoc));
+  }, [host, plugins, settingsDoc]);
 
   return { host, plugins, errors: {}, viewerErrors: {} };
 }
