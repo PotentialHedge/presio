@@ -1,4 +1,4 @@
-import { forwardRef, useRef } from "react";
+import { forwardRef, useEffect, useRef } from "react";
 import { ZoomOut } from "lucide-react";
 import { SlideLayers } from "@/components/plugins/SlideLayers";
 import type { PluginHostState } from "@/lib/plugins/usePluginHost";
@@ -6,6 +6,9 @@ import { LinkOverlay } from "@/components/LinkOverlay";
 import { useSlidePinchZoom } from "@/hooks/useSlidePinchZoom";
 import { Button } from "@/components/ui/button";
 import type { PdfLink } from "@/lib/pdfLinks";
+import { useContainedCanvasRect } from "@/hooks/useContainedCanvasRect";
+import { useElementSize } from "@/hooks/useElementSize";
+import { toAudienceZoom, type AudienceZoom } from "@/lib/audienceZoom";
 
 interface Props {
   /** Link annotations on the current slide. */
@@ -15,19 +18,28 @@ interface Props {
   onLinkGoTo?: (slide: number) => void;
   /** Reports whether a pinch gesture is running or the slide is zoomed in. */
   onZoomActiveChange?: (active: boolean) => void;
+  /** The zoom as the audience should see it (lib/audienceZoom.ts), whenever
+   *  it or the slide's place on the card changes. */
+  onZoomChange?: (zoom: AudienceZoom) => void;
   /** Plugins' layers on the slide (live "slide" surfaces), and which slide. */
   plugins?: PluginHostState;
   slide?: number;
 }
 
 export const CurrentSlideCard = forwardRef<HTMLDivElement, Props>(
-  ({ links = [], onLinkGoTo, onZoomActiveChange, plugins, slide }, ref) => {
+  ({ links = [], onLinkGoTo, onZoomActiveChange, onZoomChange, plugins, slide }, ref) => {
     // Pinch to zoom the composed slide (rendered page, links and plugins'
     // layers move together). Local to this device. Two fingers always pinch
     // and pan, even where a plugin's layer is taking input (a drawing tool):
     // SlideLayers hands those touches on to this.
     const surfaceRef = useRef<HTMLDivElement | null>(null);
     const { zoom, reset: resetZoom } = useSlidePinchZoom(surfaceRef, { onActiveChange: onZoomActiveChange });
+
+    const page = useContainedCanvasRect(ref as React.RefObject<HTMLDivElement | null>, slide);
+    const surface = useElementSize(surfaceRef);
+    useEffect(() => {
+      onZoomChange?.(toAudienceZoom(zoom, surface, page));
+    }, [onZoomChange, zoom, surface, page]);
 
     return (
       <div className="h-full flex flex-col gap-1">

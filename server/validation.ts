@@ -54,6 +54,27 @@ export function isValidSlideNumber(slideNumber: unknown, total: unknown): boolea
   return true;
 }
 
+// The presenter's zoom into the current slide: how far in (1 = the whole
+// page, up to the controller's pinch limit) and the point of the page in the
+// middle of the view, as fractions of it.
+export interface SlideZoom {
+  scale: number;
+  cx: number;
+  cy: number;
+}
+
+const MAX_SLIDE_ZOOM = 4;
+
+const isFraction = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 1;
+
+/** A well-formed SlideZoom built from `raw`, or null. */
+export function parseSlideZoom(raw: unknown): SlideZoom | null {
+  const { scale, cx, cy } = asRecord(raw);
+  if (typeof scale !== "number" || !Number.isFinite(scale) || scale < 1 || scale > MAX_SLIDE_ZOOM) return null;
+  if (!isFraction(cx) || !isFraction(cy)) return null;
+  return { scale, cx, cy };
+}
+
 // --- Plugins ---
 //
 // The server never runs plugin code or looks inside plugin messages: it relays

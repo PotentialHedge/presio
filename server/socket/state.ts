@@ -9,6 +9,7 @@ import {
   MAX_RETAINED_BYTES_PER_PLUGIN,
   type PublishedPlugin,
   type Retain,
+  type SlideZoom,
 } from "../validation.js";
 import { clearAudience, createAudienceState, type AudienceState } from "../audience.js";
 import { HistoryStore } from "../history.js";
@@ -31,6 +32,9 @@ export interface SocketState {
   controllers: Map<string, string>;
   // Blanked state per session (transient, no DB persistence).
   blankedSessions: Set<string>;
+  // The presenter's zoom into the current slide, per session, while zoomed in
+  // (transient, like blanking; see client/src/lib/audienceZoom.ts).
+  zoomedSessions: Map<string, SlideZoom>;
   // The plugins the controller published for viewers to run (where to load
   // each and its hash), per session.
   publishedPlugins: Map<string, Map<string, PublishedPlugin>>;
@@ -48,6 +52,7 @@ export function createSocketState(): SocketState {
   return {
     controllers: new Map(),
     blankedSessions: new Set(),
+    zoomedSessions: new Map(),
     publishedPlugins: new Map(),
     pluginRetained: new Map(),
     pluginSettings: new Map(),
@@ -60,6 +65,7 @@ export function createSocketState(): SocketState {
 export function clearSessionState(state: SocketState, sessionId: string) {
   state.controllers.delete(sessionId);
   state.blankedSessions.delete(sessionId);
+  state.zoomedSessions.delete(sessionId);
   state.publishedPlugins.delete(sessionId);
   state.pluginRetained.delete(sessionId);
   state.pluginSettings.delete(sessionId);

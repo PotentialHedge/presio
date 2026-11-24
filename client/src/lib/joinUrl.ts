@@ -25,6 +25,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getSetting, setSetting } from "@/lib/settings";
 import { viewerOrigin } from "@/lib/origins";
+import { controllerLink } from "@/lib/sessionAuth";
 
 /** How long to wait for a probe. A firewall DROP sends no RST, so an unguarded
  *  fetch hangs until the TCP timeout (~75s) — the difference between an instant
@@ -283,8 +284,9 @@ export function useLanOrigin(): JoinOrigin {
 }
 
 /** Join URLs plus the LAN-address state behind them, for the share surfaces
- *  that render both the links and the field. */
-export function useJoinUrls(id: string) {
+ *  that render both the links and the field. The controller link signs its
+ *  device in with `passphrase` (lib/sessionAuth.ts) when one is given. */
+export function useJoinUrls(id: string, passphrase?: string) {
   const { origin, ...rest } = useLanOrigin();
   return {
     ...rest,
@@ -293,7 +295,7 @@ export function useJoinUrls(id: string) {
     // (lib/origins.ts); control always stays on the app origin. Viewer is the
     // default role, so the audience's link doesn't spell it out.
     viewerUrl: `${viewerOrigin ?? origin}/s/${id}`,
-    controllerUrl: `${origin}/s/${id}?role=controller`,
+    controllerUrl: controllerLink(origin, id, passphrase),
   };
 }
 

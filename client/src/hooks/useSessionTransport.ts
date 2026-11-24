@@ -8,6 +8,7 @@ import type { NavigateFunction, SetURLSearchParams } from "react-router-dom";
 import { socket } from "@/lib/socket";
 import { startClockSync } from "@/lib/clock";
 import { getSessionAuth } from "@/lib/utils";
+import { isAudienceZoom, NO_ZOOM, type AudienceZoom } from "@/lib/audienceZoom";
 
 /** The error a viewer shows once its synced session has been ended. */
 export const SESSION_ENDED = "This presentation has ended";
@@ -18,11 +19,16 @@ export interface SessionTransportOptions {
   local: boolean | null;
   requestedRole: string;
   /** What this window answers a local viewer's state request with (as the controller). */
-  stateRef: React.RefObject<{ currentSlide: number; totalSlides: number; blanked: boolean }>;
+  stateRef: React.RefObject<{ currentSlide: number; totalSlides: number; blanked: boolean; zoom: AudienceZoom }>;
   setCurrentSlide: React.Dispatch<React.SetStateAction<number>>;
   setTotalSlides: (total: number) => void;
   setBlanked: (blanked: boolean) => void;
   setViewerSlide: (slide: number | null) => void;
+  /** The presenter's zoom into the slide, for a viewer to show. */
+  setZoom: (zoom: AudienceZoom) => void;
+  /** A window that asked to be the controller was let in as a viewer: it
+   *  holds no controller token for the session (or a stale one). */
+  onControlDenied: () => void;
   setError: (message: string) => void;
   applyRole: (role: string) => void;
   applyDeckUpdate: (deck: { filename: string; totalSlides: number }) => Promise<void>;
@@ -40,6 +46,8 @@ export function useSessionTransport({
   setTotalSlides,
   setBlanked,
   setViewerSlide,
+  setZoom,
+  onControlDenied,
   setError,
   applyRole,
   applyDeckUpdate,
@@ -57,6 +65,7 @@ export function useSessionTransport({
       const { type, payload } = e.data;
       if (type === "slide_update") setCurrentSlide(payload.slideNumber);
       else if (type === "blank_update") setBlanked(payload.blanked);
+      else if (type === "zoom_update") setZoom(isAudienceZoom(payload) ? payload : NO_ZOOM);
       else if (type === "deck_update") void applyDeckUpdate(payload);
       else if (type === "session_ended") navigate("/", { replace: true });
       else if (type === "rekeyed") {
@@ -76,6 +85,7 @@ export function useSessionTransport({
         setCurrentSlide(payload.currentSlide);
         if (payload.totalSlides) setTotalSlides(payload.totalSlides);
         setBlanked(payload.blanked);
+        setZoom(isAudienceZoom(payload.zoom) ? payload.zoom : NO_ZOOM);
       }
     };
 
@@ -140,10 +150,12 @@ export function useSessionTransport({
       }
     }, RECONNECT_EVERY_MS);
 
-    socket.on("session_state", ({ currentSlide, totalSlides, role: grantedRole }) => {
+    socket.on("session_state", ({ currentSlide, totalSlides, role: grantedRole, zoom }) => {
       setCurrentSlide(currentSlide);
       setTotalSlides(totalSlides);
+      setZoom(isAudienceZoom(zoom) ? zoom : NO_ZOOM);
       if (grantedRole && grantedRole !== requestedRole) {
+        if (requestedRole === "controller" && grantedRole === "viewer") onControlDenied();
         applyRole(grantedRole);
         setSearchParams({ role: grantedRole }, { replace: true });
       } else {
@@ -168,6 +180,10 @@ export function useSessionTransport({
 
     socket.on("blank_update", ({ blanked }: { blanked: boolean }) => {
       setBlanked(blanked);
+    });
+
+    socket.on("zoom_update", (zoom: unknown) => {
+      setZoom(isAudienceZoom(zoom) ? zoom : NO_ZOOM);
     });
 
     // The controller replaced the deck (server broadcast from the replace
@@ -217,13 +233,14 @@ export function useSessionTransport({
       socket.off("total_slides_update");
       socket.off("sync_all");
       socket.off("blank_update");
+      socket.off("zoom_update");
       socket.off("deck_updated");
       socket.off("controller_replaced");
       socket.off("error");
       socket.off("session_ended");
       socket.disconnect();
     };
-  }, [id, local, requestedRole, navigate, setSearchParams, applyRole, applyDeckUpdate, stateRef, setCurrentSlide, setTotalSlides, setBlanked, setViewerSlide, setError]);
+  }, [id, local, requestedRole, navigate, setSearchParams, applyRole, applyDeckUpdate, stateRef, setCurrentSlide, setTotalSlides, setBlanked, setViewerSlide, setZoom, onControlDenied, setError]);
 
   return channelRef;
 }

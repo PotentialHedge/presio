@@ -2,13 +2,13 @@
 
 import type { Socket } from "socket.io";
 import { safeEqual } from "../auth.js";
-import { asRecord, isValidSlideNumber, isValidTotalSlides } from "../validation.js";
+import { asRecord, isValidSlideNumber, isValidTotalSlides, parseSlideZoom } from "../validation.js";
 import { allowJoin, controllerOnly, SESSION_ID_RE } from "./guards.js";
 import type { SocketDeps } from "./state.js";
 import type { PluginPresence } from "./plugins.js";
 
 export function sessionHandlers({ io, supabase, state }: SocketDeps, presence: PluginPresence) {
-  const { controllers, blankedSessions } = state;
+  const { controllers, blankedSessions, zoomedSessions } = state;
 
   // Tail of each session's in-flight current_slide write, so overlapping
   // updates land in emit order (see slide_change).
@@ -80,6 +80,7 @@ export function sessionHandlers({ io, supabase, state }: SocketDeps, presence: P
         currentSlide: data.current_slide,
         totalSlides: data.total_slides,
         role: grantedRole,
+        zoom: zoomedSessions.get(sessionId) ?? null,
       });
       socket.emit("plugins_state", presence.pluginsState(sessionId));
       // The controller starts from who's running which plugin (presio.viewers).
@@ -140,6 +141,18 @@ export function sessionHandlers({ io, supabase, state }: SocketDeps, presence: P
         blankedSessions.add(sessionId);
       }
       io.to(sessionId).emit("blank_update", { blanked: blankedSessions.has(sessionId) });
+    }));
+
+    // The presenter zoomed into the slide (or back out, at scale 1). Sent to
+    // everyone else in the room: the controller already shows it. The client
+    // throttles these to a few per second while pinching, and always sends
+    // where the gesture ends, so nothing here is volatile.
+    socket.on("zoom_change", controllerOnly(controllers, socket, (sessionId, raw: unknown) => {
+      const zoom = parseSlideZoom(raw);
+      if (!zoom) return;
+      if (zoom.scale > 1) zoomedSessions.set(sessionId, zoom);
+      else zoomedSessions.delete(sessionId);
+      socket.to(sessionId).emit("zoom_update", zoom);
     }));
 
     socket.on("time_ping", (clientT1: number, ack?: (data: { serverTime: number; clientT1: number }) => void) => {

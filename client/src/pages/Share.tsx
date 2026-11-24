@@ -12,6 +12,8 @@ import { LoginDialog } from "@/components/LoginDialog";
 import { LanAddressField } from "@/components/LanAddressField";
 import { ShareEmptyState } from "@/components/ShareEmptyState";
 import { useJoinUrls } from "@/lib/joinUrl";
+import { usePassphrase } from "@/hooks/usePassphrase";
+import { ControllerLinkField } from "@/components/ControllerLinkField";
 
 export default function Share() {
   const { id } = useParams<{ id: string }>();
@@ -30,6 +32,12 @@ export default function Share() {
   // codes scanned from other devices resolve when Presio is opened over
   // localhost in a local deployment.
   const {
+    passphrase,
+    busy: passphraseBusy,
+    error: passphraseError,
+    request: requestPassphrase,
+  } = usePassphrase(id!);
+  const {
     address: lanAddress,
     setAddress: setLanAddress,
     status: lanStatus,
@@ -37,7 +45,7 @@ export default function Share() {
     shareable: lanShareable,
     viewerUrl,
     controllerUrl,
-  } = useJoinUrls(id!);
+  } = useJoinUrls(id!, passphrase);
 
   useEffect(() => {
     let cancelled = false;
@@ -129,7 +137,13 @@ export default function Share() {
                   they wait until an address other devices can reach is known. */}
               {lanShareable && (
                 <>
-                  <CopyRow label="Controller link" url={controllerUrl} />
+                  <ControllerLinkField
+                    url={controllerUrl}
+                    ready={!!passphrase}
+                    busy={passphraseBusy}
+                    error={passphraseError}
+                    onCreate={requestPassphrase}
+                  />
                   <CopyRow label="Viewer link" url={viewerUrl} />
                 </>
               )}
