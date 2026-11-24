@@ -21,6 +21,10 @@
   --border: var(--vscode-panel-border, var(--vscode-widget-border, transparent));
   --input: var(--vscode-input-border, var(--vscode-panel-border, transparent));
   --ring: var(--vscode-focusBorder);
+  /* A toggle that's on (ToggleButton): VS Code's own toggles' colours. */
+  --toggle-on-bg: var(--vscode-inputOption-activeBackground, color-mix(in srgb, var(--vscode-focusBorder) 25%, transparent));
+  --toggle-on-border: var(--vscode-inputOption-activeBorder, var(--vscode-focusBorder));
+  --toggle-on-fg: var(--vscode-inputOption-activeForeground, var(--vscode-editor-foreground));
   /* A resize handle's line, on hover and while dragged. */
   --sash: var(--vscode-sash-hoverBorder, var(--vscode-focusBorder));
 }

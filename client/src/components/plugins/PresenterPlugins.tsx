@@ -17,6 +17,7 @@ import { findCommand, type ButtonContribution, type ButtonLocation, type LoadedP
 import { PluginFrame } from "./PluginFrame";
 import { pluginIcon } from "./icons";
 import { runPluginCommand } from "./pluginCommands";
+import { pressPluginButton as press, resolvePluginButtons, usePluginButtonStates } from "./pluginButtons";
 
 // The presenter's side of plugins, drawn by Presio from what each plugin
 // declares: its panels, its hidden background frame, the buttons that run
@@ -63,93 +64,78 @@ export function PluginButtons({
   );
 }
 
-/** Press a plugin's button: run its command (asking for a file first, for
- *  a button with "accept"). */
-function press(host: PluginHost, pluginId: string, button: ButtonContribution) {
-  runPluginCommand(host, pluginId, button.command, { accept: button.accept });
-}
-
 function PluginButtonGroup({ host, plugin, location }: { host: PluginHost; plugin: LoadedPlugin; location: ButtonLocation }) {
-  const { id, manifest } = plugin;
-  const name = manifest.displayName;
-  const states = useSyncExternalStore(host.subscribeButtons, () => host.buttonStates(id));
+  const { id } = plugin;
+  const states = usePluginButtonStates(host, id);
   return (
     <>
-      {manifest.contributes.buttons
-        .filter((b) => b.location === location && !states[b.command]?.hidden)
-        .map((b) => {
-          // A button shows its command's title and icon unless it has its own.
-          const command = findCommand(manifest, b.command);
-          const button = { ...b, label: b.label ?? command?.title ?? b.command, icon: b.icon ?? command?.icon };
-          const state = states[button.command] ?? {};
-          const Icon = pluginIcon(button.icon);
-          const title = `${button.tooltip ?? state.label ?? button.label} (${name})`;
-          const menu = state.menu && (
-            <ButtonMenu
-              host={host}
-              pluginId={id}
-              button={button}
-              entries={state.menu}
-              label={state.label ?? button.label}
-              active={state.active}
-              location={location}
-            />
-          );
-          if (location === "controller.currentSlide") {
-            // A card header's small icon action; the label is its tooltip.
-            const icon = (
-              <button
-                key={button.command}
-                type="button"
-                disabled={state.disabled}
-                aria-pressed={state.active}
-                aria-label={state.label ?? button.label}
-                data-testid={`plugin-button-${id}-${button.command}`}
-                title={title}
-                onClick={() => press(host, id, button)}
-                className={cn(
-                  "inline-flex items-center justify-center h-5 min-w-5 px-0.5 rounded transition-colors disabled:opacity-40",
-                  state.active ? "text-foreground bg-accent" : "text-muted-foreground hover:text-foreground hover:bg-accent"
-                )}
-              >
-                {Icon ? <Icon size={13} /> : <span className="text-[11px]">{state.label ?? button.label}</span>}
-              </button>
-            );
-            return menu ? (
-              <span key={button.command} className="inline-flex items-center">
-                {icon}
-                {menu}
-              </span>
-            ) : (
-              icon
-            );
-          }
-          // Settings page actions are plain buttons; the toolbar's show their state.
-          const inSettings = location === "settings";
-          const main = (
-            <Button
+      {resolvePluginButtons(plugin, location, states).map(({ button, state, Icon, title }) => {
+        const menu = state.menu && (
+          <ButtonMenu
+            host={host}
+            pluginId={id}
+            button={button}
+            entries={state.menu}
+            label={state.label ?? button.label}
+            active={state.active}
+            location={location}
+          />
+        );
+        if (location === "controller.currentSlide") {
+          // A card header's small icon action; the label is its tooltip.
+          const icon = (
+            <button
               key={button.command}
-              variant={inSettings ? "outline" : state.active ? "default" : "ghost"}
-              size="sm"
+              type="button"
               disabled={state.disabled}
-              aria-pressed={inSettings ? undefined : state.active}
+              aria-pressed={state.active}
+              aria-label={state.label ?? button.label}
               data-testid={`plugin-button-${id}-${button.command}`}
-              title={inSettings ? button.tooltip : title}
+              title={title}
               onClick={() => press(host, id, button)}
+              className={cn(
+                "inline-flex items-center justify-center h-5 min-w-5 px-0.5 rounded transition-colors disabled:opacity-40",
+                state.active ? "text-foreground bg-accent" : "text-muted-foreground hover:text-foreground hover:bg-accent"
+              )}
             >
-              {Icon && <Icon size={14} className="mr-1" />}
-              {state.label ?? button.label}
-            </Button>
+              {Icon ? <Icon size={13} /> : <span className="text-[11px]">{state.label ?? button.label}</span>}
+            </button>
           );
           return menu ? (
-            <ButtonGroup key={button.command}>
-              {main}
+            <span key={button.command} className="inline-flex items-center">
+              {icon}
               {menu}
-            </ButtonGroup>
+            </span>
           ) : (
-            main
+            icon
           );
-        })}
+        }
+        // Settings page actions are plain buttons; the toolbar's show their state.
+        const inSettings = location === "settings";
+        const main = (
+          <Button
+            key={button.command}
+            variant={inSettings ? "outline" : state.active ? "default" : "ghost"}
+            size="sm"
+            disabled={state.disabled}
+            aria-pressed={inSettings ? undefined : state.active}
+            data-testid={`plugin-button-${id}-${button.command}`}
+            title={inSettings ? button.tooltip : title}
+            onClick={() => press(host, id, button)}
+          >
+            {Icon && <Icon size={14} className="mr-1" />}
+            {state.label ?? button.label}
+          </Button>
+        );
+        return menu ? (
+          <ButtonGroup key={button.command}>
+            {main}
+            {menu}
+          </ButtonGroup>
+        ) : (
+          main
+        );
+      })}
     </>
   );
 }
