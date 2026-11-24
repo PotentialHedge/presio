@@ -3,6 +3,7 @@ import { useLatestRef } from "@/hooks/useLatestRef";
 import type { FrameLink, Interactive, PluginHost, SlidePage, SlideView } from "@/lib/plugins/host";
 import type { LoadedPlugin, PluginPermission, PluginSurface } from "@/lib/plugins/manifest";
 import { cn } from "@/lib/utils";
+import { frameAttributes, frameTargetOrigin, loadFrame } from "@/lib/plugins/frameSource";
 
 // Media permissions, as the iframe features they unlock.
 const MEDIA_FEATURES: Partial<Record<PluginPermission, string>> = {
@@ -113,14 +114,14 @@ export function PluginFrame({
       frame.contentWindow?.postMessage(
         host.bootMessage(plugin, surface, panel),
         // Same origin as this page: it's the frame page this component loaded.
-        window.location.origin,
+        frameTargetOrigin(),
         [port2]
       );
     };
     frame.addEventListener("load", boot);
     // A rerun of this effect finds the frame already booted, on the port the
     // cleanup just closed. Load it afresh rather than leave it running deaf.
-    if (frame.dataset.booted) frame.src = "/plugin-frame.html";
+    if (frame.dataset.booted) loadFrame(frame);
     frame.dataset.booted = "1";
     return () => {
       frame.removeEventListener("load", boot);
@@ -132,7 +133,7 @@ export function PluginFrame({
   return (
     <iframe
       ref={ref}
-      src="/plugin-frame.html"
+      {...frameAttributes()}
       allow={frameAllow(plugin)}
       title={plugin.manifest.displayName}
       data-testid={`plugin-frame-${plugin.id}-${surface}${panel ? `-${panel}` : ""}`}

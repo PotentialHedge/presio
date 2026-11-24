@@ -1,0 +1,41 @@
+/* The app's styles, with its colours taken from VS Code's theme. */
+@import "../index.css";
+
+:root,
+:root.dark {
+  --background: var(--vscode-editor-background);
+  --foreground: var(--vscode-editor-foreground);
+  --card: var(--vscode-editor-background);
+  --card-foreground: var(--vscode-editor-foreground);
+  --popover: var(--vscode-menu-background, var(--vscode-editor-background));
+  --popover-foreground: var(--vscode-menu-foreground, var(--vscode-editor-foreground));
+  --primary: var(--vscode-button-background);
+  --primary-foreground: var(--vscode-button-foreground);
+  --secondary: var(--vscode-button-secondaryBackground, var(--vscode-editorWidget-background));
+  --secondary-foreground: var(--vscode-button-secondaryForeground, var(--vscode-editor-foreground));
+  --muted: var(--vscode-editorWidget-background);
+  --muted-foreground: var(--vscode-descriptionForeground);
+  --accent: var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground));
+  --accent-foreground: var(--vscode-editor-foreground);
+  --destructive: var(--vscode-errorForeground);
+  --border: var(--vscode-panel-border, var(--vscode-widget-border, transparent));
+  --input: var(--vscode-input-border, var(--vscode-panel-border, transparent));
+  --ring: var(--vscode-focusBorder);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  /* VS Code's default webview styles pad the body. */
+  padding: 0;
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--vscode-font-family, ui-sans-serif, system-ui, sans-serif);
+  font-size: var(--vscode-font-size, 13px);
+  overflow: hidden;
+}

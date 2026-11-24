@@ -22,5 +22,5 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["vite.config.ts", "plugins/build.ts", "plugins/kit"]
+  "include": ["vite.config.ts", "vite.vscode.config.ts", "plugins/build.ts", "plugins/kit"]
 }

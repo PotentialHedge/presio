@@ -9,6 +9,7 @@ Coding agents working in this repository.
 - `client/` — Vite + React SPA
 - `server/` — Express + Socket.IO + Supabase
 - `schema/` — JSON schemas for sidecar formats
+- `vscode/` — VS Code extension previewing a deck with Presio's renderer (webview: `client/src/embed/`, see `vscode/README.md`)
 
 ## Agent-facing product APIs (runtime)
 

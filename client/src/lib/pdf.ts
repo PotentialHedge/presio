@@ -24,8 +24,18 @@ function loadPdfjs() {
 let sharedWorker: PDFWorker | null = null;
 async function loadWorker(): Promise<PDFWorker> {
   const lib = await loadPdfjs();
-  if (!sharedWorker || sharedWorker.destroyed) sharedWorker = new lib.PDFWorker();
+  if (!sharedWorker || sharedWorker.destroyed) {
+    sharedWorker = workerFactory ? lib.PDFWorker.create({ port: workerFactory() }) : new lib.PDFWorker();
+  }
   return sharedWorker;
+}
+
+/** How to start the worker, where a URL won't do: a page that can't run a
+ *  worker from where its scripts are served (the VS Code preview, whose
+ *  resources are on another origin) starts an inlined one instead. */
+let workerFactory: (() => Worker) | null = null;
+export function setPdfWorkerFactory(factory: () => Worker): void {
+  workerFactory = factory;
 }
 
 /** Start loading pdf.js and its worker ahead of the first openPdf(). */
