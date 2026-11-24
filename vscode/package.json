@@ -27,7 +27,9 @@
     "latex"
   ],
   "main": "./dist/extension.js",
-  "activationEvents": [],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "contributes": {
     "customEditors": [
       {
@@ -70,6 +72,16 @@
           "group": "navigation"
         }
       ]
+    },
+    "configuration": {
+      "title": "Presio Preview",
+      "properties": {
+        "presio.preview.openDecks": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Open PDFs that carry Presio's speaker notes or media (its `notes-slide-*.json` and `media-slide-*.json` attachments) in Presio Preview, even when another editor is the default for PDFs. A deck you reopen with another editor stays there for the session."
+        }
+      }
     }
   },
   "scripts": {
