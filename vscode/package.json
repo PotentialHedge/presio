@@ -3,6 +3,7 @@
   "displayName": "Presio Preview",
   "description": "Preview Presio PDF decks in VS Code: slides with their videos, GIFs, HTML animations, drawings and speaker notes, reloaded whenever the PDF is rebuilt.",
   "version": "0.1.0",
+  "preview": true,
   "publisher": "presio",
   "license": "MIT",
   "private": true,
