@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { Settings, TriangleAlert, Check, Option, Plus, Share2, ExternalLink, User, Puzzle, KeyRound, Keyboard, FileJson, Search, Compass, SunMoon, Sun, Moon, Monitor } from "lucide-react";
+import { Settings, TriangleAlert, Check, Option, Plus, Share2, ExternalLink, User, Puzzle, KeyRound, Keyboard, FileJson, Search, Compass, SunMoon, Sun, Moon, Monitor, Presentation } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
+import { Switch } from "@/components/ui/switch";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { DialogOverlay } from "@/components/ui/dialog-overlay";
 import { CopyField } from "@/components/CopyField";
@@ -56,6 +57,7 @@ import {
 } from "@/lib/controllerLayout";
 import { lsGetString, lsSetString, viewerOpenedKey } from "@/lib/storage";
 import type { Deck } from "@/lib/deck";
+import type { AudienceZoom } from "@/lib/audienceZoom";
 import type { PluginHostState } from "@/lib/plugins/usePluginHost";
 import { PluginBackgrounds, PluginButtons, PluginPanel, PluginStatusItems } from "@/components/plugins/PresenterPlugins";
 import { usePluginPaletteItems } from "@/components/plugins/pluginCommands";
@@ -87,6 +89,8 @@ interface ControllerViewProps {
   currentCanvasEl: HTMLDivElement | null;
   blanked: boolean;
   onBlankToggle: () => void;
+  /** The current slide's zoom, as the audience should see it. */
+  onZoomChange?: (zoom: AudienceZoom) => void;
   /** The deck on screen, shown in the header's deck control. */
   filename: string;
   /** Live-reload preference, or null when this deck can't be watched. */
@@ -118,6 +122,7 @@ export function ControllerView({
   currentCanvasEl,
   blanked,
   onBlankToggle,
+  onZoomChange,
   filename,
   deckWatchMode,
   deckWatchStatus,
@@ -147,6 +152,8 @@ export function ControllerView({
   // where the presenter left it.
   const [settingsCategory, setSettingsCategory] = useState<string | undefined>(undefined);
   const [keymap, setKeymap] = useSetting("keybindings");
+  const [shareZoom, setShareZoom] = useSetting("present.shareZoom");
+  const [keepAwake, setKeepAwake] = useSetting("present.keepAwake");
   const [viewerBlocked, setViewerBlocked] = useState(false);
   const [viewerPromptDismissed, setViewerPromptDismissed] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
@@ -302,6 +309,12 @@ export function ControllerView({
   // presenter-entered LAN address instead (lib/joinUrl.ts), so phones can scan.
   const viewerUrl = `${window.location.origin}/s/${id}?role=viewer`;
   const {
+    passphrase,
+    busy: passphraseBusy,
+    error: passphraseError,
+    request: requestPassphrase,
+  } = usePassphrase(id);
+  const {
     address: lanAddress,
     setAddress: setLanAddress,
     status: lanStatus,
@@ -309,13 +322,7 @@ export function ControllerView({
     shareable: lanShareable,
     controllerUrl,
     viewerUrl: shareViewerUrl,
-  } = useJoinUrls(id);
-  const {
-    passphrase,
-    busy: passphraseBusy,
-    error: passphraseError,
-    request: requestPassphrase,
-  } = usePassphrase(id);
+  } = useJoinUrls(id, passphrase);
   // Only a shared deck has a co-presenter to hand control to (and a row to
   // hold the passphrase); a local one is same-device by definition.
   const canSharePassphrase = !local;
@@ -374,6 +381,7 @@ export function ControllerView({
           links={slideLinks}
           onLinkGoTo={onGoTo}
           onZoomActiveChange={setSlideZoomActive}
+          onZoomChange={onZoomChange}
           plugins={plugins}
           slide={currentSlide}
         />
@@ -612,6 +620,10 @@ export function ControllerView({
           id={id}
           viewerUrl={shareViewerUrl}
           controllerUrl={controllerUrl}
+          controllerLinkReady={!!passphrase}
+          controllerLinkBusy={passphraseBusy}
+          controllerLinkError={passphraseError}
+          onCreateControllerLink={requestPassphrase}
           lanAddress={lanAddress}
           onLanAddressChange={setLanAddress}
           lanStatus={lanStatus}
@@ -740,12 +752,34 @@ export function ControllerView({
                 </div>
               ),
             },
+            {
+              id: "presenting",
+              label: "Presenting",
+              icon: Presentation,
+              description: "What the audience sees of your controller, and keeping this screen on.",
+              content: (
+                <div className="space-y-2">
+                  {([
+                    ["Show my zoom to the audience", "Pinching into the current slide zooms the audience's slide too.", shareZoom, setShareZoom, "setting-share-zoom"],
+                    ["Keep the screen awake", "No dimming or sleep while a presentation is open, here and in the viewer window.", keepAwake, setKeepAwake, "setting-keep-awake"],
+                  ] as const).map(([label, hint, checked, set, testId]) => (
+                    <div key={testId} className="flex items-center justify-between gap-3 rounded-md border px-3 py-2.5">
+                      <div className="min-w-0 text-sm">
+                        <div className="font-medium">{label}</div>
+                        <div className="text-xs text-muted-foreground">{hint}</div>
+                      </div>
+                      <Switch checked={checked} label={label} testId={testId} onChange={set} />
+                    </div>
+                  ))}
+                </div>
+              ),
+            },
             ...(canSharePassphrase
               ? [{
                 id: "control",
                 label: "Shared control",
                 icon: KeyRound,
-                description: "Share this passphrase to grant controller access.",
+                description: "Share this passphrase to grant controller access. The controller link in Share includes it.",
                 content: (
                   <>
                     {passphrase ? (

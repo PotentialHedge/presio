@@ -15,7 +15,10 @@ import { DeckLoadTimer } from "@/lib/deckLoadMetrics";
 import { endSession } from "@/lib/utils";
 import { idbGet, idbPut, idbDelete } from "@/lib/localStore";
 import { isLocalDeckId } from "@/lib/localId";
-import { controllerHeaders } from "@/lib/sessionAuth";
+import { clearLinkPassphrase, controllerHeaders, readLinkPassphrase, signInWithPassphrase } from "@/lib/sessionAuth";
+import { NO_ZOOM, sameAudienceZoom, type AudienceZoom } from "@/lib/audienceZoom";
+import { useSetting } from "@/lib/settings";
+import { useWakeLock } from "@/hooks/useWakeLock";
 import { readPdfFile } from "@/lib/deckImport";
 import { watchRemoteDeck } from "@/lib/remoteDeckPoller";
 import {
@@ -39,6 +42,9 @@ const SESSION_NOT_FOUND = "Session not found";
 const DOWNLOAD_FAILED = "Couldn't download the presentation";
 /** A local deck opened somewhere its PDF isn't (another browser or device). */
 const LOCAL_ELSEWHERE = "This presentation is only available in the same browser on the device it was created on";
+
+/** How often a pinch-zoom reaches the audience while it's running. */
+const ZOOM_SEND_MS = 50;
 
 export default function Presentation() {
   const { id } = useParams<{ id: string }>();
@@ -81,6 +87,31 @@ export default function Presentation() {
     setError("");
   }
   const [blanked, setBlanked] = useState(false);
+  // The presenter's zoom into the current slide: the controller's own, or the
+  // one a viewer mirrors (lib/audienceZoom.ts).
+  const [zoom, setZoom] = useState<AudienceZoom>(NO_ZOOM);
+
+  // Opened from a controller link carrying the passphrase (lib/sessionAuth.ts):
+  // sign in with it before joining, so the session lets this window in as the
+  // controller rather than demoting it to a viewer.
+  const [linkPassphrase, setLinkPassphrase] = useState(() => (requestedRole === "controller" ? readLinkPassphrase() : null));
+  // A controller link that didn't sign this window in: a viewer now, asked
+  // for the passphrase (with the reason) instead of silently watching.
+  const [controlDenied, setControlDenied] = useState<{ reason: string } | null>(null);
+  useEffect(() => {
+    if (!linkPassphrase) return;
+    clearLinkPassphrase();
+    let cancelled = false;
+    signInWithPassphrase(id!, linkPassphrase)
+      .catch((e: unknown) => {
+        if (!cancelled) setControlDenied({ reason: e instanceof Error ? e.message : "Authentication failed" });
+      })
+      .finally(() => {
+        if (!cancelled) setLinkPassphrase(null);
+      });
+    return () => { cancelled = true; };
+  }, [linkPassphrase, id]);
+  const onControlDenied = useCallback(() => setControlDenied((prev) => prev ?? { reason: "" }), []);
 
   // Everything extracted from the loaded PDF, re-derived whenever the
   // document is swapped (e.g. after a notes edit). The deck exists as soon as
@@ -126,6 +157,7 @@ export default function Presentation() {
   // Latest broadcastable state, for replying to a local window's state_request
   // without re-subscribing the channel on every slide change.
   const stateRef = useLatestRef({
+    zoom,
     currentSlide,
     totalSlides,
     blanked,
@@ -460,13 +492,16 @@ export default function Presentation() {
 
   const channelRef = useSessionTransport({
     id,
-    local,
+    // Joining waits for a controller link's sign-in.
+    local: linkPassphrase ? null : local,
     requestedRole,
     stateRef,
     setCurrentSlide,
     setTotalSlides,
     setBlanked,
     setViewerSlide,
+    setZoom,
+    onControlDenied,
     setError,
     applyRole,
     applyDeckUpdate,
@@ -502,19 +537,23 @@ export default function Presentation() {
   // re-render, or the slide stays an upscaled canvas from the old size.
   const view = useRenderTargetSize(currentCanvasEl, !!deck);
 
+  // A viewer zoomed in by the presenter renders the page sharper, in two
+  // steps so a pinch doesn't re-render it on every frame.
+  const renderScale = isViewer && !outOfSync && zoom.scale >= 1.5 ? 2 : 1;
+
   useEffect(() => {
     if (!pdf || !currentCanvasEl || !view.width) return;
     const container = currentCanvasEl;
     // A rapid slide change could otherwise leave a stale page on screen —
     // with plugins' layers already showing the new slide over it.
-    return renderPageInto(container, pdf, displaySlide, { targetWidth: view.width, targetHeight: view.height }, {
+    return renderPageInto(container, pdf, displaySlide, { targetWidth: view.width * renderScale, targetHeight: view.height * renderScale }, {
       onPainted: () => {
         if (loadTimerRef.current?.pdf === pdf) loadTimerRef.current.timer.mark("paint");
       },
     });
     // The container comes and goes with the view (and card) that owns it:
     // render into whichever one is mounted now.
-  }, [pdf, displaySlide, currentCanvasEl, view.width, view.height]);
+  }, [pdf, displaySlide, currentCanvasEl, view.width, view.height, renderScale]);
 
   // Mirror a local state change outward: always to other same-browser windows
   // (BroadcastChannel) and, for synced sessions, to the server (socket). The
@@ -530,6 +569,51 @@ export default function Presentation() {
     },
     [local, channelRef]
   );
+
+  // The controller's zoom into the slide, shown to the audience unless the
+  // presenter turned that off. Sent at most every ZOOM_SEND_MS while a pinch
+  // runs, and always where it ends.
+  const [shareZoom] = useSetting("present.shareZoom");
+  const zoomSend = useRef<{ own: AudienceZoom; sent: AudienceZoom; last: number; timer?: ReturnType<typeof setTimeout> }>({
+    own: NO_ZOOM,
+    sent: NO_ZOOM,
+    last: 0,
+  });
+  const flushZoom = useCallback(() => {
+    const st = zoomSend.current;
+    st.timer = undefined;
+    const out = shareZoom ? st.own : NO_ZOOM;
+    if (sameAudienceZoom(out, st.sent)) return;
+    st.sent = out;
+    st.last = performance.now();
+    setZoom(out);
+    broadcast({ type: "zoom_update", payload: out }, { event: "zoom_change", payload: out });
+  }, [broadcast, shareZoom]);
+  const onZoomChange = useCallback(
+    (next: AudienceZoom) => {
+      const st = zoomSend.current;
+      st.own = next;
+      if (st.timer) return;
+      const wait = ZOOM_SEND_MS - (performance.now() - st.last);
+      if (wait <= 0) flushZoom();
+      else st.timer = setTimeout(flushZoom, wait);
+    },
+    [flushZoom]
+  );
+  // The session's zoom came from elsewhere — what the server held when this
+  // controller (re)joined, from before a reload or a blip — or the setting
+  // changed: put the audience back on this controller's.
+  useEffect(() => {
+    if (role !== "controller") return;
+    const st = zoomSend.current;
+    if (zoom !== st.sent) st.sent = zoom;
+    if (!st.timer) flushZoom();
+  }, [role, zoom, flushZoom]);
+  useEffect(() => () => clearTimeout(zoomSend.current.timer), []);
+
+  // No dimming or sleeping while a deck is up, on either end (issue #172).
+  const [keepAwake] = useSetting("present.keepAwake");
+  useWakeLock(keepAwake && !!deck);
 
   // Opening a deck isn't presenting it. A few slide changes is the signal
   // that a talk actually happened, counted once per page.
@@ -874,6 +958,8 @@ export default function Presentation() {
         outOfSync={outOfSync}
         onViewerGoTo={viewerGoTo}
         onResync={resync}
+        zoom={outOfSync ? NO_ZOOM : zoom}
+        controlDenied={controlDenied}
         plugins={plugins}
       />
     );
@@ -921,6 +1007,7 @@ export default function Presentation() {
           if (local) setBlanked(next);
           broadcast({ type: "blank_update", payload: { blanked: next } }, { event: "blank_toggle" });
         }}
+        onZoomChange={onZoomChange}
         plugins={plugins}
       />
     </>

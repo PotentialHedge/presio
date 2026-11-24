@@ -38,6 +38,8 @@ export interface CoreSettings {
   "share.lanAddress": string;
   "home.minimal": boolean;
   "layout.forceDesktop": boolean;
+  "present.keepAwake": boolean;
+  "present.shareZoom": boolean;
   /** By source without its version (shared/plugin/sources.ts): whether it's
    *  on, where it loads from, the id it has and the version it's on (a tag,
    *  a branch or a commit). Built-ins appear only once toggled. */
@@ -117,6 +119,16 @@ export const CORE_SETTINGS: { [K in CoreSettingKey]: CoreSpec<CoreSettings[K]> }
     type: "boolean",
     default: false,
     description: "Use the desktop layout on phones and tablets too (also set by ?desktop=1).",
+  },
+  "present.keepAwake": {
+    type: "boolean",
+    default: true,
+    description: "Keep the screen from dimming or sleeping while a presentation is open.",
+  },
+  "present.shareZoom": {
+    type: "boolean",
+    default: true,
+    description: "Zooming into the current slide on the controller zooms the audience's slide too.",
   },
   plugins: {
     type: "object",

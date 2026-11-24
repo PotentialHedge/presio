@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { DialogOverlay } from "@/components/ui/dialog-overlay";
 import { SessionQRCode } from "@/components/SessionQRCode";
 import { CopyField } from "@/components/CopyField";
+import { ControllerLinkField } from "@/components/ControllerLinkField";
 import { LanAddressField } from "@/components/LanAddressField";
 import type { LanStatus } from "@/lib/joinUrl";
 import { ShareEmptyState } from "@/components/ShareEmptyState";
@@ -14,6 +15,10 @@ export function ShareDialog({
   id,
   viewerUrl,
   controllerUrl,
+  controllerLinkReady,
+  controllerLinkBusy,
+  controllerLinkError,
+  onCreateControllerLink,
   lanAddress,
   onLanAddressChange,
   lanStatus,
@@ -32,6 +37,11 @@ export function ShareDialog({
   id: string;
   viewerUrl: string;
   controllerUrl: string;
+  /** Whether controllerUrl carries the passphrase (components/ControllerLinkField). */
+  controllerLinkReady: boolean;
+  controllerLinkBusy: boolean;
+  controllerLinkError: string;
+  onCreateControllerLink: () => void;
   lanAddress: string;
   onLanAddressChange: (address: string) => void;
   lanStatus: LanStatus;
@@ -74,7 +84,13 @@ export function ShareDialog({
           {lanShareable && (
             <div className="space-y-2">
               <CopyField label="Viewer link" value={viewerUrl} />
-              <CopyField label="Controller link" value={controllerUrl} />
+              <ControllerLinkField
+                url={controllerUrl}
+                ready={controllerLinkReady}
+                busy={controllerLinkBusy}
+                error={controllerLinkError}
+                onCreate={onCreateControllerLink}
+              />
             </div>
           )}
           <LanAddressField
