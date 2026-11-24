@@ -9,6 +9,7 @@
 import * as path from "path";
 import * as vscode from "vscode";
 import { preferPresioForDecks } from "./preferDecks";
+import { openInPresio } from "./openInPresio";
 import type { FromWebview, PreviewIssue, SaveResult, ToWebview } from "../../client/src/embed/protocol";
 
 const VIEW_TYPE = "presio.preview";
@@ -30,6 +31,7 @@ export function activate(context: vscode.ExtensionContext) {
     }),
     vscode.commands.registerCommand("presio.openPreview", (uri?: vscode.Uri) => openPreview(uri, false)),
     vscode.commands.registerCommand("presio.openPreviewToSide", (uri?: vscode.Uri) => openPreview(uri, true)),
+    vscode.commands.registerCommand("presio.openInPresio", (uri?: vscode.Uri) => provider.openInPresio(uri)),
     preferPresioForDecks(VIEW_TYPE)
   );
 }
@@ -78,6 +80,8 @@ function sameBytes(a: Uint8Array | null, b: Uint8Array): boolean {
 class PreviewProvider implements vscode.CustomReadonlyEditorProvider {
   /** Open previews per file, for the diagnostics they share. */
   private open = new Map<string, number>();
+  /** Open previews' panels, to ask the one in front which slide it's on. */
+  private panels = new Map<vscode.WebviewPanel, vscode.Uri>();
   /** Files whose notes edits we've already warned would be lost on a rebuild. */
   private warned = new Set<string>();
 
@@ -99,6 +103,7 @@ class PreviewProvider implements vscode.CustomReadonlyEditorProvider {
     webview.options = { enableScripts: true, localResourceRoots: [root] };
     webview.html = this.html(webview, root);
     this.open.set(key, (this.open.get(key) ?? 0) + 1);
+    this.panels.set(panel, uri);
 
     const subscriptions: vscode.Disposable[] = [];
     const post = (message: ToWebview | SaveResult) => void webview.postMessage(message);
@@ -156,6 +161,9 @@ class PreviewProvider implements vscode.CustomReadonlyEditorProvider {
               post({ type: "saved", id: message.id, error: e instanceof Error ? e.message : String(e) });
             }
             break;
+          case "openInPresio":
+            await openInPresio(this.context, uri, message.slide, this.log);
+            break;
           case "report":
             retries = 0;
             this.diagnostics.set(uri, message.issues.map((issue) => toDiagnostic(issue)));
@@ -166,6 +174,7 @@ class PreviewProvider implements vscode.CustomReadonlyEditorProvider {
 
     panel.onDidDispose(() => {
       clearTimeout(timer);
+      this.panels.delete(panel);
       subscriptions.forEach((d) => d.dispose());
       const left = (this.open.get(key) ?? 1) - 1;
       if (left > 0) this.open.set(key, left);
@@ -174,6 +183,27 @@ class PreviewProvider implements vscode.CustomReadonlyEditorProvider {
         this.diagnostics.delete(uri);
       }
     });
+  }
+
+  /**
+   * The "Open in Presio" command: for the preview in front, at its slide
+   * (the webview answers with the slide it's on); for a PDF picked in the
+   * Explorer, or the PDF of the active Typst/LaTeX file, at the start.
+   */
+  async openInPresio(uri?: vscode.Uri) {
+    const front = [...this.panels].find(([panel, file]) => panel.active && (!uri || file.toString() === uri.toString()));
+    if (front) {
+      void front[0].webview.postMessage({ type: "openInPresio" } satisfies ToWebview);
+      return;
+    }
+    const target = uri ?? activeUri();
+    if (!target) {
+      void vscode.window.showInformationMessage("Open a PDF deck (or its preview) to open it in Presio.");
+      return;
+    }
+    const ext = path.extname(target.path).toLowerCase();
+    const pdf = ext === ".pdf" ? target : target.with({ path: target.path.slice(0, -ext.length) + ".pdf" });
+    await openInPresio(this.context, pdf, 1, this.log);
   }
 
   /** Notes edited here live in the PDF; a deck built from source loses them

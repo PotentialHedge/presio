@@ -20,6 +20,11 @@ you were on.
   `\section`s). Plugin shortcuts work too (`k` play/pause media, `r` restart, `p` pen…).
 - **Speaker notes:** click them to edit. Edits are saved into the PDF. If the PDF is built from a source
   file, the next build replaces them, so copy them into the source to keep them.
+- **Open in Presio:** the button in the preview's footer (or its editor title, or *Presio: Open in
+  Presio* on a PDF in the Explorer) opens the deck in Presio in your browser, on the slide you're on, ready
+  to present. The PDF is uploaded to Presio (`presio.server`, presio.xyz by default) only long enough for the
+  browser to take it in. Opening the same file again after a rebuild replaces the deck of the presentation
+  it opened before, so its code, notes and drawings carry over.
 - **Problems:** the deck's sidecars (notes, media placements) are checked as in Presio's checker, and any
   problems are listed in the Problems panel against the PDF.
 - **Log:** *Output → Presio Preview* shows errors from the preview.

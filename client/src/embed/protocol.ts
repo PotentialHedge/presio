@@ -23,7 +23,9 @@ export type ToWebview =
       id: string;
     }
   /** Go to a slide (1-based). */
-  | { type: "goTo"; slide: number };
+  | { type: "goTo"; slide: number }
+  /** The "Open in Presio" command ran: answer with an openInPresio. */
+  | { type: "openInPresio" };
 
 /** Webview → extension. */
 export type FromWebview =
@@ -31,6 +33,9 @@ export type FromWebview =
   | { type: "ready" }
   /** A plugin saved an edited deck (presio.deck.save): write it to the file. */
   | { type: "save"; id: number; bytes: Uint8Array }
+  /** Open this deck in Presio, at `slide` (the footer's button, or the
+   *  answer to the command's request). */
+  | { type: "openInPresio"; slide: number }
   /** The sidecar check of the deck now showing. */
   | { type: "report"; issues: PreviewIssue[] }
   /** The bytes didn't open as a PDF (a build still writing it, say). */
