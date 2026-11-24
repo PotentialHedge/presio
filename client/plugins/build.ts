@@ -33,7 +33,7 @@ function entry(name: string): string {
 
 /** One plugin's files, by name relative to its folder: index.html, the
  *  manifest, and the scripts and styles it loads. */
-async function bundle(name: string, dev: boolean): Promise<Map<string, string | Uint8Array>> {
+async function bundle(name: string, dev: boolean, standalone = false): Promise<Map<string, string | Uint8Array>> {
   const result = await build({
     configFile: false,
     envDir: false,
@@ -48,9 +48,13 @@ async function bundle(name: string, dev: boolean): Promise<Map<string, string | 
       write: false,
       minify: !dev,
       modulePreload: false,
+      // Standalone: one script and one stylesheet, everything inlined, so
+      // index.html needs nothing fetched (see standaloneBuiltinPlugins).
+      ...(standalone ? { cssCodeSplit: false, assetsInlineLimit: () => true } : {}),
       rollupOptions: {
         input: entry(name),
         output: {
+          ...(standalone ? { codeSplitting: false } : {}),
           format: "es",
           entryFileNames: "main-[hash].js",
           chunkFileNames: "[name]-[hash].js",
@@ -75,6 +79,11 @@ async function bundle(name: string, dev: boolean): Promise<Map<string, string | 
       files.set(out.fileName, out.source)
     }
   }
+  if (standalone) {
+    files.set("index.html", standaloneHtml(files, main))
+    files.set("presio-plugin.json", fs.readFileSync(path.join(ROOT, name, "presio-plugin.json"), "utf8"))
+    return files
+  }
   files.set(
     "index.html",
     `<!doctype html>
@@ -92,6 +101,49 @@ ${styles.map((href) => `<link rel="stylesheet" href="${href}">`).join("\n")}
   )
   files.set("presio-plugin.json", fs.readFileSync(path.join(ROOT, name, "presio-plugin.json"), "utf8"))
   return files
+}
+
+/** A standalone build's index.html: its stylesheet and script inline. The
+ *  script can't contain what would end its <script> element early. */
+function standaloneHtml(files: Map<string, string | Uint8Array>, main: string): string {
+  const text = (v: string | Uint8Array) => (typeof v === "string" ? v : new TextDecoder().decode(v))
+  const css = [...files].filter(([f]) => f.endsWith(".css")).map(([, v]) => text(v)).join("\n")
+  const code = text(files.get(main) ?? "").replace(/<\/(script)/gi, "<\\/$1").replace(/<!--/g, "<\\!--")
+  return `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>${css.replace(/<\/(style)/gi, "<\\/$1")}</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="module">${code}</script>
+</body>
+</html>
+`
+}
+
+/**
+ * The built-in plugins as one virtual module, `virtual:presio-builtin-plugins`:
+ * each one's name, manifest and self-contained HTML. For embedders that run
+ * plugins without serving them (the VS Code preview).
+ */
+export function standaloneBuiltinPlugins(): Plugin {
+  const ID = "virtual:presio-builtin-plugins"
+  return {
+    name: "presio-standalone-builtin-plugins",
+    resolveId: (id) => (id === ID ? "\0" + ID : undefined),
+    async load(id) {
+      if (id !== "\0" + ID) return
+      const list = []
+      for (const name of pluginNames()) {
+        this.addWatchFile(path.join(ROOT, name))
+        const files = await bundle(name, false, true)
+        list.push({ name, manifest: JSON.parse(files.get("presio-plugin.json") as string), html: files.get("index.html") })
+      }
+      return `export default ${JSON.stringify(list)};`
+    },
+  }
 }
 
 const TYPES: Record<string, string> = {

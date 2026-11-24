@@ -1,0 +1,91 @@
+{
+  "name": "presio-preview",
+  "displayName": "Presio Preview",
+  "description": "Preview Presio PDF decks in VS Code: slides with their videos, GIFs, HTML animations, drawings and speaker notes, reloaded whenever the PDF is rebuilt.",
+  "version": "0.1.0",
+  "publisher": "presio",
+  "license": "MIT",
+  "private": true,
+  "icon": "media/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PotentialHedge/presio.git",
+    "directory": "vscode"
+  },
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Visualization",
+    "Other"
+  ],
+  "keywords": [
+    "pdf",
+    "slides",
+    "presentation",
+    "typst",
+    "latex"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "presio.preview",
+        "displayName": "Presio Preview",
+        "selector": [
+          {
+            "filenamePattern": "*.pdf"
+          }
+        ],
+        "priority": "option"
+      }
+    ],
+    "commands": [
+      {
+        "command": "presio.openPreview",
+        "title": "Open Presio Preview",
+        "category": "Presio",
+        "icon": "$(preview)"
+      },
+      {
+        "command": "presio.openPreviewToSide",
+        "title": "Open Presio Preview to the Side",
+        "category": "Presio",
+        "icon": "$(open-preview)"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "presio.openPreview",
+          "when": "resourceExtname == .pdf",
+          "group": "navigation"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "presio.openPreviewToSide",
+          "when": "resourceExtname == .typ || resourceExtname == .tex",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "npm run build:webview && npm run build:extension",
+    "build:webview": "npm --prefix ../client run build:vscode",
+    "build:extension": "esbuild src/extension.ts --bundle --platform=node --format=cjs --target=node20 --external:vscode --outfile=dist/extension.js",
+    "watch:extension": "npm run build:extension -- --watch",
+    "typecheck": "tsc --noEmit",
+    "vscode:prepublish": "npm run build",
+    "package": "cp ../LICENSE LICENSE && vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/vscode": "^1.95.0",
+    "@vscode/vsce": "^3.2.1",
+    "esbuild": "^0.25.0",
+    "typescript": "~5.9.3"
+  }
+}

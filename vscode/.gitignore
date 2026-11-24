@@ -1,0 +1,4 @@
+dist/
+*.vsix
+# Copied in by `npm run package`.
+LICENSE
