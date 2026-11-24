@@ -36,9 +36,7 @@ export type FromWebview =
   /** The bytes didn't open as a PDF (a build still writing it, say). */
   | { type: "loadError"; message: string }
   /** Something went wrong in the webview, for the extension's log. */
-  | { type: "log"; level: "error" | "warn"; message: string }
-  /** The slide now showing, for the status bar. */
-  | { type: "slide"; current: number; total: number };
+  | { type: "log"; level: "error" | "warn"; message: string };
 
 /** The extension's answer to a "save". */
 export type SaveResult = { type: "saved"; id: number; error?: string };

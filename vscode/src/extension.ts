@@ -17,13 +17,11 @@ const SOURCE_EXTENSIONS = [".typ", ".tex"];
 
 export function activate(context: vscode.ExtensionContext) {
   const diagnostics = vscode.languages.createDiagnosticCollection("presio");
-  const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   const log = vscode.window.createOutputChannel("Presio Preview", { log: true });
-  const provider = new PreviewProvider(context, diagnostics, status, log);
+  const provider = new PreviewProvider(context, diagnostics, log);
   context.subscriptions.push(
     log,
     diagnostics,
-    status,
     vscode.window.registerCustomEditorProvider(VIEW_TYPE, provider, {
       // Plugins keep playing state (a video's position, the notes being
       // edited) that a reload would lose.
@@ -86,7 +84,6 @@ class PreviewProvider implements vscode.CustomReadonlyEditorProvider {
   constructor(
     private context: vscode.ExtensionContext,
     private diagnostics: vscode.DiagnosticCollection,
-    private status: vscode.StatusBarItem,
     private log: vscode.LogOutputChannel
   ) {}
 
@@ -109,7 +106,6 @@ class PreviewProvider implements vscode.CustomReadonlyEditorProvider {
     // --- The deck: sent on ready, and again when the file changes ---
     let sent: Uint8Array | null = null;
     let retries = 0;
-    let lastSlide: { current: number; total: number } | null = null;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const send = async (force = false) => {
       let bytes: Uint8Array;
@@ -164,25 +160,13 @@ class PreviewProvider implements vscode.CustomReadonlyEditorProvider {
             retries = 0;
             this.diagnostics.set(uri, message.issues.map((issue) => toDiagnostic(issue)));
             break;
-          case "slide":
-            if (panel.active) this.showStatus(message.current, message.total);
-            lastSlide = message;
-            break;
         }
-      })
-    );
-
-    subscriptions.push(
-      panel.onDidChangeViewState(() => {
-        if (panel.active && lastSlide) this.showStatus(lastSlide.current, lastSlide.total);
-        else if (!panel.active) this.status.hide();
       })
     );
 
     panel.onDidDispose(() => {
       clearTimeout(timer);
       subscriptions.forEach((d) => d.dispose());
-      if (panel.active) this.status.hide();
       const left = (this.open.get(key) ?? 1) - 1;
       if (left > 0) this.open.set(key, left);
       else {
@@ -190,12 +174,6 @@ class PreviewProvider implements vscode.CustomReadonlyEditorProvider {
         this.diagnostics.delete(uri);
       }
     });
-  }
-
-  private showStatus(current: number, total: number) {
-    this.status.text = `$(preview) Slide ${current} / ${total}`;
-    this.status.tooltip = "Presio Preview";
-    this.status.show();
   }
 
   /** Notes edited here live in the PDF; a deck built from source loses them
