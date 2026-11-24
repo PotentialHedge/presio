@@ -13,7 +13,7 @@ import { DEFAULT_KEYMAP, isEditableTarget, matchesBinding } from "@/lib/keymap";
 import { nextSectionStart, prevSectionStart } from "@/lib/sections";
 import { CurrentSlideCard } from "@/components/controller/CurrentSlideCard";
 import { ThumbnailsCard } from "@/components/controller/ThumbnailsCard";
-import { PluginBackgrounds, PluginButtons, PluginPanel } from "@/components/plugins/PresenterPlugins";
+import { PluginBackgrounds, PluginPanel } from "@/components/plugins/PresenterPlugins";
 import { Button } from "@/components/ui/button";
 import { useElementRef } from "@/hooks/useElementRef";
 import { useRenderTargetSize } from "@/hooks/useRenderTargetSize";
@@ -23,6 +23,7 @@ import type { PreviewIssue } from "./protocol";
 import { onMessage, post, saveDeck, setViewState, viewState } from "./vscode";
 import { usePreviewHost } from "./usePreviewHost";
 import { ResizablePanel } from "./ResizablePanel";
+import { PluginToggles, ToggleButton } from "./ToggleButton";
 
 /** The panels' heights (CSS px): to start with, and below which a drag closes them. */
 const NOTES = { height: 220, min: 72 };
@@ -220,15 +221,11 @@ export function PreviewApp() {
       </div>
       <footer className="shrink-0 h-10 px-2 flex items-center gap-1 border-t border-border text-sm">
         {/* Left: what's shown around the slide. */}
-        <Button variant="ghost" size="icon-sm" title="Slides" aria-pressed={showThumbs} onClick={() => setShowThumbs((v) => !v)} className={cn(showThumbs && "bg-accent")}>
-          <GalleryHorizontalEnd className="size-4" />
-        </Button>
+        <ToggleButton icon={GalleryHorizontalEnd} label="Slides" active={showThumbs} onClick={() => setShowThumbs((v) => !v)} />
         {panels.length > 0 && (
-          <Button variant="ghost" size="icon-sm" title="Speaker notes" aria-pressed={showNotes} onClick={() => setShowNotes((v) => !v)} className={cn(showNotes && "bg-accent")}>
-            <NotebookText className="size-4" />
-          </Button>
+          <ToggleButton icon={NotebookText} label="Speaker notes" active={showNotes} onClick={() => setShowNotes((v) => !v)} />
         )}
-        <PluginButtons host={host.host} plugins={plugins} location="controller.currentSlide" />
+        <PluginToggles host={host.host} plugins={plugins} />
         <div className="flex-1" />
         {loadError && (
           <span className="text-xs text-muted-foreground truncate" title={loadError}>
