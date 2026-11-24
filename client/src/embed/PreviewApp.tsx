@@ -116,8 +116,7 @@ export function PreviewApp() {
 
   useEffect(() => {
     setViewState({ slide: current, notes: showNotes, thumbnails: showThumbs, notesHeight, thumbsHeight });
-    if (total) post({ type: "slide", current, total });
-  }, [current, total, showNotes, showThumbs, notesHeight, thumbsHeight]);
+  }, [current, showNotes, showThumbs, notesHeight, thumbsHeight]);
 
   const goTo = useCallback((n: number) => setSlide(() => Math.min(Math.max(1, n), total || 1)), [total]);
 

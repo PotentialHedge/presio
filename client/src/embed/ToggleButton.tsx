@@ -1,6 +1,7 @@
 // The preview footer's toggles: Presio's panels and the plugins' buttons
 // alike. On looks like VS Code's own toggles (the find widget's Match Case),
-// not like hover, so a pressed button reads as on once the pointer leaves.
+// and hovering never fills a button, so a click's result shows at once, under
+// the pointer.
 
 import type { LucideIcon } from "lucide-react";
 import type { PluginHost } from "@/lib/plugins/host";
@@ -36,10 +37,11 @@ export function ToggleButton({
       data-testid={testId}
       onClick={onClick}
       className={cn(
-        "inline-flex items-center justify-center h-7 min-w-7 px-1 rounded border transition-colors disabled:opacity-40",
+        "inline-flex items-center justify-center h-7 min-w-7 px-1 rounded border disabled:opacity-40",
         active
           ? "bg-(--toggle-on-bg) border-(--toggle-on-border) text-(--toggle-on-fg)"
-          : "border-transparent text-muted-foreground hover:bg-accent hover:text-foreground"
+          : // Hover only outlines an off toggle, never fills it: a fill means on.
+            "border-transparent text-muted-foreground hover:border-(--toggle-hover-border) hover:text-foreground"
       )}
     >
       {Icon ? <Icon className="size-4" /> : <span className="text-xs">{label}</span>}

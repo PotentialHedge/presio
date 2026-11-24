@@ -25,6 +25,8 @@
   --toggle-on-bg: var(--vscode-inputOption-activeBackground, color-mix(in srgb, var(--vscode-focusBorder) 25%, transparent));
   --toggle-on-border: var(--vscode-inputOption-activeBorder, var(--vscode-focusBorder));
   --toggle-on-fg: var(--vscode-inputOption-activeForeground, var(--vscode-editor-foreground));
+  /* An off toggle under the pointer: an outline only. */
+  --toggle-hover-border: color-mix(in srgb, var(--vscode-descriptionForeground, currentColor) 50%, transparent);
   /* A resize handle's line, on hover and while dragged. */
   --sash: var(--vscode-sash-hoverBorder, var(--vscode-focusBorder));
 }
