@@ -1,5 +1,24 @@
 # Changelog
 
+## [3.1.0](https://github.com/PotentialHedge/presio/compare/v3.0.0...v3.1.0) (2026-11-24)
+
+
+### Features
+
+* ⌥←/⌥→ jump between a deck's sections ([eb3acab](https://github.com/PotentialHedge/presio/commit/eb3acabfa1b2e70da7b88568936a34f83618b2c9))
+* controller links that sign in, screen wake lock, zoom shown to the audience ([#172](https://github.com/PotentialHedge/presio/issues/172)) ([d085c58](https://github.com/PotentialHedge/presio/commit/d085c58094d6ed4295bdaeeab2a43667db0b9f71))
+* **vscode:** Open in Presio button in the preview ([8679ec6](https://github.com/PotentialHedge/presio/commit/8679ec609766c311de9e51fd7257595b7603162a))
+* **vscode:** open Presio decks in the preview by default ([8bd0a87](https://github.com/PotentialHedge/presio/commit/8bd0a87b3e60e7a60605364ba4000fe2952d5117))
+* **vscode:** preview Presio decks in VS Code with Presio's renderer ([2539114](https://github.com/PotentialHedge/presio/commit/25391149c698b6ca424695e11a4eae678f234386))
+* **vscode:** resizable notes and thumbnails panels ([4a9f0c1](https://github.com/PotentialHedge/presio/commit/4a9f0c192a2cd580ce3799ca8b4236a28c219ea4))
+
+
+### Bug Fixes
+
+* **vscode:** hover outlines an off toggle instead of filling it; drop the status bar slide number ([64a62ed](https://github.com/PotentialHedge/presio/commit/64a62ed0a51985ce776aacb20d37da186d30da6d))
+* **vscode:** one toggle style for the footer, with an on state unlike hover ([c8af710](https://github.com/PotentialHedge/presio/commit/c8af710dadaf59e4233605742f071239e092fa7c))
+* **vscode:** plugin settings changes reach the plugins; footer layout ([059a63c](https://github.com/PotentialHedge/presio/commit/059a63c2cf4e28514757678d7beada55c7de655f))
+
 ## [3.0.0](https://github.com/PotentialHedge/presio/compare/v2.0.0...v3.0.0) (2026-11-16)
 
 
