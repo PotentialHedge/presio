@@ -21,6 +21,11 @@ import type { PluginHost } from "@/lib/plugins/host";
 import type { PreviewIssue } from "./protocol";
 import { onMessage, post, saveDeck, setViewState, viewState } from "./vscode";
 import { usePreviewHost } from "./usePreviewHost";
+import { ResizablePanel } from "./ResizablePanel";
+
+/** The panels' heights (CSS px): to start with, and below which a drag closes them. */
+const NOTES = { height: 220, min: 72 };
+const THUMBS = { height: 96, min: 56 };
 
 interface Loaded {
   deck: Deck;
@@ -35,6 +40,8 @@ export function PreviewApp() {
   const [slide, setSlide] = useState(initial.slide ?? 1);
   const [showNotes, setShowNotes] = useState(initial.notes ?? true);
   const [showThumbs, setShowThumbs] = useState(initial.thumbnails ?? false);
+  const [notesHeight, setNotesHeight] = useState(initial.notesHeight ?? NOTES.height);
+  const [thumbsHeight, setThumbsHeight] = useState(initial.thumbsHeight ?? THUMBS.height);
   const deck = loaded?.deck ?? null;
   const total = deck?.totalSlides ?? 0;
   const current = total ? Math.min(Math.max(1, slide), total) : 1;
@@ -106,9 +113,9 @@ export function PreviewApp() {
   useEffect(() => post({ type: "ready" }), []);
 
   useEffect(() => {
-    setViewState({ slide: current, notes: showNotes, thumbnails: showThumbs });
+    setViewState({ slide: current, notes: showNotes, thumbnails: showThumbs, notesHeight, thumbsHeight });
     if (total) post({ type: "slide", current, total });
-  }, [current, total, showNotes, showThumbs]);
+  }, [current, total, showNotes, showThumbs, notesHeight, thumbsHeight]);
 
   const goTo = useCallback((n: number) => setSlide(() => Math.min(Math.max(1, n), total || 1)), [total]);
 
@@ -170,12 +177,24 @@ export function PreviewApp() {
             />
           </div>
           {showThumbs && (
-            <div className="h-24 shrink-0 px-2 pb-2">
+            <ResizablePanel
+              height={thumbsHeight}
+              min={THUMBS.min}
+              onResize={setThumbsHeight}
+              onClose={() => setShowThumbs(false)}
+              className="px-2 pb-2"
+            >
               <ThumbnailsCard deck={deck} currentSlide={current} onGoTo={goTo} plugins={host} />
-            </div>
+            </ResizablePanel>
           )}
           {showNotes && panels.length > 0 && (
-            <section className="h-[32%] min-h-24 shrink-0 border-t border-border flex">
+            <ResizablePanel
+              height={notesHeight}
+              min={NOTES.min}
+              onResize={setNotesHeight}
+              onClose={() => setShowNotes(false)}
+              className="border-t border-border flex"
+            >
               {panels.map(({ plugin, panel }) => (
                 <div key={`${plugin.hash}:${panel.id}`} className="flex-1 min-w-0 flex flex-col">
                   <div className="px-3 pt-2 text-[11px] uppercase tracking-wide text-muted-foreground">{panel.title}</div>
@@ -184,7 +203,7 @@ export function PreviewApp() {
                   </div>
                 </div>
               ))}
-            </section>
+            </ResizablePanel>
           )}
         </main>
       </div>

@@ -38,6 +38,9 @@ export interface ViewState {
   slide?: number;
   notes?: boolean;
   thumbnails?: boolean;
+  /** The panels' heights, as last dragged (CSS px). */
+  notesHeight?: number;
+  thumbsHeight?: number;
 }
 
 export function viewState(): ViewState {
