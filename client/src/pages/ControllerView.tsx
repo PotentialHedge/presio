@@ -294,7 +294,7 @@ export function ControllerView({
   useEffect(() => pluginHost.setKeymap(keymap), [pluginHost, keymap]);
 
   const togglePalette = useCallback(() => setPaletteOpen((open) => !open), []);
-  useControllerKeys({ keymap, currentSlide, totalSlides, onGoTo, onBlankToggle, togglePalette, jump, runningPlugins, pluginHost });
+  useControllerKeys({ keymap, currentSlide, totalSlides, sections: deck.sections, onGoTo, onBlankToggle, togglePalette, jump, runningPlugins, pluginHost });
 
 
   // Navigations this device performs itself (viewer popup) use the page's own
@@ -405,6 +405,7 @@ export function ControllerView({
     {
       currentSlide,
       totalSlides,
+      sections: deck.sections,
       local,
       blanked,
       isMobile,

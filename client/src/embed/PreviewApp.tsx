@@ -9,7 +9,8 @@ import { ChevronLeft, ChevronRight, GalleryHorizontalEnd, NotebookText, Triangle
 import { clearCache, destroyPdf, loadPdfData, renderPageInto } from "@/lib/pdf";
 import { loadDeckExtras, makeDeck, type Deck } from "@/lib/deck";
 import { inspectAttachments } from "@/lib/inspectAttachments";
-import { isEditableTarget, matchesBinding } from "@/lib/keymap";
+import { DEFAULT_KEYMAP, isEditableTarget, matchesBinding } from "@/lib/keymap";
+import { nextSectionStart, prevSectionStart } from "@/lib/sections";
 import { CurrentSlideCard } from "@/components/controller/CurrentSlideCard";
 import { ThumbnailsCard } from "@/components/controller/ThumbnailsCard";
 import { PluginBackgrounds, PluginButtons, PluginPanel } from "@/components/plugins/PresenterPlugins";
@@ -119,19 +120,29 @@ export function PreviewApp() {
 
   const goTo = useCallback((n: number) => setSlide(() => Math.min(Math.max(1, n), total || 1)), [total]);
 
-  // Keys: Presio's slide navigation, then the plugins' own shortcuts.
+  // Keys: Presio's (its default keymap, plus ↑/↓, ⇧Space and Home/End),
+  // then the plugins' own shortcuts.
   const plugins = host.plugins;
+  const sections = deck?.sections;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (isEditableTarget(e.target) || e.ctrlKey || e.altKey) return;
-      const nav: Record<string, number> = { ArrowRight: 1, ArrowDown: 1, PageDown: 1, " ": 1, ArrowLeft: -1, ArrowUp: -1, PageUp: -1 };
-      if (!e.metaKey && e.key in nav) {
+      if (isEditableTarget(e.target) || e.ctrlKey) return;
+      const plain = !e.metaKey && !e.altKey;
+      const sectionsHere = sections ?? [];
+      const to =
+        matchesBinding(e, DEFAULT_KEYMAP.firstSlide) || (plain && e.key === "Home") ? 1
+        : matchesBinding(e, DEFAULT_KEYMAP.lastSlide) || (plain && e.key === "End") ? total
+        : matchesBinding(e, DEFAULT_KEYMAP.nextSection) ? nextSectionStart(sectionsHere, current)
+        : matchesBinding(e, DEFAULT_KEYMAP.prevSection) ? prevSectionStart(sectionsHere, current)
+        : plain && e.shiftKey && e.key === " " ? current - 1
+        : matchesBinding(e, DEFAULT_KEYMAP.nextSlide) || (plain && e.key === "ArrowDown") ? current + 1
+        : matchesBinding(e, DEFAULT_KEYMAP.prevSlide) || (plain && e.key === "ArrowUp") ? current - 1
+        : undefined;
+      if (to !== undefined) {
         e.preventDefault();
-        goTo(current + (e.shiftKey && e.key === " " ? -1 : nav[e.key]));
+        if (to !== null) goTo(to);
         return;
       }
-      if (e.key === "Home") return goTo(1);
-      if (e.key === "End") return goTo(total);
       for (const plugin of plugins) {
         const kb = plugin.manifest.contributes.keybindings.find((k) => matchesBinding(e, k.keys));
         if (!kb) continue;
@@ -142,7 +153,7 @@ export function PreviewApp() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [current, total, goTo, plugins, host.host]);
+  }, [current, total, sections, goTo, plugins, host.host]);
 
   // The current page, drawn at the stage's pixel size.
   const [canvasRef, canvasEl] = useElementRef<HTMLDivElement>();

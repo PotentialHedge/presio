@@ -8,6 +8,8 @@ import {
   ArrowRight,
   ChevronFirst,
   ChevronLast,
+  ChevronsLeft,
+  ChevronsRight,
   EyeOff,
   Eye,
   Hash,
@@ -31,11 +33,14 @@ import {
 } from "lucide-react";
 import { formatBinding, type Keymap, type KeymapAction } from "@/lib/keymap";
 import { slideArg, slideFromQuery, type AppCommand, type PaletteItem } from "@/lib/commands";
+import { nextSectionStart, prevSectionStart } from "@/lib/sections";
 import type { Theme } from "@/hooks/useTheme";
 
 export interface ControllerCommandState {
   currentSlide: number;
   totalSlides: number;
+  /** Where the deck's sections start: none, and there are no section commands. */
+  sections: readonly number[];
   local: boolean;
   blanked: boolean;
   isMobile: boolean;
@@ -80,6 +85,12 @@ export function useControllerCommands(s: ControllerCommandState, a: ControllerCo
     { id: "prevSlide", title: "Previous slide", category: nav, icon: ArrowLeft, shortcut: key("prevSlide"), keywords: "back", exposed: true, run: () => a.goTo(clamp(s.currentSlide - 1)) },
     { id: "firstSlide", title: "First slide", category: nav, icon: ChevronFirst, shortcut: key("firstSlide"), keywords: "start beginning", exposed: true, run: () => a.goTo(1) },
     { id: "lastSlide", title: "Last slide", category: nav, icon: ChevronLast, shortcut: key("lastSlide"), keywords: "end", exposed: true, run: () => a.goTo(s.totalSlides) },
+    ...(s.sections.length
+      ? [
+          { id: "nextSection", title: "Next section", category: nav, icon: ChevronsRight, shortcut: key("nextSection"), keywords: "chapter skip", run: () => { const to = nextSectionStart(s.sections, s.currentSlide); if (to !== null) a.goTo(to); } },
+          { id: "prevSection", title: "Previous section", category: nav, icon: ChevronsLeft, shortcut: key("prevSection"), keywords: "chapter back", run: () => { const to = prevSectionStart(s.sections, s.currentSlide); if (to !== null) a.goTo(to); } },
+        ]
+      : []),
     // Listed as a prompt for a number; plugins run it with { slide }.
     { id: "goToSlide", title: "Go to slide…", category: nav, icon: Hash, shortcut: key("jumpToSlide"), keywords: "jump page number", prefill: "slide ", exposed: true, run: (args) => a.goTo(clamp(slideArg(args))) },
     {
