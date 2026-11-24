@@ -6,6 +6,8 @@
 export interface KeyBinding {
   key: string;
   meta?: boolean;
+  /** Option (⌥) / Alt. */
+  alt?: boolean;
   shift?: boolean;
 }
 
@@ -18,13 +20,15 @@ export interface Keymap {
   prevSlide: KeyBinding[];
   firstSlide: KeyBinding[];
   lastSlide: KeyBinding[];
+  nextSection: KeyBinding[];
+  prevSection: KeyBinding[];
   toggleBlank: KeyBinding[];
   jumpToSlide: KeyBinding[];
   /** Plugins' commands the presenter rebound, as "<plugin id>.<command>". */
   [pluginCommand: string]: KeyBinding[];
 }
 
-export const KEYMAP_ACTIONS = ["nextSlide", "prevSlide", "firstSlide", "lastSlide", "toggleBlank", "jumpToSlide"] as const;
+export const KEYMAP_ACTIONS = ["nextSlide", "prevSlide", "firstSlide", "lastSlide", "nextSection", "prevSection", "toggleBlank", "jumpToSlide"] as const;
 export type KeymapAction = (typeof KEYMAP_ACTIONS)[number];
 
 export const KEYMAP_LABELS: Record<KeymapAction, string> = {
@@ -32,6 +36,8 @@ export const KEYMAP_LABELS: Record<KeymapAction, string> = {
   prevSlide: "Previous slide",
   firstSlide: "First slide",
   lastSlide: "Last slide",
+  nextSection: "Next section",
+  prevSection: "Previous section (or this one's start)",
   toggleBlank: "Blank screen",
   jumpToSlide: "Jump to slide (then digits)",
 };
@@ -42,6 +48,9 @@ export const DEFAULT_KEYMAP: Keymap = {
   prevSlide: [{ key: "ArrowLeft" }, { key: "PageUp" }],
   firstSlide: [{ key: "ArrowLeft", meta: true }],
   lastSlide: [{ key: "ArrowRight", meta: true }],
+  // Sections are the PDF outline's (lib/sections.ts).
+  nextSection: [{ key: "ArrowRight", alt: true }],
+  prevSection: [{ key: "ArrowLeft", alt: true }],
   toggleBlank: [{ key: "b" }],
   // A prefix, not a one-shot action: it arms digit capture (see ControllerView).
   jumpToSlide: [{ key: "j" }],
@@ -62,8 +71,9 @@ export function matchesBinding(e: KeyboardEvent, bindings: KeyBinding[]): boolea
   return bindings.some((b) => {
     const keyMatch = e.key.toLowerCase() === b.key.toLowerCase();
     const metaMatch = b.meta ? e.metaKey : !e.metaKey;
+    const altMatch = b.alt ? e.altKey : !e.altKey;
     const shiftMatch = !shiftMatters(b.key) || (b.shift ? e.shiftKey : !e.shiftKey);
-    return keyMatch && metaMatch && shiftMatch;
+    return keyMatch && metaMatch && altMatch && shiftMatch;
   });
 }
 
@@ -76,7 +86,7 @@ export function pluginBindings(keymap: Keymap, pluginId: string, command: { comm
 }
 
 const sameBinding = (a: KeyBinding, b: KeyBinding) =>
-  a.key.toLowerCase() === b.key.toLowerCase() && !!a.meta === !!b.meta && !!a.shift === !!b.shift;
+  a.key.toLowerCase() === b.key.toLowerCase() && !!a.meta === !!b.meta && !!a.alt === !!b.alt && !!a.shift === !!b.shift;
 
 /**
  * The Presio action already bound to this key, if any. Presio's own shortcuts
@@ -112,6 +122,7 @@ export function shortcutTakenBy(keymap: Keymap, binding: KeyBinding, earlier: re
 
 export function formatBinding(b: KeyBinding): string {
   const parts: string[] = [];
+  if (b.alt) parts.push("⌥");
   if (b.shift) parts.push("⇧");
   if (b.meta) parts.push("⌘");
   const display: Record<string, string> = {

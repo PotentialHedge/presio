@@ -58,12 +58,12 @@ const isPluginCommandKey = (key: string) => {
 function sanitizeKeymap(raw: unknown): Keymap | undefined {
   if (!isRecord(raw)) return undefined;
   const isBinding = (b: unknown): b is KeyBinding =>
-    isRecord(b) && typeof b.key === "string" && b.key.length > 0 && (b.meta === undefined || typeof b.meta === "boolean") && (b.shift === undefined || typeof b.shift === "boolean");
+    isRecord(b) && typeof b.key === "string" && b.key.length > 0 && (b.meta === undefined || typeof b.meta === "boolean") && (b.alt === undefined || typeof b.alt === "boolean") && (b.shift === undefined || typeof b.shift === "boolean");
   // Merged over the defaults, so a map saved before an action existed still
   // binds it.
   const km: Keymap = { ...DEFAULT_KEYMAP };
   const clean = (list: KeyBinding[]) =>
-    list.map((b): KeyBinding => ({ key: b.key, ...(b.meta && { meta: true }), ...(b.shift && { shift: true }) }));
+    list.map((b): KeyBinding => ({ key: b.key, ...(b.meta && { meta: true }), ...(b.alt && { alt: true }), ...(b.shift && { shift: true }) }));
   for (const action of KEYMAP_ACTIONS) {
     const list = raw[action];
     if (Array.isArray(list) && list.every(isBinding)) km[action] = clean(list);

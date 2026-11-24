@@ -11,8 +11,9 @@ you were on.
   Preview*.
 - **From the source:** in a `.typ` or `.tex` file, the preview button in the editor title (or *Presio: Open
   Presio Preview to the Side*) opens the PDF of the same name beside it.
-- **Keys:** ←/→ (also Space, PgUp/PgDn, Home/End) change slides; plugin shortcuts work too (`k` play/pause
-  media, `r` restart, `p` pen…).
+- **Keys:** ←/→ (also Space, PgUp/PgDn) change slides, ⌘←/⌘→ (or Home/End) go to the first/last, and
+  ⌥←/⌥→ jump between sections, the PDF outline's top-level entries (Typst `=` headings, LaTeX
+  `\section`s). Plugin shortcuts work too (`k` play/pause media, `r` restart, `p` pen…).
 - **Speaker notes:** click them to edit. Edits are saved into the PDF. If the PDF is built from a source
   file, the next build replaces them, so copy them into the source to keep them.
 - **Problems:** the deck's sidecars (notes, media placements) are checked as in Presio's checker, and any

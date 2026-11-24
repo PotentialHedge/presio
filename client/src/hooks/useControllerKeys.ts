@@ -2,13 +2,16 @@ import { useEffect } from "react";
 import { isEditableTarget, matchesBinding, pluginBindings, type Keymap } from "@/lib/keymap";
 import type { PluginHost } from "@/lib/plugins/host";
 import type { LoadedPlugin } from "@/lib/plugins/manifest";
+import { nextSectionStart, prevSectionStart } from "@/lib/sections";
 import type { SlideJump } from "./useSlideJump";
 
-/** The controller's keyboard: the palette, slide navigation, blanking, jumps and plugins' keys. */
+/** The controller's keyboard: the palette, slide and section navigation,
+ *  blanking, jumps and plugins' keys. */
 export function useControllerKeys({
   keymap,
   currentSlide,
   totalSlides,
+  sections,
   onGoTo,
   onBlankToggle,
   togglePalette,
@@ -19,6 +22,8 @@ export function useControllerKeys({
   keymap: Keymap;
   currentSlide: number;
   totalSlides: number;
+  /** Where the deck's sections start (Deck.sections). */
+  sections: readonly number[];
   onGoTo: (slide: number) => void;
   onBlankToggle: () => void;
   togglePalette: () => void;
@@ -57,6 +62,14 @@ export function useControllerKeys({
       } else if (matchesBinding(e, keymap.lastSlide)) {
         e.preventDefault();
         onGoTo(totalSlides);
+      } else if (matchesBinding(e, keymap.nextSection)) {
+        e.preventDefault();
+        const to = nextSectionStart(sections, currentSlide);
+        if (to !== null) onGoTo(to);
+      } else if (matchesBinding(e, keymap.prevSection)) {
+        e.preventDefault();
+        const to = prevSectionStart(sections, currentSlide);
+        if (to !== null) onGoTo(to);
       } else if (matchesBinding(e, keymap.nextSlide)) {
         e.preventDefault();
         onGoTo(currentSlide + 1);
@@ -80,5 +93,5 @@ export function useControllerKeys({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [currentSlide, totalSlides, onGoTo, onBlankToggle, togglePalette, keymap, pendingJump, armJump, commitJump, cancelJump, runningPlugins, pluginHost]);
+  }, [currentSlide, totalSlides, sections, onGoTo, onBlankToggle, togglePalette, keymap, pendingJump, armJump, commitJump, cancelJump, runningPlugins, pluginHost]);
 }

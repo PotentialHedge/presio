@@ -6,6 +6,7 @@
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { hasAttachments } from "./pdf";
 import { loadLinks, type PdfLink } from "./pdfLinks";
+import { loadSections } from "./sections";
 
 /** Everything derived from the PDF itself — stable until the file changes
  *  (e.g. when a plugin saves an edited deck). */
@@ -19,14 +20,17 @@ export interface Deck {
   hasAttachments: boolean;
   /** Link annotations per slide (no entry = no links). */
   linksBySlide: Map<number, PdfLink[]>;
+  /** Slides where the outline's sections start, ascending (lib/sections.ts). */
+  sections: number[];
 }
 
-/** The parts of a Deck read from page annotations, which a long document
- *  takes a moment to scan. */
-export type DeckExtras = Pick<Deck, "hasAttachments" | "linksBySlide">;
+/** The parts of a Deck read from page annotations and the outline, which a
+ *  long document takes a moment to scan. */
+export type DeckExtras = Pick<Deck, "hasAttachments" | "linksBySlide" | "sections">;
 
-/** What a deck shows until its extras are read: no links, no attachments. */
-export const NO_EXTRAS: DeckExtras = { hasAttachments: false, linksBySlide: new Map() };
+/** What a deck shows until its extras are read: no links, no attachments,
+ *  no sections. */
+export const NO_EXTRAS: DeckExtras = { hasAttachments: false, linksBySlide: new Map(), sections: [] };
 
 /** A deck for a freshly loaded PDF. Synchronous, so the first slide never
  *  waits on the annotation scan — the extras follow from loadDeckExtras. */
@@ -39,12 +43,13 @@ export function makeDeck(
   return { pdf, url, filename, totalSlides: pdf.numPages, ...extras };
 }
 
-/** Read a deck's links and whether it carries attachments. Never rejects —
- *  both are best-effort extras. */
+/** Read a deck's links, sections and whether it carries attachments. Never
+ *  rejects — all are best-effort extras. */
 export async function loadDeckExtras(pdf: PDFDocumentProxy): Promise<DeckExtras> {
-  const [attachments, linksBySlide] = await Promise.all([
+  const [attachments, linksBySlide, sections] = await Promise.all([
     hasAttachments(pdf).catch(() => false),
     loadLinks(pdf).catch(() => new Map<number, PdfLink[]>()),
+    loadSections(pdf).catch(() => []),
   ]);
-  return { hasAttachments: attachments, linksBySlide };
+  return { hasAttachments: attachments, linksBySlide, sections };
 }

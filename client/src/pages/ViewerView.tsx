@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { RotateCw, EllipsisVertical, ArrowLeft, ArrowRight, ChevronFirst, ChevronLast, Hash, Maximize, Minimize, MonitorCog, House, Puzzle } from "lucide-react";
+import { RotateCw, EllipsisVertical, ArrowLeft, ArrowRight, ChevronFirst, ChevronLast, ChevronsLeft, ChevronsRight, Hash, Maximize, Minimize, MonitorCog, House, Puzzle } from "lucide-react";
 import { getSessionAuth, setSessionAuth } from "@/lib/utils";
 import { appOrigin, onViewerOrigin, TAKEOVER_PARAM } from "@/lib/origins";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,8 @@ import { goToSlideItems } from "@/components/controller/controllerCommands";
 import { appPaletteItems, slideArg, useAppCommands, type AppCommand } from "@/lib/commands";
 import { runsOnViewer, useViewerPluginSwitches } from "@/lib/plugins/viewerSwitches";
 import { track } from "@/lib/analytics";
-import { isEditableTarget } from "@/lib/keymap";
+import { DEFAULT_KEYMAP, isEditableTarget, matchesBinding } from "@/lib/keymap";
+import { nextSectionStart, prevSectionStart } from "@/lib/sections";
 
 export function ViewerView({
   id,
@@ -46,7 +47,7 @@ export function ViewerView({
   onResync: () => void;
   plugins: PluginHostState;
 }) {
-  const { totalSlides } = deck;
+  const { totalSlides, sections } = deck;
   const navigate = useNavigate();
   const [cursorVisible, setCursorVisible] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -116,6 +117,12 @@ export function ViewerView({
           { id: "prevSlide", title: "Previous slide", category: "Navigation", icon: ArrowLeft, shortcut: "←", exposed: true, run: () => onViewerGoTo(clamp(currentSlide - 1)) },
           { id: "firstSlide", title: "First slide", category: "Navigation", icon: ChevronFirst, exposed: true, run: () => onViewerGoTo(1) },
           { id: "lastSlide", title: "Last slide", category: "Navigation", icon: ChevronLast, exposed: true, run: () => onViewerGoTo(totalSlides) },
+          ...(sections.length
+            ? [
+                { id: "nextSection", title: "Next section", category: "Navigation", icon: ChevronsRight, shortcut: "⌥→", run: () => onViewerGoTo(nextSectionStart(sections, currentSlide) ?? currentSlide) },
+                { id: "prevSection", title: "Previous section", category: "Navigation", icon: ChevronsLeft, shortcut: "⌥←", run: () => onViewerGoTo(prevSectionStart(sections, currentSlide) ?? currentSlide) },
+              ]
+            : []),
           { id: "goToSlide", title: "Go to slide…", category: "Navigation", icon: Hash, prefill: "slide ", exposed: true, run: (args: Record<string, unknown>) => onViewerGoTo(clamp(slideArg(args))) },
           ...(outOfSync ? [{ id: "resync", title: "Follow the presenter again", category: "Navigation", icon: RotateCw, keywords: "sync", run: onResync }] : []),
         ]
@@ -149,17 +156,23 @@ export function ViewerView({
       if (isEditableTarget(e.target)) return;
       if (e.key === "f" || e.key === "F") {
         toggleFullscreen();
-      } else if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") {
+      } else {
+        // The presenter's default keys (a viewer has no keymap of its own).
+        const to = matchesBinding(e, DEFAULT_KEYMAP.nextSlide) ? currentSlide + 1
+          : matchesBinding(e, DEFAULT_KEYMAP.prevSlide) ? currentSlide - 1
+          : matchesBinding(e, DEFAULT_KEYMAP.firstSlide) ? 1
+          : matchesBinding(e, DEFAULT_KEYMAP.lastSlide) ? totalSlides
+          : matchesBinding(e, DEFAULT_KEYMAP.nextSection) ? nextSectionStart(sections, currentSlide)
+          : matchesBinding(e, DEFAULT_KEYMAP.prevSection) ? prevSectionStart(sections, currentSlide)
+          : undefined;
+        if (to === undefined) return;
         e.preventDefault();
-        onViewerGoTo(currentSlide + 1);
-      } else if (e.key === "ArrowLeft" || e.key === "PageUp") {
-        e.preventDefault();
-        onViewerGoTo(currentSlide - 1);
+        if (to !== null) onViewerGoTo(to);
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [currentSlide, onViewerGoTo, toggleFullscreen]);
+  }, [currentSlide, totalSlides, sections, onViewerGoTo, toggleFullscreen]);
 
   // Take control: on the viewer origin the controller token must never be
   // stored (lib/origins.ts), so ask for the passphrase on the app origin.
