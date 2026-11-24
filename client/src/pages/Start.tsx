@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { idbGet, idbPut } from "@/lib/localStore";
 import { setSessionAuth } from "@/lib/utils";
+import { lsSetString, slideKey } from "@/lib/storage";
 
-// Deep link from POST /api/present: /start/:id?t=<token>
+// Deep link from POST /api/present: /start/:id?t=<token>[&slide=<n>]
 // Pulls the staged PDF into IndexedDB (local session), clears the server copy,
 // and opens the controller — skipping the share screen.
 
@@ -69,6 +70,9 @@ export default function Start() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const token = searchParams.get("t") || "";
+  // Where to open it (the VS Code preview's "Open in Presio" passes the slide
+  // it's on); the presentation clamps it to the deck.
+  const slide = Number(searchParams.get("slide")) || 0;
   const [loadError, setLoadError] = useState("");
   const error = !id || !token ? "Missing session id or token." : loadError;
 
@@ -76,11 +80,15 @@ export default function Start() {
     let cancelled = false;
     if (!id || !token) return;
     pullHandoff(id, token).then(
-      () => { if (!cancelled) navigate(`/s/${id}?role=controller`, { replace: true }); },
+      () => {
+        if (cancelled) return;
+        if (slide >= 1) lsSetString(slideKey(id), String(Math.floor(slide)));
+        navigate(`/s/${id}?role=controller`, { replace: true });
+      },
       (e: unknown) => { if (!cancelled) setLoadError(e instanceof Error ? e.message : "Failed to start presentation"); }
     );
     return () => { cancelled = true; };
-  }, [id, token, navigate]);
+  }, [id, token, slide, navigate]);
 
   if (error) {
     return (

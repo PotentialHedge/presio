@@ -5,7 +5,7 @@
 // changes, so a rebuilt deck shows at once on the slide you were on.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, GalleryHorizontalEnd, NotebookText, TriangleAlert } from "lucide-react";
+import { ChevronLeft, ChevronRight, ExternalLink, GalleryHorizontalEnd, NotebookText, TriangleAlert } from "lucide-react";
 import { clearCache, destroyPdf, loadPdfData, renderPageInto } from "@/lib/pdf";
 import { loadDeckExtras, makeDeck, type Deck } from "@/lib/deck";
 import { inspectAttachments } from "@/lib/inspectAttachments";
@@ -16,6 +16,7 @@ import { ThumbnailsCard } from "@/components/controller/ThumbnailsCard";
 import { PluginBackgrounds, PluginPanel } from "@/components/plugins/PresenterPlugins";
 import { Button } from "@/components/ui/button";
 import { useElementRef } from "@/hooks/useElementRef";
+import { useLatestRef } from "@/hooks/useLatestRef";
 import { useRenderTargetSize } from "@/hooks/useRenderTargetSize";
 import { cn } from "@/lib/utils";
 import type { PluginHost } from "@/lib/plugins/host";
@@ -47,6 +48,8 @@ export function PreviewApp() {
   const deck = loaded?.deck ?? null;
   const total = deck?.totalSlides ?? 0;
   const current = total ? Math.min(Math.max(1, slide), total) : 1;
+  // For answering the extension's "Open in Presio" request.
+  const currentRef = useLatestRef(current);
 
   // Swap in a new document: the next deck from the extension, or one a plugin
   // just saved. The old one is freed once the new one is showing.
@@ -109,8 +112,9 @@ export function PreviewApp() {
       onMessage((m) => {
         if (m.type === "deck") void show(m.bytes, m.filename, m.id);
         else if (m.type === "goTo") setSlide(m.slide);
+        else if (m.type === "openInPresio") post({ type: "openInPresio", slide: currentRef.current });
       }),
-    [show]
+    [show, currentRef]
   );
   useEffect(() => post({ type: "ready" }), []);
 
@@ -240,6 +244,15 @@ export function PreviewApp() {
             {issues.length}
           </span>
         )}
+        <Button
+          variant="ghost"
+          size="sm"
+          title="Open this deck in Presio, in the browser, on this slide"
+          onClick={() => post({ type: "openInPresio", slide: current })}
+        >
+          <ExternalLink className="size-3.5" />
+          Open in Presio
+        </Button>
         {/* Right: moving through the deck. */}
         <Button variant="ghost" size="icon-sm" title="Previous slide (←)" disabled={current <= 1} onClick={() => goTo(current - 1)}>
           <ChevronLeft className="size-4" />

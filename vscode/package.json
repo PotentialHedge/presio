@@ -55,6 +55,12 @@
         "title": "Open Presio Preview to the Side",
         "category": "Presio",
         "icon": "$(open-preview)"
+      },
+      {
+        "command": "presio.openInPresio",
+        "title": "Open in Presio",
+        "category": "Presio",
+        "icon": "$(link-external)"
       }
     ],
     "menus": {
@@ -63,12 +69,22 @@
           "command": "presio.openPreview",
           "when": "resourceExtname == .pdf",
           "group": "navigation"
+        },
+        {
+          "command": "presio.openInPresio",
+          "when": "resourceExtname == .pdf",
+          "group": "navigation"
         }
       ],
       "editor/title": [
         {
           "command": "presio.openPreviewToSide",
           "when": "resourceExtname == .typ || resourceExtname == .tex",
+          "group": "navigation"
+        },
+        {
+          "command": "presio.openInPresio",
+          "when": "activeCustomEditorId == presio.preview",
           "group": "navigation"
         }
       ]
@@ -80,6 +96,11 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Open PDFs that carry Presio's speaker notes or media (its `notes-slide-*.json` and `media-slide-*.json` attachments) in Presio Preview, even when another editor is the default for PDFs. A deck you reopen with another editor stays there for the session."
+        },
+        "presio.server": {
+          "type": "string",
+          "default": "https://presio.xyz",
+          "markdownDescription": "The Presio server *Open in Presio* hands decks to, e.g. `http://localhost:3001` for a local deployment. The PDF is uploaded there briefly, then moved into your browser."
         }
       }
     }
